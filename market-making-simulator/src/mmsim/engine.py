@@ -281,9 +281,11 @@ def simulate_book(  # noqa: PLR0912, PLR0915  (one loop; splitting it would hide
         n_steps: Steps in the session.
         horizon: Session length in time units.
         order_size: Size posted on each side.
-        requote_every: Re-quote every ``n`` steps. Re-quoting every step means never
-            building queue priority, which understates fill rates; a larger value trades
-            staleness for queue position.
+        requote_every: Re-quote every ``n`` steps. Larger values let an order age and
+            earn queue priority, but also leave the maker out of the market after each fill
+            until its next refresh, and let the quote go stale against a moving mid. In
+            this market the second pair of effects wins: refreshing every 20 steps instead
+            of every step costs about 30% of fills.
         seed: Seed or ``Generator``.
 
     Returns:
@@ -345,6 +347,7 @@ def simulate_book(  # noqa: PLR0912, PLR0915  (one loop; splitting it would hide
             ask_quotes[i] = ask_quotes[i - 1]
 
         q, c = state.inventory, state.cash
+        mid_before = state.mid  # the mid the maker quoted against, before this step moves it
         efficient_ticks, trades = generator.step(book, efficient_ticks, now, dt)
 
         for trade in trades:
@@ -367,7 +370,11 @@ def simulate_book(  # noqa: PLR0912, PLR0915  (one loop; splitting it would hide
                     "step": i,
                     "side": "buy" if signed > 0 else "sell",
                     "price": price,
-                    "mid": market.to_currency(efficient_ticks),
+                    # The mid *before* this step's price move, which is what the maker
+                    # quoted against. Recording the post-move mid instead would silently
+                    # fold the adverse-selection loss into "spread captured" and make the
+                    # first markout horizon blind to informed impact.
+                    "mid": mid_before,
                     "size": trade.size,
                 }
             )

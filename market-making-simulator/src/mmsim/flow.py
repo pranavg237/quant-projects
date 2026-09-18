@@ -22,6 +22,14 @@ an informed buy **permanently raises** the efficient price by ``info_impact`` ti
 informed sell lowers it. So the maker that sold to an informed buyer is immediately marked
 down on the position it just took.
 
+Impact is **not** instantaneous. It enters a pending bucket and is released into the
+efficient price at rate ``info_impact_speed`` per step, so the price discovers the
+information over several steps rather than jumping. This matters for one specific reason:
+with instantaneous impact the maker's markout curve is *flat* from the first step, because
+the entire move has already happened by the time you look. Real markout curves decay over
+seconds to minutes, and reproducing that shape is the point of measuring markout at all.
+Setting ``info_impact_speed = 1.0`` recovers the instantaneous case.
+
 This is the Glosten-Milgrom mechanism, and it produces genuine adverse selection rather
 than a hand-waved cost: the loss shows up automatically in the maker's mark-to-market, at
 a magnitude set by the informed fraction and the impact size. It also means the fair
@@ -54,6 +62,9 @@ class FlowConfig:
             order is cancelled independently with probability ``1 - exp(-rate*dt)``.
         informed_fraction: Probability :math:`p` that a market order is informed.
         info_impact_ticks: Permanent price impact :math:`J` of an informed order, in ticks.
+        info_impact_speed: Fraction of the outstanding informed impact released into the
+            efficient price each step. ``1.0`` is instantaneous; smaller values spread
+            price discovery over roughly ``1/speed`` steps.
         mean_order_size: Mean size of a market order.
         size_tail: Pareto tail index for market-order size. Smaller means fatter tails and
             more multi-level sweeps. Empirical estimates for equities sit near 1.5.
@@ -75,6 +86,7 @@ class FlowConfig:
     cancel_rate: float = 1_200.0
     informed_fraction: float = 0.0
     info_impact_ticks: float = 2.0
+    info_impact_speed: float = 0.05
     mean_order_size: float = 1.5
     size_tail: float = 1.5
     limit_depth_ticks: float = 4.0
@@ -95,6 +107,8 @@ class FlowConfig:
             raise ValueError("size_tail must be > 1 for the order size to have a finite mean")
         if self.seed_levels < 0:
             raise ValueError("seed_levels must be >= 0")
+        if not 0.0 < self.info_impact_speed <= 1.0:
+            raise ValueError("info_impact_speed must be in (0, 1]")
         if self.depth_shape <= 0.0:
             raise ValueError("depth_shape must be > 0")
         if self.limit_depth_ticks <= 0.0:
@@ -127,6 +141,8 @@ class OrderFlowGenerator:
         self.config = config
         self.market = market
         self.rng = rng
+        #: Informed impact generated but not yet released into the efficient price.
+        self.pending_impact = 0.0
 
     # ------------------------------------------------------------------ helpers
 
@@ -196,10 +212,15 @@ class OrderFlowGenerator:
             _, executed = book.submit_market(side, size, timestamp, owner)
             trades.extend(executed)
             if informed and executed:
-                # The impact is applied *after* execution: the informed trader is filled at
-                # the old price and the efficient price then moves in its direction. That
-                # ordering is what makes the adverse selection causal rather than fitted.
-                efficient_ticks += float(side) * cfg.info_impact_ticks
+                # Queued *after* execution: the informed trader is filled at the old price
+                # and the efficient price then moves in its direction. That ordering is
+                # what makes the adverse selection causal rather than fitted.
+                self.pending_impact += float(side) * cfg.info_impact_ticks
+
+        # Release part of the outstanding informed impact: price discovery takes time.
+        released = cfg.info_impact_speed * self.pending_impact
+        self.pending_impact -= released
+        efficient_ticks += released
 
         efficient_ticks += cfg.volatility_ticks * np.sqrt(dt) * float(self.rng.standard_normal())
         return efficient_ticks, trades

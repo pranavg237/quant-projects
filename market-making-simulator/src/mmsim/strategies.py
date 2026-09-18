@@ -79,7 +79,14 @@ class MakerState:
 class QuotePolicy(Protocol):
     """A two-sided quoting rule."""
 
-    name: str
+    @property
+    def name(self) -> str:
+        """Human-readable label, used to key result tables.
+
+        Declared read-only so that frozen dataclasses satisfy the protocol; a settable
+        attribute in the protocol would exclude every immutable implementation.
+        """
+        ...
 
     def quote(self, state: MakerState) -> tuple[float | None, float | None]:
         """Return ``(bid_price, ask_price)``; ``None`` on a side means do not quote it."""

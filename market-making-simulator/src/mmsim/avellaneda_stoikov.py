@@ -176,17 +176,22 @@ def optimal_spread(
 ) -> FloatArray:
     r"""Total optimal spread, inventory-risk term plus monopolistic markup.
 
-    .. math:: \gamma\sigma^2(T-t) + \frac{2}{\gamma}\ln(1 + \gamma/\kappa).
+        .. math:: \gamma\sigma^2(T-t) + \frac{2}{\gamma}\ln(1 + \gamma/\kappa).
 
-    The first term is compensation for inventory risk over the remaining horizon; the
-    second is the monopolistic markup a maker can charge given how fast fill probability
-    decays, and is independent of volatility.
+        The first term is compensation for inventory risk over the remaining horizon; the
+        second is the monopolistic markup a maker can charge given how fast fill probability
+        decays, and is independent of volatility.
 
     As :math:`\gamma \to 0` the second term has a removable singularity: expanding
-    :math:`\tfrac{2}{\gamma}\ln(1+\gamma/\kappa) = \tfrac{2}{\kappa} - \tfrac{\gamma}{\kappa^2}
-    + O(\gamma^2)`, the risk-neutral limit is the finite value :math:`2/\kappa`. Evaluating
-    the formula literally at small ``gamma`` loses precision to cancellation, so the
-    series is used below a cutoff.
+        :math:`\tfrac{2}{\gamma}\ln(1+\gamma/\kappa) = \tfrac{2}{\kappa} - \tfrac{\gamma}{\kappa^2}
+        + O(\gamma^2)`, the risk-neutral limit is the finite value :math:`2/\kappa`. Evaluating
+        the formula literally at small ``gamma`` loses precision to cancellation, so the
+        series is used below a cutoff.
+
+        Note the markup is **decreasing** in :math:`\gamma`, approaching :math:`2/\kappa` from
+        below -- a more risk-averse maker charges a *smaller* monopolistic markup, preferring a
+        likelier small gain to a rarer large one. The total spread nevertheless widens with
+        :math:`\gamma`, because the inventory term grows linearly and dominates.
     """
     tau = np.asarray(time_remaining, dtype=np.float64)
     gamma, kappa = params.gamma, params.kappa
