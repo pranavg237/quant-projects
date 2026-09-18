@@ -99,6 +99,22 @@ def test_fill_intensity_figure_renders(quiet_flow: FlowConfig, market: MarketCon
     plt.close(fig)
 
 
+def test_volatility_signature_figure_renders(market: MarketConfig) -> None:
+    from mmsim.calibration import volatility_signature
+
+    signatures = {
+        "quiet": volatility_signature(
+            FlowConfig(informed_fraction=0.0), market, n_steps=2000, seed=1
+        ),
+        "toxic": volatility_signature(
+            FlowConfig(informed_fraction=0.2), market, n_steps=2000, seed=1
+        ),
+    }
+    fig = plotting.plot_volatility_signature(signatures)
+    assert len(fig.axes) >= 1
+    plt.close(fig)
+
+
 def test_sensitivity_figure_renders() -> None:
     import numpy as np
 

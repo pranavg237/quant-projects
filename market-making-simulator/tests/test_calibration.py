@@ -10,6 +10,7 @@ from mmsim.calibration import (
     estimate_fill_intensity,
     estimate_volatility,
     fit_as_params_to_book,
+    volatility_signature,
 )
 from mmsim.flow import FlowConfig
 from mmsim.types import MarketConfig
@@ -71,6 +72,53 @@ def test_informed_flow_raises_the_volatility_estimate(market: MarketConfig) -> N
         FlowConfig(informed_fraction=0.25, info_impact_ticks=2.0), market, n_steps=3000, seed=5
     )
     assert toxic > quiet
+
+
+def test_volatility_signature_is_flat_for_a_martingale(market: MarketConfig) -> None:
+    """No informed flow means a pure random walk, so sigma is the same at every horizon."""
+    signature = volatility_signature(
+        FlowConfig(informed_fraction=0.0), market, n_steps=8000, seed=10
+    )
+    sigmas = signature["sigma"].to_numpy()
+    assert sigmas.std() / sigmas.mean() < 0.10
+
+
+def test_volatility_signature_rises_with_gradual_price_discovery(market: MarketConfig) -> None:
+    """Slow impact makes the price positively autocorrelated, so sigma grows with horizon.
+
+    This is the diagnostic that caught a real bug: the volatility estimate originally used
+    one-step increments and so understated what the maker faces by about 4x.
+    """
+    gradual = volatility_signature(
+        FlowConfig(informed_fraction=0.15, info_impact_ticks=2.0, info_impact_speed=0.05),
+        market,
+        n_steps=8000,
+        seed=11,
+    )
+    sigmas = gradual["sigma"].to_numpy()
+    assert sigmas[-1] > 2.0 * sigmas[0]
+    assert sigmas[0] < sigmas[3] < sigmas[-1]
+
+
+def test_volatility_signature_is_flat_again_with_instant_impact(market: MarketConfig) -> None:
+    """Instantaneous impact keeps the price a martingale, however toxic the flow."""
+    instant = volatility_signature(
+        FlowConfig(informed_fraction=0.15, info_impact_ticks=2.0, info_impact_speed=1.0),
+        market,
+        n_steps=8000,
+        seed=11,
+    )
+    sigmas = instant["sigma"].to_numpy()
+    assert sigmas.std() / sigmas.mean() < 0.10
+
+
+def test_block_sampling_changes_the_volatility_estimate(market: MarketConfig) -> None:
+    config = FlowConfig(informed_fraction=0.2, info_impact_ticks=2.0, info_impact_speed=0.05)
+    one_step = estimate_volatility(config, market, n_steps=6000, block_steps=1, seed=12)
+    blocked = estimate_volatility(config, market, n_steps=6000, block_steps=100, seed=12)
+    assert blocked > 2.0 * one_step
+    with pytest.raises(ValueError, match="block_steps"):
+        estimate_volatility(config, market, block_steps=0)
 
 
 def test_fit_as_params_to_book_produces_sane_quotes(

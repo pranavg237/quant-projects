@@ -133,88 +133,88 @@
     {
       "policy": "Avellaneda-Stoikov",
       "n_runs": 200,
-      "mean_pnl": 9.064730648016088,
-      "std_pnl": 2.060829916290476,
-      "sharpe": 4.398582617789602,
-      "median_pnl": 8.994485537416296,
-      "pnl_5th_percentile": 5.700605943372909,
-      "mean_abs_inventory": 4.529894121113505,
-      "std_final_inventory": 6.407817917224632,
-      "max_abs_inventory": 29.023450740738735,
-      "mean_trades": 193.8,
-      "mean_spread_captured": 0.10052773333333334,
-      "max_drawdown": 0.9692361698698
+      "mean_pnl": 12.53276638063745,
+      "std_pnl": 2.09200164810951,
+      "sharpe": 5.9908013896466095,
+      "median_pnl": 12.537411774399317,
+      "pnl_5th_percentile": 9.346525986233303,
+      "mean_abs_inventory": 4.677215495975265,
+      "std_final_inventory": 6.315795621092317,
+      "max_abs_inventory": 31.24595466414376,
+      "mean_trades": 260.66,
+      "mean_spread_captured": 0.10052778333333333,
+      "max_drawdown": 0.930979787656253
     },
     {
       "policy": "Symmetric",
       "n_runs": 200,
-      "mean_pnl": 9.401701652265364,
-      "std_pnl": 3.917220081948923,
-      "sharpe": 2.400095336892014,
-      "median_pnl": 9.376966312242542,
-      "pnl_5th_percentile": 2.798979459851927,
-      "mean_abs_inventory": 7.848221015496512,
-      "std_final_inventory": 15.382686195987244,
-      "max_abs_inventory": 45.67693060114138,
-      "mean_trades": 192.875,
-      "mean_spread_captured": 0.10052884999999996,
-      "max_drawdown": 2.084043686585857
+      "mean_pnl": 12.320689087900208,
+      "std_pnl": 4.957632381942581,
+      "sharpe": 2.4851961861424896,
+      "median_pnl": 12.324587964095628,
+      "pnl_5th_percentile": 4.978016859273401,
+      "mean_abs_inventory": 9.341558886688105,
+      "std_final_inventory": 18.226429580710118,
+      "max_abs_inventory": 69.6366892296892,
+      "mean_trades": 257.75,
+      "mean_spread_captured": 0.10052988333333335,
+      "max_drawdown": 2.4515649934466315
     },
     {
       "policy": "Symmetric + position limit",
       "n_runs": 200,
-      "mean_pnl": 8.521280270520728,
-      "std_pnl": 1.676671554292358,
-      "sharpe": 5.082259700002574,
-      "median_pnl": 8.596727755374786,
-      "pnl_5th_percentile": 5.8114479743564065,
-      "mean_abs_inventory": 3.3640347077223365,
-      "std_final_inventory": 4.24876503316512,
-      "max_abs_inventory": 6.99945242235701,
-      "mean_trades": 178.07,
-      "mean_spread_captured": 0.10052813904942905,
-      "max_drawdown": 0.6230613060871468
+      "mean_pnl": 11.643173741393865,
+      "std_pnl": 1.667036948305346,
+      "sharpe": 6.984352538334513,
+      "median_pnl": 11.679179719114103,
+      "pnl_5th_percentile": 8.993131316679225,
+      "mean_abs_inventory": 3.414233519580126,
+      "std_final_inventory": 3.9978945819403644,
+      "max_abs_inventory": 8.946095984395829,
+      "mean_trades": 236.79,
+      "mean_spread_captured": 0.10052881315330081,
+      "max_drawdown": 0.5452837082511404
     }
   ],
   "book_paired_tests": [
     {
       "comparison": "Avellaneda-Stoikov - Symmetric",
-      "mean_difference": -0.33697100424927484,
-      "std_error": 0.24781400310232585,
-      "t_statistic": -1.359773862779396,
-      "p_value": 0.17544011598371798,
+      "mean_difference": 0.21207729273723966,
+      "std_error": 0.3225545153518828,
+      "t_statistic": 0.657492865991596,
+      "p_value": 0.511623826950793,
       "n_pairs": 200.0
     },
     {
       "comparison": "Avellaneda-Stoikov - Symmetric + position limit",
-      "mean_difference": 0.5434503774953598,
-      "std_error": 0.13325985513573607,
-      "t_statistic": 4.078125230901767,
-      "p_value": 6.563221098773194e-05,
+      "mean_difference": 0.8895926392435833,
+      "std_error": 0.15806100955720276,
+      "t_statistic": 5.628159922144728,
+      "p_value": 6.13129967348614e-08,
       "n_pairs": 200.0
     }
   ],
   "pnl_decomposition": [
     {
       "policy": "Avellaneda-Stoikov",
-      "spread_capture": 9.695723688543087,
-      "inventory_pnl": -0.6309930405270529,
-      "total": 9.064730648016035,
-      "max_reconciliation_error": 4.316547119742609e-12
+      "spread_capture": 13.225584185198255,
+      "inventory_pnl": -0.6928178045607435,
+      "total": 12.532766380637508,
+      "max_reconciliation_error": 3.906208689841151e-12
     },
     {
       "policy": "Symmetric",
-      "spread_capture": 9.693715417216612,
-      "inventory_pnl": -0.2920137649511968,
-      "total": 9.401701652265418,
-      "max_reconciliation_error": 4.6771475581408595e-12
+      "spread_capture": 13.164715270469548,
+      "inventory_pnl": -0.8440261825691635,
+      "total": 12.320689087900387,
+      "max_reconciliation_error": 5.766054300693213e-12
     },
     {
       "policy": "Symmetric + position limit",
-      "spread_capture": 8.952735317134858,
-      "inventory_pnl": -0.43145504661415507,
-      "total": 8.521280270520702,
-      "max_reconciliation_error": 1.3642420526593924e-12
+      "spread_capture": 12.087670969711413,
+      "inventory_pnl": -0.4444972283175402,
+      "total": 11.643173741393873,
+      "max_reconciliation_error": 1.5631940186722204e-12
     }
   ],
   "fill_fit": {
@@ -255,73 +255,73 @@
       "informed_fraction": 0.0,
       "expected_cost_ticks": 0.0,
       "policy": "Avellaneda-Stoikov",
-      "mean_pnl": 9.724053714817265,
-      "sharpe": 11.45342796228698,
-      "std_final_inventory": 7.275770318002125,
-      "mean_trades": 191.4090909090909
+      "mean_pnl": 12.829612475300516,
+      "sharpe": 12.092685230206321,
+      "std_final_inventory": 7.980352412943988,
+      "mean_trades": 253.13636363636363
     },
     {
       "informed_fraction": 0.0,
       "expected_cost_ticks": 0.0,
       "policy": "Symmetric",
-      "mean_pnl": 9.572155969216588,
-      "sharpe": 11.593250665702916,
-      "std_final_inventory": 12.866416704515524,
-      "mean_trades": 188.3030303030303
+      "mean_pnl": 12.644915630411703,
+      "sharpe": 12.261045084942005,
+      "std_final_inventory": 15.8624979967327,
+      "mean_trades": 252.56060606060606
     },
     {
       "informed_fraction": 0.1,
       "expected_cost_ticks": 0.2,
       "policy": "Avellaneda-Stoikov",
-      "mean_pnl": 9.646474833781445,
-      "sharpe": 5.578267157904946,
-      "std_final_inventory": 6.627874613505194,
-      "mean_trades": 192.0909090909091
+      "mean_pnl": 12.774662386959598,
+      "sharpe": 6.098354240204681,
+      "std_final_inventory": 5.929454964632692,
+      "mean_trades": 257.75757575757575
     },
     {
       "informed_fraction": 0.1,
       "expected_cost_ticks": 0.2,
       "policy": "Symmetric",
-      "mean_pnl": 9.467636704259164,
-      "sharpe": 4.23126881317829,
-      "std_final_inventory": 13.929747342443381,
-      "mean_trades": 188.74242424242425
+      "mean_pnl": 13.091943091820106,
+      "sharpe": 3.592477295236071,
+      "std_final_inventory": 17.97408627871735,
+      "mean_trades": 253.43939393939394
     },
     {
       "informed_fraction": 0.2,
       "expected_cost_ticks": 0.4,
       "policy": "Avellaneda-Stoikov",
-      "mean_pnl": 8.778526050790393,
-      "sharpe": 4.6270397513722825,
-      "std_final_inventory": 6.178073095329077,
-      "mean_trades": 196.3181818181818
+      "mean_pnl": 12.508687089373826,
+      "sharpe": 5.056220148751048,
+      "std_final_inventory": 5.8032891397689,
+      "mean_trades": 263.4848484848485
     },
     {
       "informed_fraction": 0.2,
       "expected_cost_ticks": 0.4,
       "policy": "Symmetric",
-      "mean_pnl": 9.764828101995164,
-      "sharpe": 2.3696935819186606,
-      "std_final_inventory": 13.615433941113707,
-      "mean_trades": 193.43939393939394
+      "mean_pnl": 12.685901381780406,
+      "sharpe": 2.2147555669616263,
+      "std_final_inventory": 18.940075561423154,
+      "mean_trades": 257.43939393939394
     },
     {
       "informed_fraction": 0.3,
       "expected_cost_ticks": 0.6,
       "policy": "Avellaneda-Stoikov",
-      "mean_pnl": 8.627636819534073,
-      "sharpe": 3.489343015656463,
-      "std_final_inventory": 5.60451299755501,
-      "mean_trades": 196.9090909090909
+      "mean_pnl": 11.670767253776551,
+      "sharpe": 5.110703255208205,
+      "std_final_inventory": 6.035717262493658,
+      "mean_trades": 264.1212121212121
     },
     {
       "informed_fraction": 0.3,
       "expected_cost_ticks": 0.6,
       "policy": "Symmetric",
-      "mean_pnl": 8.844232689961842,
-      "sharpe": 1.8677343847406491,
-      "std_final_inventory": 15.833194143002252,
-      "mean_trades": 194.33333333333334
+      "mean_pnl": 10.696855559343543,
+      "sharpe": 1.478281719785449,
+      "std_final_inventory": 19.201519621291446,
+      "mean_trades": 260.27272727272725
     }
   ],
   "sweep_gamma": [

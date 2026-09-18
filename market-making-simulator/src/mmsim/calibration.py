@@ -20,7 +20,13 @@ by ordinary least squares. The exponential form is an assumption of the model, a
 is worth knowing, and is reported.
 
 **Volatility.** The realised standard deviation of efficient-price increments, scaled to
-the time unit. Arithmetic, not log: the model is built on arithmetic Brownian motion.
+the time unit. Arithmetic, not log: the model is built on arithmetic Brownian motion. It is
+measured over **blocks of steps, not single steps**, and that is not a detail. Informed
+impact is released gradually, so the efficient price has positive autocorrelation at short
+horizons: a one-step variance scaled by :math:`1/\Delta t` understates the variance a maker
+actually faces over the horizon it holds inventory, by a factor of four on the headline
+configuration. :func:`volatility_signature` exposes the whole variance-versus-horizon curve,
+which is the standard microstructure diagnostic for exactly this.
 
 Estimating rather than assuming also means the comparison between the idealised engine and
 the book engine is a fair one: both are told the same thing about the world.
@@ -31,6 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import pandas as pd
 
 from .avellaneda_stoikov import AvellanedaStoikovParams, HorizonMode
 from .book import LimitOrderBook
@@ -42,6 +49,7 @@ __all__ = [
     "estimate_fill_intensity",
     "estimate_volatility",
     "fit_as_params_to_book",
+    "volatility_signature",
 ]
 
 _PROBE = "probe"
@@ -77,11 +85,74 @@ class FillIntensityFit:
         return np.asarray(self.arrival_rate * np.exp(-self.kappa * d), dtype=np.float64)
 
 
+def _efficient_price_path(
+    flow_config: FlowConfig,
+    market: MarketConfig,
+    n_steps: int,
+    horizon: float,
+    rng: np.random.Generator,
+) -> FloatArray:
+    """Simulate the efficient price with no strategic maker present."""
+    book = LimitOrderBook()
+    generator = OrderFlowGenerator(flow_config, market, rng)
+    dt = horizon / n_steps
+    efficient = float(market.initial_mid_ticks)
+    generator.seed_book(book, efficient, 0.0)
+    path = np.empty(n_steps + 1, dtype=np.float64)
+    path[0] = efficient
+    for i in range(n_steps):
+        efficient, _ = generator.step(book, efficient, i * dt, dt)
+        path[i + 1] = efficient
+    return path
+
+
+def volatility_signature(
+    flow_config: FlowConfig,
+    market: MarketConfig,
+    block_steps: tuple[int, ...] = (1, 2, 5, 10, 25, 50, 100, 200),
+    n_steps: int = 8_000,
+    horizon: float = 1.0,
+    seed: int | np.random.Generator | None = None,
+) -> pd.DataFrame:
+    r"""Annualised volatility estimated at a range of sampling horizons.
+
+    The **volatility signature plot** is the standard microstructure diagnostic. For a pure
+    martingale it is flat: variance scales linearly with horizon, so the annualised number
+    is the same however you sample. A rising signature means positive autocorrelation --
+    here, from informed impact being released over many steps rather than at once. A falling
+    signature would mean bid-ask bounce or other mean reversion.
+
+    This is what says which horizon's volatility to feed the model: the one matching the
+    time the maker actually holds inventory, not the finest grid available.
+
+    Returns:
+        Frame with ``block_steps``, ``block_time`` and ``sigma``.
+    """
+    rng = seed if isinstance(seed, np.random.Generator) else np.random.default_rng(seed)
+    path = _efficient_price_path(flow_config, market, n_steps, horizon, rng)
+    dt = horizon / n_steps
+    rows: list[dict[str, float]] = []
+    for block in block_steps:
+        sampled = path[::block] * market.tick_size
+        increments = np.diff(sampled)
+        if increments.size < 2:
+            continue
+        rows.append(
+            {
+                "block_steps": float(block),
+                "block_time": float(block * dt),
+                "sigma": float(np.std(increments, ddof=1) / np.sqrt(block * dt)),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def estimate_volatility(
     flow_config: FlowConfig,
     market: MarketConfig,
     n_steps: int = 4_000,
     horizon: float = 1.0,
+    block_steps: int = 25,
     seed: int | np.random.Generator | None = None,
 ) -> float:
     r"""Realised volatility of the efficient price, in price units per sqrt(time).
@@ -90,22 +161,26 @@ def estimate_volatility(
     impact of informed order flow. That matters -- a maker facing informed flow sees a more
     volatile price than ``volatility_ticks`` alone implies, and telling the model otherwise
     would make it under-price inventory risk exactly when inventory is most dangerous.
+
+    Args:
+        flow_config: Flow parameters.
+        market: Tick size and initial price.
+        n_steps: Simulation length.
+        horizon: Simulated time span.
+        block_steps: Sample the price every ``block_steps`` steps before differencing.
+            **Not 1.** Informed impact is released gradually, so the price is positively
+            autocorrelated at short horizons and a one-step estimate understates the
+            variance a maker faces over the horizon it holds inventory -- by about 4x on the
+            headline configuration. See :func:`volatility_signature`.
+        seed: Seed or ``Generator``.
     """
+    if block_steps < 1:
+        raise ValueError("block_steps must be >= 1")
     rng = seed if isinstance(seed, np.random.Generator) else np.random.default_rng(seed)
-    book = LimitOrderBook()
-    generator = OrderFlowGenerator(flow_config, market, rng)
+    path = _efficient_price_path(flow_config, market, n_steps, horizon, rng)
     dt = horizon / n_steps
-
-    efficient = float(market.initial_mid_ticks)
-    generator.seed_book(book, efficient, 0.0)
-    path = np.empty(n_steps + 1, dtype=np.float64)
-    path[0] = efficient
-    for i in range(n_steps):
-        efficient, _ = generator.step(book, efficient, i * dt, dt)
-        path[i + 1] = efficient
-
-    increments = np.diff(path) * market.tick_size
-    return float(np.std(increments, ddof=1) / np.sqrt(dt))
+    increments = np.diff(path[::block_steps]) * market.tick_size
+    return float(np.std(increments, ddof=1) / np.sqrt(block_steps * dt))
 
 
 def estimate_fill_intensity(
@@ -219,11 +294,18 @@ def fit_as_params_to_book(
     time and the finite-horizon model throws away its inventory control as the clock runs
     out (see the README).
 
+    The volatility is measured at a sampling horizon matched to ``risk_horizon`` rather
+    than at one step, because informed impact is released gradually and a one-step estimate
+    understates what the maker faces by about 4x. See :func:`volatility_signature`.
+
     Returns:
         ``(params, fill_fit, sigma)``.
     """
     rng = seed if isinstance(seed, np.random.Generator) else np.random.default_rng(seed)
-    sigma = estimate_volatility(flow_config, market, n_steps=n_steps, seed=rng)
+    # Measure volatility at the horizon the maker actually holds inventory for, capped so
+    # enough blocks remain for the estimate to be stable.
+    block = int(np.clip(round(risk_horizon * n_steps), 1, max(n_steps // 40, 1)))
+    sigma = estimate_volatility(flow_config, market, n_steps=n_steps, block_steps=block, seed=rng)
     fit = estimate_fill_intensity(flow_config, market, n_steps=n_steps, seed=rng)
     params = AvellanedaStoikovParams(
         gamma=gamma,

@@ -33,6 +33,7 @@ __all__ = [
     "plot_reservation_price",
     "plot_risk_return",
     "plot_sensitivity",
+    "plot_volatility_signature",
     "save_all",
 ]
 
@@ -360,6 +361,43 @@ def plot_fill_intensity_fit(fit: FillIntensityFit, market: MarketConfig) -> Figu
         f"(1/kappa = {fit.half_life_ticks / np.log(2) / market.tick_size:.1f} ticks), "
         f"R^2={fit.r_squared:.3f}",
     )
+
+
+def plot_volatility_signature(signatures: dict[str, pd.DataFrame]) -> Figure:
+    """Annualised volatility against sampling horizon -- the microstructure diagnostic.
+
+    Flat means the efficient price is a martingale: variance scales with time, so the
+    annualised number does not depend on how you sample. A **rising** signature means
+    positive autocorrelation, which here comes from informed impact being released over
+    many steps rather than at once. It is also the reason the model is fed a
+    block-sampled volatility rather than a one-step one: at one step the informed
+    contribution has barely happened yet.
+    """
+    apply_house_style()
+    fig, ax = plt.subplots(figsize=(8.0, 5.0))
+    for (label, frame), color in zip(signatures.items(), CATEGORICAL, strict=False):
+        ax.semilogx(
+            frame["block_steps"],
+            frame["sigma"],
+            color=color,
+            marker="o",
+            markersize=5,
+            label=label,
+        )
+        ax.annotate(
+            label,
+            xy=(frame["block_steps"].iloc[-1], frame["sigma"].iloc[-1]),
+            xytext=(6, -3),
+            textcoords="offset points",
+            fontsize=8,
+            color=color,
+        )
+    ax.set_xlabel("sampling horizon (steps)")
+    ax.set_ylabel(r"estimated $\sigma$ (price units per $\sqrt{\mathrm{time}}$)")
+    ax.set_title("A flat signature means a martingale; a rising one means slow price discovery")
+    ax.set_xlim(right=float(next(iter(signatures.values()))["block_steps"].max()) * 3)
+    ax.legend(loc="upper left")
+    return _finish(fig, "Feed the model the volatility at the horizon it holds inventory for")
 
 
 def plot_markout(

@@ -28,7 +28,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from mmsim import plotting  # noqa: E402
 from mmsim.avellaneda_stoikov import AvellanedaStoikovParams, HorizonMode  # noqa: E402
-from mmsim.calibration import fit_as_params_to_book  # noqa: E402
+from mmsim.calibration import fit_as_params_to_book, volatility_signature  # noqa: E402
 from mmsim.engine import simulate_reference  # noqa: E402
 from mmsim.experiments import (  # noqa: E402
     build_policy_set,
@@ -234,6 +234,29 @@ def main() -> int:
         f"x {flow.info_impact_ticks:.0f} tick impact)"
     )
 
+    signatures = {
+        "no informed flow": volatility_signature(
+            FlowConfig(informed_fraction=0.0), market, n_steps=8000, seed=3
+        ),
+        "15% informed, gradual": volatility_signature(flow, market, n_steps=8000, seed=3),
+        "15% informed, instant": volatility_signature(
+            FlowConfig(informed_fraction=0.15, info_impact_ticks=2.0, info_impact_speed=1.0),
+            market,
+            n_steps=8000,
+            seed=3,
+        ),
+    }
+    print("\n  Volatility signature (sigma estimated at each sampling horizon):")
+    signature_table = pd.DataFrame(
+        {name: frame.set_index("block_steps")["sigma"] for name, frame in signatures.items()}
+    )
+    print(
+        "  " + signature_table.to_string(float_format=lambda x: f"{x:8.4f}").replace("\n", "\n  ")
+    )
+    results["volatility_signature"] = {
+        name: frame.to_dict(orient="records") for name, frame in signatures.items()
+    }
+
     book_comparison = compare_policies_book(
         build_policy_set(params, inventory_limit=6.0),
         flow,
@@ -404,6 +427,7 @@ def main() -> int:
         "risk_return": plotting.plot_risk_return(reference_comparison),
         "sensitivity": plotting.plot_sensitivity(sweeps),
         "fill_intensity": plotting.plot_fill_intensity_fit(fill_fit, market),
+        "volatility_signature": plotting.plot_volatility_signature(signatures),
         "book_risk_return": plotting.plot_risk_return(book_comparison),
         "book_inventory_paths": plotting.plot_inventory_paths(book_comparison),
         "markout": plotting.plot_markout(book_comparison.runs),
