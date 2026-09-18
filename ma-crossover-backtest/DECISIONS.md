@@ -102,3 +102,20 @@ phases. Newest entries at the bottom.
     walk-forward Sharpe 0.67 vs in-sample-best 0.79, PBO 0.50, chosen parameters wander
     across the whole grid. The strategy is not robustly better than buy-and-hold
     (Sharpe 0.62 over the same span); the framework says so rather than hiding it.
+
+## Phase 5: Factor analysis
+
+28. **The French loader is a fresh implementation inside this repo** (the same parsing
+    idea as the `ffmodel` package in `project a`, which stays untouched). Cached zips
+    live under `data/cache/french/` with a 30-day refresh, since French updates monthly.
+29. **Newey-West lag defaults to the 1994 rule of thumb `4 (T/100)^(2/9)`**, i.e. 9
+    lags for ~5,000 daily observations; callers can fix it. Daily regressions are the
+    default because strategies are daily; monthly aggregation is available via the
+    `frequency` argument for anyone who prefers the conventional monthly alphas.
+30. **Regressions take raw strategy returns and subtract French `RF`.** A strategy that
+    sits in cash earning zero therefore shows a *negative* excess return while flat,
+    which is correct: the honest fix is to let cash earn `RF` in the backtest (Phase 6
+    runs do exactly that).
+31. **First factor result: the walk-forward MA crossover on SPY (2005-2025) has FF5
+    alpha of +1.8% p.a. with t = 0.93 and a momentum loading of 0.15 (t = 6.2).**
+    It is a diluted market-plus-momentum exposure, not alpha.
