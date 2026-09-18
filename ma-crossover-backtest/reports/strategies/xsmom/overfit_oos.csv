@@ -1,12 +1,12 @@
 ,0
-sharpe,0.2053918682979332
-sharpe_se_annual,0.25358194073397594
-psr,0.7910191420071071
+sharpe,0.17622033503274623
+sharpe_se_annual,0.25349053957790746
+psr,0.7565272420159264
 dsr,
 n_trials,1
-min_track_record_periods,16241.536699118551
-bootstrap_ci_lo,-0.2679391699861312
-bootstrap_ci_hi,0.6411244458652545
-bootstrap_p_sharpe_le_0,0.192
+min_track_record_periods,22047.603516618932
+bootstrap_ci_lo,-0.2989734630927132
+bootstrap_ci_hi,0.6123206480863108
+bootstrap_p_sharpe_le_0,0.226
 pbo,
-flags,PSR 0.79 < 0.95: Sharpe not distinguishable from zero; bootstrap P(Sharpe<=0) = 0.19
+flags,PSR 0.76 < 0.95: Sharpe not distinguishable from zero; bootstrap P(Sharpe<=0) = 0.23

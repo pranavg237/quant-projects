@@ -54,10 +54,11 @@
   "start": "2005-01-01",
   "end": "2025-08-29",
   "benchmark": "SPY",
+  "borrow_rate": 0.005,
   "train_years": 5.0,
   "test_years": 1.0,
   "caveats": [
     "Candidate pairs chosen by hand today (selection bias).",
-    "No borrow cost on shorts."
+    "Borrow is charged at a flat 50 bp; hard-to-borrow names cost far more."
   ]
 }

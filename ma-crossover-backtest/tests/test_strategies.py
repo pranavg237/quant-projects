@@ -243,3 +243,66 @@ def test_pairs_skips_missing_symbols_and_handles_stops() -> None:
     res = run_backtest(uni_data, strat, start=data.index[252], execution=NO_COST)
     assert res.records["n_pairs"].max() == 1
     assert res.records["n_open"].max() <= 1
+
+
+# -- Phase 8 regressions ---------------------------------------------------------------
+
+
+def test_tsmom_uses_the_full_volatility_window_even_when_it_exceeds_the_lookback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With ``vol_lookback > lookback`` the frame must still be long enough to measure vol.
+
+    The strategy used to request ``lookback + 1`` bars unconditionally, so a 21-day
+    momentum window with a 60-day vol window silently estimated vol on 20 returns --
+    a noisier estimate, and therefore a systematically different position size.
+    """
+    seen: dict[str, int] = {}
+
+    def spy(closes: pd.DataFrame, lookback: int, ppy: int = 252) -> pd.Series:
+        seen["rows"] = len(closes)
+        seen["used"] = len(closes.pct_change().iloc[-lookback:].dropna())
+        return realized_vol(closes, lookback, ppy)
+
+    monkeypatch.setattr("quantbt.strategies.tsmom.realized_vol", spy)
+    data = _trend_universe(400)
+    strat = TimeSeriesMomentum(lookback=21, skip=0, vol_lookback=60, rebalance="monthly")
+    run_backtest(data, strat, start=data.index[100], execution=NO_COST)
+    assert seen["rows"] == 61  # max(lookback, vol_lookback) + 1, not lookback + 1
+    assert seen["used"] == 60
+
+
+def test_tsmom_momentum_window_is_the_lookback_not_the_frame() -> None:
+    """The signal must be measured over ``lookback`` bars however many are fetched."""
+    n = 400
+    index = pd.bdate_range("2018-01-01", periods=n)
+    # Down for the first half, up for the last 40 bars: a 21-day lookback sees only the
+    # recent up-move, so the sign must be positive even though the frame starts higher.
+    price = np.concatenate([np.linspace(200.0, 100.0, n - 40), np.linspace(100.0, 130.0, 40)])
+    data = PriceData.from_frames({"UP": _frame(price, index)})
+    strat = TimeSeriesMomentum(lookback=21, skip=0, vol_lookback=60, rebalance="daily")
+    res = run_backtest(data, strat, start=index[-2], execution=NO_COST)
+    assert res.weights["UP"].iloc[-1] > 0
+
+
+def test_xsmom_legs_never_share_a_symbol() -> None:
+    """``top_frac=0.5`` on an odd number of names used to round both legs up to 4 of 7,
+    putting the middle name in the long and the short list at once."""
+    rng = np.random.default_rng(3)
+    n = 400
+    index = pd.bdate_range("2018-01-01", periods=n)
+    frames = {
+        f"S{i}": _frame(100 * np.exp(np.cumsum(rng.normal(0.0002 * (i - 3), 0.01, n))), index)
+        for i in range(7)
+    }
+    data = PriceData.from_frames(frames)
+    strat = CrossSectionalMomentum(lookback=252, skip=0, top_frac=0.5, min_names=5)
+    res = run_backtest(data, strat, start=index[260], execution=NO_COST)
+    held = (res.weights != 0).sum(axis=1)
+    assert held.max() <= 6  # 3 long + 3 short out of 7, never 4 + 4 with an overlap
+    # the legs stay balanced: equally many longs and shorts on every invested bar
+    longs = (res.weights > 0).sum(axis=1)
+    shorts = (res.weights < 0).sum(axis=1)
+    invested = held > 0
+    assert (longs[invested] == shorts[invested]).all()
+    assert longs[invested].max() == 3

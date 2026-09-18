@@ -51,7 +51,9 @@ class CrossSectionalMomentum(Strategy):
         weights: dict[str, float] = {}
         if len(scores) >= self.min_names:
             ranked = sorted(scores, key=scores.__getitem__)
-            n = max(1, round(self.top_frac * len(ranked)))
+            # Cap at half the names: rounding top_frac=0.5 up on an odd count would put
+            # the same symbol in both legs, and the short weight would silently win.
+            n = max(1, min(round(self.top_frac * len(ranked)), len(ranked) // 2))
             longs, shorts = ranked[-n:], ranked[:n]
             if self.long_only:
                 weights = dict.fromkeys(longs, self.gross / n)

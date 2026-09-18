@@ -47,6 +47,7 @@ def run_backtest(
     rf: pd.Series | float | None = None,
     universe: Universe | None = None,
     benchmark: str | None = None,
+    borrow_rate: float = 0.0,
     params: Mapping[str, Any] | None = None,
 ) -> BacktestResult:
     """Run ``strategy`` over ``data`` and return a :class:`BacktestResult`.
@@ -54,6 +55,9 @@ def run_backtest(
     Bars before ``start`` are visible as history but no decisions are made on them.
     ``universe`` defaults to :func:`quantbt.universe.from_data` (a symbol is tradable
     only while it has prices). ``rf`` is an annual rate or a per-period series.
+    ``borrow_rate`` is an annual stock-loan fee charged on short market value; it
+    defaults to 0 for backwards compatibility, but any long/short result reported
+    without it is an upper bound.
     """
     execution = execution or ExecutionSimulator()
     index = data.index
@@ -82,6 +86,9 @@ def run_backtest(
 
     ppy = periods_per_year(index)
     rf_series = _rf_series(rf, index, ppy)
+    if borrow_rate < 0:
+        raise ValueError("borrow_rate must be >= 0")
+    borrow_per_period = (1.0 + borrow_rate) ** (1.0 / ppy) - 1.0
 
     portfolio = Portfolio(cash=float(initial_capital))
     fill_field = data.open if execution.fill_at == "open" else data.close
@@ -107,8 +114,10 @@ def run_backtest(
         now = pd.Timestamp(index[i])
         members = uni.members(now)
 
-        # 1. interest on cash held since the previous close
+        # 1. interest on cash held since the previous close, less the stock-loan fee on
+        #    shorts carried over the same period
         portfolio.accrue_interest(float(rf_series.iloc[i]))
+        portfolio.charge_borrow(borrow_per_period)
 
         # 2. fills for orders queued at the previous close
         if pending:
@@ -147,32 +156,29 @@ def run_backtest(
         prices = {s: float(close_values[i, c]) for s, c in col.items()}
         portfolio.mark(prices)
 
-        # 5. strategy decision on evaluated bars
-        if i >= first_eval:
-            ctx = Context(
-                data=data,
-                portfolio=portfolio,
-                now=now,
-                position_index=i,
-                symbols=members,
-                params=strategy_params,
-            )
-            if not started:
-                strategy.on_start(ctx)
-                started = True
-            strategy.on_bar(ctx)
-            if i < last_eval:
-                pending = list(ctx._orders)
-            else:
-                rejections.extend(
-                    Rejection(o, now, "submitted on the final bar") for o in ctx._orders
-                )
-            eval_index.append(now)
-            equity_hist.append(portfolio.equity)
-            cash_hist.append(portfolio.cash)
-            pos_hist.append({s: p.quantity for s, p in portfolio.positions.items()})
-            weight_hist.append(portfolio.weights())
-            record_hist.append(dict(ctx._records))
+        # 5. strategy decision (the loop only visits evaluated bars)
+        ctx = Context(
+            data=data,
+            portfolio=portfolio,
+            now=now,
+            position_index=i,
+            symbols=members,
+            params=strategy_params,
+        )
+        if not started:
+            strategy.on_start(ctx)
+            started = True
+        strategy.on_bar(ctx)
+        if i < last_eval:
+            pending = list(ctx._orders)
+        else:
+            rejections.extend(Rejection(o, now, "submitted on the final bar") for o in ctx._orders)
+        eval_index.append(now)
+        equity_hist.append(portfolio.equity)
+        cash_hist.append(portfolio.cash)
+        pos_hist.append({s: p.quantity for s, p in portfolio.positions.items()})
+        weight_hist.append(portfolio.weights())
+        record_hist.append(dict(ctx._records))
 
     idx = pd.DatetimeIndex(eval_index, name="date")
     symbols = data.symbols
@@ -205,6 +211,8 @@ def run_backtest(
         initial_capital=float(initial_capital),
         total_commission=portfolio.total_commission,
         total_slippage=portfolio.total_slippage,
+        total_borrow_cost=portfolio.total_borrow_cost,
+        borrow_rate=float(borrow_rate),
     )
 
 

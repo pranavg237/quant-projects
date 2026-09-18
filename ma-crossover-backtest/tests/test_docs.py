@@ -9,6 +9,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pandas as pd
+import pytest
+
 from quantbt.data import synthetic_prices
 from quantbt.engine import run_backtest
 from quantbt.execution import ExecutionSimulator, FixedBpsSlippage, PercentageCommission
@@ -80,3 +83,90 @@ def test_documented_files_exist() -> None:
         assert Path(name).exists(), f"README links to missing {name}"
     for path in re.findall(r"\]\((tests/\w+\.py|scripts/\w+\.py)\)", readme):
         assert Path(path).exists(), f"README links to missing {path}"
+
+
+# -- RESULTS.md must agree with the CSV that produced it ---------------------------------
+
+RESULTS_CSV = Path("reports/strategies/results.csv")
+
+
+def _markdown_rows(text: str, header_contains: str) -> dict[str, list[str]]:
+    """The rows of the first markdown table whose header contains ``header_contains``."""
+    rows: dict[str, list[str]] = {}
+    in_table = False
+    for line in text.splitlines():
+        if not line.startswith("|"):
+            in_table = False
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if header_contains in line:
+            in_table = True
+            continue
+        if not in_table or set(line) <= set("|- "):
+            continue
+        rows[cells[0].replace("**", "")] = cells[1:]
+    return rows
+
+
+def _number(cell: str) -> float:
+    """Parse a table cell like ``-16.1%``, ``**0.58**``, ``1,102`` or ``+2.4%``."""
+    raw = cell.replace("**", "").replace(",", "").strip()
+    if raw.endswith("%"):
+        return float(raw[:-1]) / 100.0
+    return float(raw)
+
+
+@pytest.mark.skipif(not RESULTS_CSV.exists(), reason="run scripts/run_strategies.py first")
+def test_results_md_matches_the_generated_table() -> None:
+    """Every headline number in RESULTS.md is the one the pipeline actually produced.
+
+    The tables are hand-written prose around machine-generated numbers, which is exactly
+    the arrangement that silently goes stale. This is the check that stops it.
+    """
+    table = pd.read_csv(RESULTS_CSV).set_index("strategy")
+    text = Path("RESULTS.md").read_text()
+
+    headline = _markdown_rows(text, "| CAGR | Vol |")
+    columns = ["cagr", "ann_vol", "sharpe", "sortino", "max_drawdown", "max_dd_days", "turnover"]
+    for name, row in table.iterrows():
+        cells = headline[str(name)]
+        assert len(cells) == 8, f"{name}: expected 8 columns, got {cells}"
+        for cell, column in zip(cells, columns, strict=False):
+            reported, actual = _number(cell), float(row[column])
+            tol = 0.5 if column == "max_dd_days" else max(abs(actual) * 0.02, 0.005)
+            assert abs(reported - actual) <= tol, f"{name}.{column}: {reported} != {actual}"
+
+    diagnostics = _markdown_rows(text, "| Bootstrap 95% CI |")
+    for name, row in table.iterrows():
+        sharpe, ci, psr, pbo, alpha, tstat, r2, _beta, _t = diagnostics[str(name)]
+        assert abs(_number(sharpe) - float(row["sharpe"])) <= 0.005
+        lo, hi = (_number(x) for x in ci.split(" to "))
+        assert abs(lo - float(row["boot_ci_lo"])) <= 0.005
+        assert abs(hi - float(row["boot_ci_hi"])) <= 0.005
+        assert abs(_number(psr) - float(row["psr"])) <= 0.0005
+        assert abs(_number(pbo) - float(row["pbo"])) <= 0.005
+        assert abs(_number(alpha) - float(row["ff5_alpha"])) <= 0.0005
+        assert abs(_number(tstat) - float(row["ff5_alpha_t"])) <= 0.005
+        assert abs(_number(r2) - float(row["ff5_r2"])) <= 0.005
+
+    penalty = _markdown_rows(text, "| In-sample best |")
+    for name, row in table.iterrows():
+        is_cell, oos_cell, gap_cell = penalty[str(name)]
+        assert abs(_number(is_cell) - float(row["is_sharpe"])) <= 0.005
+        assert abs(_number(oos_cell) - float(row["sharpe"])) <= 0.005
+        # the gap is rounded from the unrounded Sharpes, not from the rounded cells
+        gap = float(row["sharpe"]) - float(row["is_sharpe"])
+        assert abs(_number(gap_cell) - gap) <= 0.005
+
+
+@pytest.mark.skipif(not RESULTS_CSV.exists(), reason="run scripts/run_strategies.py first")
+def test_results_md_documents_the_borrow_rate_actually_charged() -> None:
+    """A long/short result reported without a stock-loan fee is an upper bound; say so."""
+    table = pd.read_csv(RESULTS_CSV).set_index("strategy")
+    text = Path("RESULTS.md").read_text()
+    for name, row in table.iterrows():
+        shorts = float(row["exposure"]) > 0 and name in ("tsmom", "xsmom", "pairs")
+        if shorts:
+            assert float(row["borrow_rate"]) > 0, f"{name} shorts but pays no borrow"
+            bps = round(float(row["borrow_rate"]) * 1e4)
+            assert f"{bps} bp" in text, f"RESULTS.md does not state {name}'s {bps} bp borrow"

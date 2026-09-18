@@ -49,7 +49,8 @@ SPECS: list[StrategySpec] = [
         start="2005-01-01",
         description="Long/short each of 13 asset-class ETFs by the sign of its trailing return, "
         "volatility-scaled, rebalanced monthly.",
-        caveats=["ETF list chosen today (selection bias); no borrow cost on shorts."],
+        borrow_rate=0.003,  # 30 bp p.a.: liquid ETFs trade close to general collateral
+        caveats=["ETF list chosen today (selection bias)."],
     ),
     StrategySpec(
         name="xsmom",
@@ -61,10 +62,11 @@ SPECS: list[StrategySpec] = [
         start="2005-01-01",
         description="Dollar-neutral: long the top and short the bottom fraction of 70 large caps "
         "by 12-1 momentum, rebalanced monthly.",
+        borrow_rate=0.005,  # 50 bp p.a.: large-cap general collateral
         caveats=[
             "SURVIVORSHIP BIAS: the 70 stocks are today's large caps; every failure since "
             "2005 is missing.",
-            "No borrow cost on shorts.",
+            "Borrow is charged at a flat 50 bp; hard-to-borrow names cost far more.",
         ],
     ),
     StrategySpec(
@@ -92,9 +94,10 @@ SPECS: list[StrategySpec] = [
         start="2005-01-01",
         description="Engle-Granger cointegration test on 17 candidate pairs every quarter; "
         "trade the z-score of the frozen spread, dollar neutral.",
+        borrow_rate=0.005,
         caveats=[
             "Candidate pairs chosen by hand today (selection bias).",
-            "No borrow cost on shorts.",
+            "Borrow is charged at a flat 50 bp; hard-to-borrow names cost far more.",
         ],
     ),
 ]

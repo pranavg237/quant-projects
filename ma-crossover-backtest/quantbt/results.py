@@ -35,6 +35,8 @@ class BacktestResult:
     initial_capital: float
     total_commission: float
     total_slippage: float
+    total_borrow_cost: float = 0.0
+    borrow_rate: float = 0.0
 
     @property
     def returns(self) -> pd.Series:
@@ -107,8 +109,17 @@ class BacktestResult:
         )
         s["total_commission"] = self.total_commission
         s["total_slippage"] = self.total_slippage
-        s["cost_drag_pct"] = (self.total_commission + self.total_slippage) / self.initial_capital
+        s["total_borrow_cost"] = self.total_borrow_cost
+        s["cost_drag_pct"] = (
+            self.total_commission + self.total_slippage + self.total_borrow_cost
+        ) / self.initial_capital
         s["rejected_orders"] = len(self.rejections)
+        # Nothing stops a strategy from running gross exposure above 1 or cash below 0;
+        # the engine lends at the risk-free rate rather than refusing. Surface it, so an
+        # accidentally levered backtest cannot pass as an unlevered one.
+        gross = self.weights.abs().sum(axis=1)
+        s["max_gross_exposure"] = float(gross.max()) if len(gross) else float("nan")
+        s["min_cash_weight"] = float((self.cash / self.equity).min())
         return s
 
     def to_frame(self) -> pd.DataFrame:

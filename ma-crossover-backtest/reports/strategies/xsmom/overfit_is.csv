@@ -1,12 +1,12 @@
 ,0
-sharpe,0.15615989224923424
-sharpe_se_annual,0.2532619125129794
-psr,0.7312488752954259
-dsr,0.6648060473932449
+sharpe,0.128784070523438
+sharpe_se_annual,0.2532072426494417
+psr,0.6944876544750459
+dsr,0.6176780663241156
 n_trials,8
-min_track_record_periods,28025.05575400863
-bootstrap_ci_lo,-0.30977635997909986
-bootstrap_ci_hi,0.5952760824024602
-bootstrap_p_sharpe_le_0,0.285
-pbo,0.9276612276612277
-flags,PSR 0.73 < 0.95: Sharpe not distinguishable from zero; DSR 0.66 < 0.95 after 8 trials: likely selection effect; bootstrap P(Sharpe<=0) = 0.28; PBO 0.93 > 0.5: in-sample best is usually below median OOS
+min_track_record_periods,41187.812011306014
+bootstrap_ci_lo,-0.3374801874068859
+bootstrap_ci_hi,0.5693838702214443
+bootstrap_p_sharpe_le_0,0.32
+pbo,0.91002331002331
+flags,PSR 0.69 < 0.95: Sharpe not distinguishable from zero; DSR 0.62 < 0.95 after 8 trials: likely selection effect; bootstrap P(Sharpe<=0) = 0.32; PBO 0.91 > 0.5: in-sample best is usually below median OOS

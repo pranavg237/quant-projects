@@ -47,9 +47,11 @@ price it had just finished observing. On SPY 2018-2023 that one bug was worth 4.
 percentage points of a 48-point return. The default is now a next-open fill.
 
 **Costs are on by default.** 5 bps of slippage per side and 1 bp of commission, charged on
-the notional and included in order sizing. Turnover is reported next to return, because a
-strategy that trades 10x a year and one that trades twice are not comparable on return
-alone.
+the notional and included in order sizing, plus an annual stock-loan fee on short market
+value (`borrow_rate`). Turnover is reported next to return, because a strategy that trades
+10x a year and one that trades twice are not comparable on return alone, and `summary()`
+reports max gross exposure and minimum cash weight so a levered backtest cannot pass as an
+unlevered one.
 
 **Parameters are never chosen on the data they are scored on.** `walk_forward` searches
 the grid on a training window, then scores the winner on the following window only, and
@@ -82,19 +84,20 @@ place orders, which is what makes lookahead impossible.
 ```python
 from quantbt.strategy import Context, Strategy
 
+
 class Momentum(Strategy):
     name = "momentum"
 
     def __init__(self, lookback: int = 126) -> None:
         self.lookback = lookback
-        self.warmup = lookback          # the engine warns if history is too short
+        self.warmup = lookback  # the engine warns if history is too short
 
     def on_bar(self, ctx: Context) -> None:
-        closes = ctx.history("close", self.lookback)      # ends at today, never later
+        closes = ctx.history("close", self.lookback)  # ends at today, never later
         winners = [s for s in ctx.symbols if closes[s].iloc[-1] > closes[s].iloc[0]]
         if winners:
             ctx.order_target_weights({s: 1 / len(winners) for s in winners})
-        ctx.record(n_winners=len(winners))                # shows up in the results
+        ctx.record(n_winners=len(winners))  # shows up in the results
 ```
 
 Run it:
@@ -108,7 +111,7 @@ data = load_yahoo(["SPY", "QQQ", "TLT"], start="2004-01-01", end="2025-08-29")
 result = run_backtest(
     data,
     Momentum(126),
-    start="2006-01-01",                                    # earlier bars are warm-up only
+    start="2006-01-01",  # earlier bars are warm-up only
     execution=ExecutionSimulator(PercentageCommission(1e-4), FixedBpsSlippage(5.0)),
     rf=0.02,
     benchmark="SPY",
@@ -122,10 +125,14 @@ Then validate it before believing it:
 from quantbt.validation import walk_forward, overfit_report
 
 wf = walk_forward(
-    data, lambda p: Momentum(p["lookback"]), {"lookback": [63, 126, 252]},
-    start="2006-01-01", train_years=5, test_years=1,
+    data,
+    lambda p: Momentum(p["lookback"]),
+    {"lookback": [63, 126, 252]},
+    start="2006-01-01",
+    train_years=5,
+    test_years=1,
 )
-print(wf.summary())                       # out-of-sample beside in-sample
+print(wf.summary())  # out-of-sample beside in-sample
 print(overfit_report(wf.oos_returns, rf=wf.oos_rf).flags)
 ```
 
@@ -162,12 +169,16 @@ the same strategy both ways on SPY and asserts the equity curves agree to 4e-15.
 - [AUDIT.md](AUDIT.md) — what was wrong with the original script, ranked by how much each
   issue inflated the result
 - [RESULTS.md](RESULTS.md) — all five strategies, including the ones that lose money
+- [REVIEW.md](REVIEW.md) — a skeptical re-read of the finished codebase: what is still
+  wrong, what was fixed because of it, and what a desk would reject
 - [DECISIONS.md](DECISIONS.md) — every judgement call and why
 
 ## Limitations
 
-Daily bars only. No intraday data, no order book, no borrow costs on shorts, no taxes, no
-capacity model. The universes are built from instruments that exist today, so the
+Daily bars only. No intraday data, no order book, no taxes, no capacity model. Short
+borrow is a single flat rate per strategy, not a per-name, time-varying one, and there is
+no hard-to-borrow or recall model. The universes are built from instruments that exist
+today, so the
 cross-sectional stock results are an upper bound. Yahoo Finance is the only data source
 and it silently revises history; results are tied to the snapshot recorded in
 `data/cache/MANIFEST.json`.

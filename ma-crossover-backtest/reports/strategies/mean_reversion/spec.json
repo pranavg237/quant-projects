@@ -34,6 +34,7 @@
   "start": "2005-01-01",
   "end": "2025-08-29",
   "benchmark": "SPY",
+  "borrow_rate": 0.0,
   "train_years": 5.0,
   "test_years": 1.0,
   "caveats": [

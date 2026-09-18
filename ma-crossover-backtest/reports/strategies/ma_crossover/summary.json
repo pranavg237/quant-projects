@@ -12,6 +12,7 @@
   "max_dd_days":808,
   "turnover":1.9634474798,
   "exposure":0.7785686803,
+  "borrow_rate":0.0,
   "is_sharpe":0.6756256163,
   "is_params":"{\"short\": 10, \"long\": 200}",
   "bench_cagr":0.1049648679,
@@ -30,5 +31,5 @@
   "mom_t":5.6787394238,
   "ff6_alpha":0.0211611015,
   "ff6_alpha_t":1.0603166218,
-  "runtime_s":91.4
+  "runtime_s":100.3
 }

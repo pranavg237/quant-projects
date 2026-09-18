@@ -71,6 +71,7 @@ class Portfolio:
     _open: dict[str, _OpenTrip] = field(default_factory=dict)
     total_commission: float = 0.0
     total_slippage: float = 0.0
+    total_borrow_cost: float = 0.0
 
     @property
     def equity(self) -> float:
@@ -89,6 +90,23 @@ class Portfolio:
     def accrue_interest(self, rate: float) -> None:
         """Apply one period of ``rate`` to the cash balance (negative cash pays it)."""
         self.cash *= 1.0 + rate
+
+    def charge_borrow(self, rate: float) -> float:
+        """Pay one period of ``rate`` on the market value of every short position.
+
+        Short sale proceeds earn the cash rate in :meth:`accrue_interest`; the stock
+        loan fee is the offsetting charge. Ignoring it is the single largest free lunch
+        in a long/short backtest, because the short leg looks costless.
+        """
+        if rate == 0.0:
+            return 0.0
+        short_value = sum(-p.market_value for p in self.positions.values() if p.quantity < 0)
+        if short_value <= 0:
+            return 0.0
+        fee = short_value * rate
+        self.cash -= fee
+        self.total_borrow_cost += fee
+        return fee
 
     def mark(self, prices: dict[str, float]) -> None:
         for symbol, pos in self.positions.items():

@@ -35,6 +35,7 @@ class StrategySpec:
     constraint: Callable[[Mapping[str, Any]], bool] | None = None
     description: str = ""
     caveats: Sequence[str] = field(default_factory=list)
+    borrow_rate: float = 0.0  # annual stock-loan fee on short market value
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,7 @@ def run_spec(
         "rf": rf_series,
         "benchmark": spec.benchmark,
         "universe": universe,
+        "borrow_rate": spec.borrow_rate,
     }
     log(f"[{spec.name}] {len(tradable)} tradable symbols, {len(data)} bars, walk-forward...")
 
@@ -151,6 +153,7 @@ def run_spec(
             "max_dd_days": s_oos["max_dd_duration_days"],
             "turnover": s_oos["turnover"],
             "exposure": s_oos["exposure"],
+            "borrow_rate": spec.borrow_rate,
             "is_sharpe": s_is["sharpe"],
             "is_params": json.dumps(wf.is_best_params),
             "bench_cagr": s_bench["cagr"],
@@ -195,6 +198,7 @@ def run_spec(
                 "start": spec.start,
                 "end": end,
                 "benchmark": spec.benchmark,
+                "borrow_rate": spec.borrow_rate,
                 "train_years": train_years,
                 "test_years": test_years,
                 "caveats": list(spec.caveats),

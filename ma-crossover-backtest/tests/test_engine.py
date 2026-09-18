@@ -467,3 +467,60 @@ def test_round_trip_with_zero_cost_basis_reports_zero_return() -> None:
     p.apply_fill(_fill("A", -10, 0.0, 1))
     assert len(p.round_trips) == 1
     assert p.round_trips[0].return_pct == 0.0
+
+
+# -- short borrow cost -------------------------------------------------------------------
+
+
+class _AlwaysShort(Strategy):
+    name = "always_short"
+
+    def __init__(self, symbol: str, weight: float = -1.0) -> None:
+        self.symbol = symbol
+        self.weight = weight
+
+    def on_bar(self, ctx: Context) -> None:
+        if ctx.quantity(self.symbol) == 0:
+            ctx.order_target_weight(self.symbol, self.weight)
+
+
+def test_borrow_cost_is_charged_only_on_shorts() -> None:
+    """Carrying a short must cost the stock-loan fee; a long must not be charged."""
+    data = synthetic_prices(260, symbols=("A",), drift=0.0, vol=0.005, seed=5)
+    no_cost = ExecutionSimulator(NoCommission(), NoSlippage())
+    short_free = run_backtest(data, _AlwaysShort("A"), execution=no_cost)
+    short_paid = run_backtest(data, _AlwaysShort("A"), execution=no_cost, borrow_rate=0.03)
+    long_paid = run_backtest(data, _AlwaysShort("A", 1.0), execution=no_cost, borrow_rate=0.03)
+
+    assert short_free.total_borrow_cost == 0.0
+    assert long_paid.total_borrow_cost == 0.0  # a long position is not borrowed
+    assert short_paid.total_borrow_cost > 0.0
+    assert short_paid.equity.iloc[-1] < short_free.equity.iloc[-1]
+
+    # ~3% a year on ~100% short exposure over ~one year of bars
+    drag = 1.0 - short_paid.equity.iloc[-1] / short_free.equity.iloc[-1]
+    assert 0.02 < drag < 0.04
+    assert short_paid.summary()["total_borrow_cost"] == pytest.approx(short_paid.total_borrow_cost)
+
+
+def test_borrow_rate_must_be_non_negative() -> None:
+    data = synthetic_prices(60, symbols=("A",), seed=1)
+    with pytest.raises(ValueError, match="borrow_rate"):
+        run_backtest(data, _AlwaysShort("A"), borrow_rate=-0.01)
+
+
+def test_summary_surfaces_leverage() -> None:
+    """A backtest that borrows cash must not be able to pass as an unlevered one."""
+    data = synthetic_prices(120, symbols=("A",), drift=0.0, vol=0.005, seed=2)
+
+    class Levered(Strategy):
+        name = "levered"
+
+        def on_bar(self, ctx: Context) -> None:
+            if ctx.quantity("A") == 0:
+                ctx.order_target_weight("A", 1.5)
+
+    s = run_backtest(data, Levered(), execution=ExecutionSimulator(NoCommission(), NoSlippage()))
+    summary = s.summary()
+    assert summary["max_gross_exposure"] > 1.4
+    assert summary["min_cash_weight"] < -0.4  # the cash leg is a margin loan
