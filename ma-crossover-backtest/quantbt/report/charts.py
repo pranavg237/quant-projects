@@ -89,6 +89,42 @@ def _date_ticks(index: pd.DatetimeIndex, count: int = 8) -> list[tuple[int, str]
     return [(i, str(years[i])) for i in boundaries[::step]]
 
 
+MAX_PLOT_POINTS = 1400  # about 1.5 per horizontal pixel of the 960-wide viewport
+
+
+def decimate_positions(
+    frame: Sequence[np.ndarray], n: int, max_points: int = MAX_PLOT_POINTS
+) -> list[int]:
+    """Row positions to keep when plotting ``n`` points, preserving every local extreme.
+
+    A twenty-year daily series is 5,000 points drawn into 960 pixels, so most of them are
+    invisible: they only bloat the file. Plain every-kth sampling would be wrong, because
+    it can drop the bottom of a drawdown. This buckets the x-axis at roughly one bucket
+    per pixel and keeps each bucket's minimum and maximum *across all series*, so spikes
+    and troughs survive, and every kept point keeps its own real date and value.
+    """
+    if n <= max_points:
+        return list(range(n))
+    # Each bucket can contribute a minimum and a maximum per series, so divide the budget
+    # by both; otherwise a two-series chart keeps twice what was asked for.
+    # ... and leave room for the two endpoints, which are always kept.
+    buckets = max(1, (max_points - 2) // max(2 * len(frame), 2))
+    edges = np.linspace(0, n, buckets + 1).astype(int)
+    keep = {0, n - 1}
+    for start, stop in itertools.pairwise(edges):
+        if stop <= start:
+            continue
+        for values in frame:
+            window = values[start:stop]
+            finite = np.isfinite(window)
+            if not finite.any():
+                continue
+            masked = np.where(finite, window, np.nan)
+            keep.add(start + int(np.nanargmin(masked)))
+            keep.add(start + int(np.nanargmax(masked)))
+    return sorted(keep)
+
+
 def _last_finite(values: np.ndarray) -> float | None:
     for v in reversed(values):
         if math.isfinite(v):
@@ -177,8 +213,14 @@ def time_series_chart(
     series = [s for s in series if len(s.values.dropna())]
     if not series:
         return '<p class="empty">No data.</p>'
-    index = pd.DatetimeIndex(series[0].values.index)
+    full_index = pd.DatetimeIndex(series[0].values.index)
     x0, y0, x1, y1 = _plot_box()
+
+    # Thin the data to what the viewport can actually show, keeping every extreme.
+    keep = decimate_positions([s.values.to_numpy(dtype=float) for s in series], len(full_index))
+    if len(keep) < len(full_index):
+        series = [Series(s.name, s.values.take(keep), s.color_var, s.fill) for s in series]
+    index = pd.DatetimeIndex(full_index[keep])
     n = len(index)
 
     lo = min(float(np.nanmin(s.values.to_numpy())) for s in series)

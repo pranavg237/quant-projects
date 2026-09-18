@@ -264,3 +264,59 @@ def test_converging_end_labels_are_dropped_not_stacked() -> None:
     ns = "{http://www.w3.org/2000/svg}"
     # axis labels are present in both; only the series end-labels differ
     assert len(root_together.findall(f"{ns}text")) < len(root_apart.findall(f"{ns}text"))
+
+
+def test_decimation_preserves_extremes_and_shrinks_the_file() -> None:
+    """Thinning a 20-year daily series must not smooth away the bottom of a drawdown."""
+    from quantbt.report.charts import MAX_PLOT_POINTS, decimate_positions
+
+    n = 5000
+    idx = pd.bdate_range("2005-01-03", periods=n)
+    rng = np.random.default_rng(11)
+    values = pd.Series(np.cumsum(rng.normal(0, 0.01, n)), index=idx)
+    values.iloc[3333] = -99.0  # a single catastrophic bar
+    values.iloc[4444] = 99.0
+
+    keep = decimate_positions([values.to_numpy()], n)
+    assert len(keep) <= MAX_PLOT_POINTS
+    assert 3333 in keep and 4444 in keep  # both extremes survive
+    assert keep[0] == 0 and keep[-1] == n - 1
+    assert keep == sorted(keep)
+    assert decimate_positions([values.to_numpy()], 100) == list(range(100))  # no thinning needed
+
+    big = time_series_chart([Series("x", values)], label="big", value_format="ratio")
+    ElementTree.fromstring(big)
+    assert "-99" in big or "99" in big  # the spike is drawn, not averaged away
+    # the tooltip payload shrinks with the path
+    points = json.loads(ElementTree.fromstring(big).attrib["data-points"])
+    assert len(points["dates"]) == len(keep)
+    assert len(big) < 200_000
+
+
+def test_decimation_keeps_series_aligned() -> None:
+    """All series on one chart share the kept positions, so the crosshair stays truthful."""
+    n = 4000
+    idx = pd.bdate_range("2008-01-01", periods=n)
+    rng = np.random.default_rng(12)
+    a = pd.Series(np.cumsum(rng.normal(0, 0.01, n)), index=idx)
+    b = pd.Series(np.cumsum(rng.normal(0, 0.02, n)), index=idx)
+    svg = time_series_chart(
+        [Series("a", a), Series("b", b, "series_2")], label="two", value_format="ratio"
+    )
+    points = json.loads(ElementTree.fromstring(svg).attrib["data-points"])
+    assert len({len(s["v"]) for s in points["series"]}) == 1
+    assert len(points["series"][0]["v"]) == len(points["dates"])
+    # a sampled value is a real observation on the date the tooltip will show
+    k = len(points["dates"]) // 2
+    date = pd.Timestamp(points["dates"][k])
+    assert points["series"][0]["v"][k] == pytest.approx(float(a.loc[date]), abs=1e-6)
+
+
+def test_decimation_budget_accounts_for_series_count() -> None:
+    from quantbt.report.charts import MAX_PLOT_POINTS, decimate_positions
+
+    n = 6000
+    rng = np.random.default_rng(13)
+    arrays = [np.cumsum(rng.normal(0, 0.01, n)) for _ in range(3)]
+    assert len(decimate_positions(arrays, n)) <= MAX_PLOT_POINTS
+    assert len(decimate_positions(arrays[:1], n)) <= MAX_PLOT_POINTS
