@@ -55,12 +55,19 @@ from .types import FloatArray, OptionType, to_float
 __all__ = [
     "DEFAULT_BOUNDS",
     "DEFAULT_SEEDS",
+    "PARAM_NAMES",
     "CalibrationResult",
+    "HoldoutResult",
     "calibrate",
+    "cross_validate",
     "fit_flat_vol_per_expiry",
     "fit_global_flat_vol",
+    "split_surface",
     "surface_errors",
 ]
+
+#: Order of the packed parameter vector.
+PARAM_NAMES: tuple[str, ...] = ("v0", "kappa", "theta", "xi", "rho")
 
 #: ``(lower, upper)`` bounds on ``[v0, kappa, theta, xi, rho]``.
 DEFAULT_BOUNDS: tuple[tuple[float, ...], tuple[float, ...]] = (
@@ -94,6 +101,12 @@ class CalibrationResult:
             spread means the objective is multimodal and the answer is seed-dependent.
         errors: Per-quote frame with model vol, market vol and the residual.
         success: Whether the winning local solve reported convergence.
+        std_errors: Asymptotic standard error of each parameter, keyed by name, or empty
+            if the Jacobian was rank deficient. See :func:`_parameter_uncertainty`.
+        correlations: Parameter correlation matrix implied by the same covariance.
+            ``kappa`` and ``xi`` typically correlate above 0.9, which is the quantitative
+            form of the well-known statement that they are not separately identified by a
+            single surface.
     """
 
     params: HestonParams
@@ -105,6 +118,8 @@ class CalibrationResult:
     seed_rmses: list[float] = field(default_factory=list)
     errors: pd.DataFrame = field(default_factory=pd.DataFrame)
     success: bool = True
+    std_errors: dict[str, float] = field(default_factory=dict)
+    correlations: pd.DataFrame = field(default_factory=pd.DataFrame)
 
     def __str__(self) -> str:
         p = self.params
@@ -121,8 +136,22 @@ class CalibrationResult:
             f"({'satisfied' if p.satisfies_feller else 'VIOLATED'})\n"
             f"  RMSE {self.rmse_vol * 100:.2f} vol pts | MAE {self.mae_vol * 100:.2f} | "
             f"max {self.max_abs_vol_error * 100:.2f}\n"
-            f"  seed RMSE spread: {spread}"
+            f"  seed RMSE spread: {spread}\n"
+            f"{self.uncertainty_summary()}"
         )
+
+    def uncertainty_summary(self) -> str:
+        """One line per parameter: estimate, standard error, and relative error."""
+        if not self.std_errors:
+            return "  parameter standard errors: unavailable (rank-deficient Jacobian)"
+        lines = ["  parameter    estimate   std err   rel"]
+        values = dict(zip(PARAM_NAMES, self.params.to_array(), strict=True))
+        for name in PARAM_NAMES:
+            est = float(values[name])
+            se = self.std_errors[name]
+            rel = abs(se / est) if est != 0 else float("inf")
+            lines.append(f"  {name:<11} {est:9.4f} {se:9.4f} {rel:6.1%}")
+        return "\n".join(lines)
 
 
 def _model_prices(
@@ -295,6 +324,11 @@ def calibrate(
             max_nfev=max_nfev,
         )
         params = HestonParams.from_array(solution.x)
+        std_errors, correlations = _parameter_uncertainty(
+            np.asarray(solution.jac, dtype=np.float64),
+            np.asarray(solution.fun, dtype=np.float64),
+            n_params=5,
+        )
         errors = surface_errors(params, surface, spot, exact_vols=True)
         valid = errors["vol_error"].notna()
         vol_err = errors.loc[valid, "vol_error"].to_numpy(dtype=np.float64)
@@ -312,12 +346,188 @@ def calibrate(
                 n_function_evals=int(solution.nfev),
                 errors=errors,
                 success=bool(solution.success),
+                std_errors=std_errors,
+                correlations=correlations,
             )
 
     if best is None:  # pragma: no cover - seeds is non-empty by construction
         raise ValueError("every local solve failed")
     best.seed_rmses = sorted(seed_rmses)
     return best
+
+
+def _parameter_uncertainty(
+    jacobian: FloatArray, residuals: FloatArray, n_params: int
+) -> tuple[dict[str, float], pd.DataFrame]:
+    r"""Asymptotic standard errors and correlations from the least-squares Jacobian.
+
+    For a non-linear least-squares problem the estimator's covariance is approximated by
+
+    .. math:: \widehat{\operatorname{Cov}}(\hat\vartheta) = s^2 (J^\top J)^{-1},
+        \qquad s^2 = \frac{\|\varepsilon\|^2}{n - p},
+
+    with :math:`J` the Jacobian of the residual vector at the optimum. Two caveats, both
+    of which matter here and neither of which is a reason to omit the number:
+
+    * It is a **local, asymptotic** approximation. The Heston objective is multimodal, so
+      it describes the curvature of the basin the optimiser landed in, not global
+      uncertainty.
+    * It assumes independent, equal-variance residuals. Adjacent strikes on an option
+      chain are anything but independent, so the true uncertainty is **larger** than this.
+
+    The number is still worth reporting, because the interesting content is not the
+    absolute scale -- it is that ``kappa`` and ``xi`` come out with standard errors of the
+    same order as their estimates and a correlation above 0.9, which is exactly what "the
+    surface does not identify them separately" means numerically.
+
+    Returns:
+        ``({name: std_error}, correlation_frame)``; both empty if ``J`` is rank deficient.
+    """
+    n_obs = residuals.size
+    if n_obs <= n_params:
+        return {}, pd.DataFrame()
+    residual_variance = float(residuals @ residuals) / (n_obs - n_params)
+    hessian = jacobian.T @ jacobian
+    try:
+        covariance = residual_variance * np.linalg.inv(hessian)
+    except np.linalg.LinAlgError:  # pragma: no cover - singular only in degenerate fits
+        return {}, pd.DataFrame()
+    variances = np.diag(covariance)
+    if np.any(variances <= 0) or not np.all(np.isfinite(variances)):  # pragma: no cover
+        return {}, pd.DataFrame()
+    std = np.sqrt(variances)
+    correlation = covariance / np.outer(std, std)
+    return (
+        dict(zip(PARAM_NAMES, (float(x) for x in std), strict=True)),
+        pd.DataFrame(correlation, index=list(PARAM_NAMES), columns=list(PARAM_NAMES)),
+    )
+
+
+def split_surface(
+    surface: pd.DataFrame, stride: int = 2, offset: int = 0
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split a surface into interleaved train and test halves, **within each expiry**.
+
+    Alternate strikes rather than whole expiries, because holding out an entire expiry
+    tests extrapolation in maturity, which is a different and much harder question than
+    "does the fitted smile describe strikes it did not see". Interleaving keeps the train
+    and test sets over the same moneyness range.
+
+    Args:
+        surface: Output of :func:`optpricing.surface.build_surface`.
+        stride: Keep every ``stride``-th quote for training.
+        offset: Which residue class goes into the training set.
+
+    Returns:
+        ``(train, test)``.
+    """
+    train_parts: list[pd.DataFrame] = []
+    test_parts: list[pd.DataFrame] = []
+    for _, group in surface.groupby("tau", sort=True):
+        ordered = group.sort_values("strike")
+        is_train = (np.arange(len(ordered)) % stride) == offset
+        train_parts.append(ordered.loc[is_train])
+        test_parts.append(ordered.loc[~is_train])
+    train = pd.concat(train_parts).reset_index(drop=True)
+    test = pd.concat(test_parts).reset_index(drop=True)
+    return train, test
+
+
+@dataclass
+class HoldoutResult:
+    """In-sample versus out-of-sample fit quality, in vol points.
+
+    Attributes:
+        model: Model name.
+        in_sample_rmse: RMSE on the quotes used to fit, in vol points.
+        out_of_sample_rmse: RMSE on the held-out quotes, in vol points.
+        n_train: Training quotes.
+        n_test: Held-out quotes.
+    """
+
+    model: str
+    in_sample_rmse: float
+    out_of_sample_rmse: float
+    n_train: int
+    n_test: int
+
+    @property
+    def degradation(self) -> float:
+        """Out-of-sample RMSE divided by in-sample RMSE. Near 1 means no overfitting."""
+        if self.in_sample_rmse <= 0:
+            return float("nan")
+        return self.out_of_sample_rmse / self.in_sample_rmse
+
+
+def _rmse_vol_points(errors: pd.DataFrame) -> float:
+    e = errors["vol_error"].dropna().to_numpy(dtype=np.float64)
+    return float(np.sqrt(np.mean(e**2)) * 100) if e.size else float("nan")
+
+
+def cross_validate(
+    surface: pd.DataFrame,
+    spot: float,
+    seeds: tuple[HestonParams, ...] = DEFAULT_SEEDS,
+    stride: int = 2,
+) -> list[HoldoutResult]:
+    """Fit on alternate strikes, score on the rest -- for Heston and both benchmarks.
+
+    An in-sample RMSE is a fit statistic, not evidence. With 5 parameters against several
+    hundred quotes Heston should barely overfit, but "should" is not "measured", and the
+    flat-vol benchmarks are fitted models too and deserve the same treatment.
+
+    Args:
+        surface: Output of :func:`optpricing.surface.build_surface`.
+        spot: Underlying price.
+        seeds: Multi-start seeds for the Heston fit.
+        stride: ``2`` holds out every other strike within each expiry.
+
+    Returns:
+        One :class:`HoldoutResult` per model.
+    """
+    train, test = split_surface(surface, stride=stride)
+    results: list[HoldoutResult] = []
+
+    fit = calibrate(train, spot, seeds=seeds)
+    results.append(
+        HoldoutResult(
+            model="Heston",
+            in_sample_rmse=fit.rmse_vol * 100,
+            out_of_sample_rmse=_rmse_vol_points(surface_errors(fit.params, test, spot)),
+            n_train=len(train),
+            n_test=len(test),
+        )
+    )
+
+    global_vol, global_train_errors = fit_global_flat_vol(train)
+    global_test = test.copy()
+    global_test["model_vol"] = global_vol
+    global_test["vol_error"] = global_vol - test["implied_vol"]
+    results.append(
+        HoldoutResult(
+            model="Black-Scholes, one vol",
+            in_sample_rmse=_rmse_vol_points(global_train_errors),
+            out_of_sample_rmse=_rmse_vol_points(global_test),
+            n_train=len(train),
+            n_test=len(test),
+        )
+    )
+
+    per_expiry, per_expiry_train_errors = fit_flat_vol_per_expiry(train)
+    lookup = dict(zip(per_expiry["tau"], per_expiry["flat_vol"], strict=True))
+    per_expiry_test = test.copy()
+    per_expiry_test["model_vol"] = test["tau"].map(lookup)
+    per_expiry_test["vol_error"] = per_expiry_test["model_vol"] - test["implied_vol"]
+    results.append(
+        HoldoutResult(
+            model="Black-Scholes, one vol per expiry",
+            in_sample_rmse=_rmse_vol_points(per_expiry_train_errors),
+            out_of_sample_rmse=_rmse_vol_points(per_expiry_test),
+            n_train=len(train),
+            n_test=len(test),
+        )
+    )
+    return results
 
 
 def fit_global_flat_vol(surface: pd.DataFrame) -> tuple[float, pd.DataFrame]:

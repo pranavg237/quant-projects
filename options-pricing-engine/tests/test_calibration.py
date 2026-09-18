@@ -186,3 +186,102 @@ def test_real_spy_calibration_quality(cached_spy_snapshot: data_mod.ChainSnapsho
     wing = errors.loc[(errors["log_moneyness"] < -0.15) & (errors["tau"] < 0.15), "vol_error"]
     assert len(wing) > 5
     assert float(np.sqrt((wing**2).mean())) > 2.0 * float(np.sqrt((body**2).mean()))
+
+
+def test_parameter_standard_errors_are_reported(true_heston_params: HestonParams) -> None:
+    surf = _heston_surface(true_heston_params, taus=(0.25, 1.0))
+    result = cal.calibrate(surf, SPOT, seeds=cal.DEFAULT_SEEDS[:1])
+
+    assert set(result.std_errors) == set(cal.PARAM_NAMES)
+    assert all(np.isfinite(v) and v > 0 for v in result.std_errors.values())
+    assert list(result.correlations.index) == list(cal.PARAM_NAMES)
+    # A correlation matrix: unit diagonal, symmetric, entries in [-1, 1].
+    corr = result.correlations.to_numpy(dtype=np.float64)
+    assert np.allclose(np.diag(corr), 1.0)
+    assert np.allclose(corr, corr.T)
+    assert np.all(np.abs(corr) <= 1.0 + 1e-9)
+    assert "std err" in result.uncertainty_summary()
+
+
+def test_kappa_and_xi_are_the_correlated_pair(true_heston_params: HestonParams) -> None:
+    """The numerical form of 'a single surface does not identify kappa and xi separately'.
+
+    They come out strongly positively correlated: raising the mean-reversion speed and
+    raising the vol-of-vol together leaves the smile nearly unchanged. Not degenerate, but
+    the reason the parameter-recovery test has to give those two a looser tolerance than
+    v0, theta and rho.
+    """
+    surf = _heston_surface(true_heston_params)
+    result = cal.calibrate(surf, SPOT, seeds=cal.DEFAULT_SEEDS[:1])
+    corr = result.correlations
+    off_diagonal = corr.where(~np.eye(len(corr), dtype=bool)).abs()
+    assert float(corr.loc["kappa", "xi"]) > 0.5
+    assert float(off_diagonal.max().max()) == pytest.approx(
+        max(abs(float(corr.loc["kappa", "xi"])), abs(float(corr.loc["kappa", "theta"]))),
+        abs=1e-9,
+    )
+
+
+def test_uncertainty_is_unavailable_when_there_are_too_few_quotes() -> None:
+    jac = np.eye(5)[:3]
+    std, corr = cal._parameter_uncertainty(jac, np.zeros(3), n_params=5)
+    assert std == {}
+    assert corr.empty
+    # A rank-deficient Jacobian is also handled rather than raising.
+    std, corr = cal._parameter_uncertainty(np.zeros((20, 5)), np.ones(20), n_params=5)
+    assert std == {}
+    assert corr.empty
+
+
+def test_split_surface_interleaves_within_each_expiry(true_heston_params: HestonParams) -> None:
+    surf = _heston_surface(true_heston_params)
+    train, test = cal.split_surface(surf, stride=2)
+
+    assert len(train) + len(test) == len(surf)
+    assert abs(len(train) - len(test)) <= surf["tau"].nunique()
+    # Every expiry appears in both halves, so nothing tests extrapolation in maturity.
+    assert set(train["tau"]) == set(test["tau"]) == set(surf["tau"])
+    # And they are disjoint.
+    assert not set(zip(train["tau"], train["strike"], strict=True)) & set(
+        zip(test["tau"], test["strike"], strict=True)
+    )
+    # Both halves span the same moneyness range, to within one strike step.
+    assert train["log_moneyness"].min() == pytest.approx(surf["log_moneyness"].min(), abs=0.05)
+    assert test["log_moneyness"].max() == pytest.approx(surf["log_moneyness"].max(), abs=0.05)
+
+
+def test_cross_validation_shows_no_overfitting(true_heston_params: HestonParams) -> None:
+    """Five parameters against hundreds of quotes should not overfit -- confirm, not assume."""
+    surf = _heston_surface(true_heston_params)
+    results = cal.cross_validate(surf, SPOT, seeds=cal.DEFAULT_SEEDS[:1])
+
+    assert [r.model for r in results] == [
+        "Heston",
+        "Black-Scholes, one vol",
+        "Black-Scholes, one vol per expiry",
+    ]
+    heston = results[0]
+    assert heston.n_train + heston.n_test == len(surf)
+    # Out-of-sample must not be materially worse than in-sample.
+    assert heston.degradation < 2.0
+    # And Heston must still beat both benchmarks out of sample, not just in sample.
+    assert heston.out_of_sample_rmse < min(r.out_of_sample_rmse for r in results[1:]) / 5.0
+
+
+def test_holdout_result_degradation_edge_case() -> None:
+    assert np.isnan(cal.HoldoutResult("m", 0.0, 1.0, 10, 10).degradation)
+    assert cal.HoldoutResult("m", 2.0, 3.0, 10, 10).degradation == pytest.approx(1.5)
+
+
+def test_real_spy_holdout(cached_spy_snapshot: data_mod.ChainSnapshot) -> None:
+    """The README's out-of-sample claim, guarded on the committed snapshot."""
+    clean, _ = data_mod.clean_chain(cached_spy_snapshot)
+    curve = data_mod.RateCurve([0.25, 30.0], [0.039, 0.05])
+    surf = surface_mod.thin_surface(
+        surface_mod.build_surface(cached_spy_snapshot, clean, curve), max_per_expiry=12
+    )
+    results = cal.cross_validate(surf, cached_spy_snapshot.spot, seeds=cal.DEFAULT_SEEDS[:1])
+    heston = results[0]
+    # No overfitting: out-of-sample within 50% of in-sample on real, noisy quotes.
+    assert heston.degradation < 1.5
+    assert heston.out_of_sample_rmse < min(r.out_of_sample_rmse for r in results[1:]) / 2.0

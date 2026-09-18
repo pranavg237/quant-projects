@@ -16,13 +16,13 @@ Every pricer is cross-checked against an independently derived one, every chart 
 | **Implied vol** | Safeguarded Newton (`rtsafe`). Converges in ≤16 iterations to **1e-11** of vol even where vega is 1e-6. |
 | **Heston** | Characteristic function ("little trap" branch), two independent quadratures agreeing to 1e-8, cross-checked against a full-truncation Euler Monte Carlo. |
 | **Real data** | 4,469 SPY quotes → 2,012-point surface across 12 expiries. Forward from put-call parity, 0 calendar-arbitrage violations. |
-| **Calibration** | Heston fits the SPY surface to **2.51 vol points** RMSE with 5 parameters, against **10.61** for a Black-Scholes model with one free volatility *per expiry* (12 parameters). |
+| **Calibration** | Heston fits the SPY surface to **2.51 vol points** RMSE with 5 parameters, against **10.61** for a Black-Scholes model with one free volatility *per expiry* (12 parameters). Out-of-sample on held-out strikes: **2.38**. |
 | **Honest limitation** | That 2.51 is **1.09 vol points in the body** and **5.92 in the short-dated put wing**. Heston cannot generate enough short-dated skew. You need jumps. |
 
 ```bash
 pip install -r requirements.txt
 python scripts/run_analysis.py --ticker SPY     # ~3 min; caches to data/, writes figures/ and results/
-pytest --cov=src/optpricing                     # 190 tests
+pytest --cov=src/optpricing                     # 373 tests, 99% coverage
 ```
 
 ---
@@ -206,6 +206,38 @@ $$v_0 = 0.0130, \quad \kappa = 6.42, \quad \theta = 0.0473, \quad \xi = 1.96, \q
 
 ![Heston fit](figures/heston_fit.png)
 
+**It is not overfitting.** Fitting on alternate strikes within each expiry and scoring on
+the rest:
+
+| Model | In-sample RMSE | Out-of-sample RMSE | Ratio |
+|---|---|---|---|
+| Black-Scholes, one vol | 11.43 | 10.95 | 0.96 |
+| Black-Scholes, one vol per expiry | 10.80 | 10.31 | 0.96 |
+| **Heston** | **2.55** | **2.38** | **0.93** |
+
+All three degrade by nothing — with 5 parameters against 234 training quotes there is
+nothing to overfit — and Heston's advantage survives intact. Strikes are interleaved
+*within* each expiry rather than holding out whole expiries, because the latter tests
+extrapolation in maturity, which is a different and much harder question.
+
+**The parameters are estimated more precisely than they are identified.** Asymptotic
+standard errors from the Jacobian at the optimum:
+
+| | v0 | κ | θ | ξ | ρ |
+|---|---|---|---|---|---|
+| estimate | 0.0130 | 6.416 | 0.0473 | 1.961 | −0.680 |
+| std. error | 0.0003 | 0.246 | 0.0004 | 0.053 | 0.006 |
+| relative | 2.4% | 3.8% | 0.8% | 2.7% | 0.9% |
+
+Those look tight, and they overstate the case: the calculation assumes independent
+residuals, and adjacent strikes on an option chain are strongly dependent, so the true
+uncertainty is larger. The more useful output is the correlation matrix, where
+**corr(κ, ξ) = +0.83** and **corr(κ, θ) = −0.79**. Raising the mean-reversion speed and
+the vol-of-vol together leaves the smile almost unchanged — which is the quantitative
+version of the standard warning that a single surface does not identify κ and ξ
+separately, and is why the parameter-recovery test has to give those two a looser
+tolerance than v0, θ and ρ.
+
 ### What did not work
 
 **Heston cannot fit the short-dated put wing.** The headline 2.51 vol points decomposes into **1.09 in the body** ($|k| < 0.15$) and **5.92 in the short-dated put wing** ($k < -0.15$, $\tau < 0.15$). The 12- and 28-day panels above show it clearly: the model smile is 5–10 vol points below the market in the deep puts.
@@ -248,7 +280,7 @@ src/optpricing/
   style.py         One validated chart palette
   plotting.py      Every figure in this README
 scripts/run_analysis.py   Full pipeline
-tests/                    190 tests
+tests/                    373 tests, 99% statement + branch coverage
 data/snapshots/           Committed SPY chain so results reproduce offline
 ```
 

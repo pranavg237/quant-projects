@@ -275,8 +275,39 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
         f"{np.sqrt((wing**2).mean()) * 100:5.2f} vol pts  ({len(wing)} quotes)"
     )
 
+    print()
+    print("  Parameter uncertainty (asymptotic, local to this optimum):")
+    print("  " + fit.uncertainty_summary().replace("\n", "\n  ").strip())
+    if not fit.correlations.empty:
+        print("\n  Parameter correlations:")
+        print("  " + fit.correlations.round(2).to_string().replace("\n", "\n  "))
+
+    print()
+    print("  Out-of-sample: fit on alternate strikes, score on the rest")
+    holdout = calibration.cross_validate(thin, snapshot.spot)
+    holdout_df = pd.DataFrame(
+        [
+            {
+                "model": h.model,
+                "in_sample_rmse": h.in_sample_rmse,
+                "out_of_sample_rmse": h.out_of_sample_rmse,
+                "degradation": h.degradation,
+            }
+            for h in holdout
+        ]
+    )
+    print(
+        "  "
+        + holdout_df.to_string(index=False, float_format=lambda x: f"{x:8.2f}").replace(
+            "\n", "\n  "
+        )
+    )
+    results["holdout"] = holdout_df.to_dict(orient="records")
+
     results["heston"] = {
         "params": asdict(fit.params),
+        "std_errors": fit.std_errors,
+        "correlations": fit.correlations.to_dict() if not fit.correlations.empty else {},
         "feller_ratio": fit.params.feller_ratio,
         "rmse_vol_points": fit.rmse_vol * 100,
         "mae_vol_points": fit.mae_vol * 100,
@@ -317,6 +348,7 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
     }
     (args.results / "results.json").write_text(json.dumps(results, indent=2, default=str))
     (args.results / "model_comparison.md").write_text(_to_markdown(comparison_df))
+    (args.results / "holdout.md").write_text(_to_markdown(holdout_df))
     surf.to_csv(args.results / "surface.csv", index=False)
     print(f"  wrote {(args.results / 'results.json').relative_to(REPO_ROOT)}")
     return 0
