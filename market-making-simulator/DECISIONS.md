@@ -142,3 +142,18 @@ measured rather than argued about.
 `mypy` runs without a `python_version` pin, for the same numpy-stub reason as the options
 project. `plotting.py` is excluded from the coverage target but still has smoke tests,
 because its figures are in the README.
+
+## A quote is only cancelled and replaced when its price changes
+
+The first version called `cancel_all` and re-posted every requote step. That sends the
+maker to the back of the queue on *every single step*, so it never accumulates any time
+priority at all -- which quietly understates fill rates for every strategy, and understates
+them most for whichever strategy changes its quotes least. Since the whole point of the
+book engine is that queue position is the thing a book-free model cannot represent,
+throwing it away was self-defeating.
+
+`_refresh_side` now leaves an order alone when the target price is unchanged. On the
+headline configuration this raised the fill count by about 60% (50 to 82 fills per run at
+`requote_every=1`). The monotone decline in fills with `requote_every` survives, because
+absence-after-fill and quote staleness still dominate the queue-priority gain in this
+market.

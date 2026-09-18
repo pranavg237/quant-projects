@@ -1,5 +1,5 @@
 | policy | mean_pnl | std_pnl | sharpe | mean_abs_inventory | std_final_inventory | max_abs_inventory | mean_trades | mean_spread_captured | max_drawdown |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Avellaneda-Stoikov | 7.741 | 0.689 | 11.234 | 1.347 | 1.747 | 7.340 | 160.350 | 0.110 | 0.244 |
-| Symmetric | 7.778 | 3.732 | 2.084 | 7.563 | 14.873 | 31.224 | 146.550 | 0.110 | 2.204 |
-| Symmetric + position limit | 7.280 | 1.735 | 4.195 | 3.373 | 4.197 | 6.992 | 135.125 | 0.110 | 0.748 |
+| Avellaneda-Stoikov | 9.065 | 2.061 | 4.399 | 4.530 | 6.408 | 29.023 | 193.800 | 0.101 | 0.969 |
+| Symmetric | 9.402 | 3.917 | 2.400 | 7.848 | 15.383 | 45.677 | 192.875 | 0.101 | 2.084 |
+| Symmetric + position limit | 8.521 | 1.677 | 5.082 | 3.364 | 4.249 | 6.999 | 178.070 | 0.101 | 0.623 |

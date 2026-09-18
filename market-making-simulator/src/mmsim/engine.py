@@ -251,7 +251,59 @@ def simulate_reference(
     )
 
 
-def simulate_book(  # noqa: PLR0912, PLR0915  (one loop; splitting it would hide the order of operations)
+def _refresh_side(
+    book: LimitOrderBook,
+    side: Side,
+    target_tick: int | None,
+    resting: tuple[int, int] | None,
+    size: float,
+    now: float,
+) -> tuple[int, int] | None:
+    """Move the maker's quote on one side to ``target_tick``, keeping it if unchanged.
+
+    **An order is only cancelled and re-posted when its price actually changes.** Blindly
+    cancelling and replacing every step -- which is what the first version did -- sends the
+    maker to the back of the queue on every single step, so it never accumulates any time
+    priority at all. That silently understates fill rates for every strategy, and it
+    understates them *most* for the strategy that changes its quotes least, which is
+    exactly the comparison this repo is trying to make.
+
+    Args:
+        book: The order book.
+        side: Which side to refresh.
+        target_tick: Desired price, or ``None`` to withdraw the side.
+        resting: The maker's current ``(order_id, price_ticks)`` on this side, if any.
+        size: Size to post.
+        now: Current time.
+
+    Returns:
+        The new ``(order_id, price_ticks)``, or ``None`` if nothing is resting.
+    """
+    if resting is not None and resting[0] not in book:
+        resting = None  # it was filled or otherwise removed
+    if target_tick is None:
+        if resting is not None:
+            book.cancel(resting[0])
+        return None
+    if resting is not None and resting[1] == target_tick:
+        return resting  # unchanged: leave it alone and keep its queue position
+
+    # Never post through the opposite side: a quote that crosses is a market order.
+    opposite_best = book.best(side.opposite)
+    if opposite_best is not None:
+        crosses = target_tick >= opposite_best if side is Side.BID else target_tick <= opposite_best
+        if crosses:
+            if resting is not None:
+                book.cancel(resting[0])
+            return None
+
+    if resting is not None:
+        book.cancel(resting[0])
+    order_id, _ = book.submit_limit(side, target_tick, size, now, _MAKER)
+    return (order_id, target_tick)
+
+
+def simulate_book(  # noqa: PLR0915  (one loop; splitting it would hide the order of operations)
     policy: QuotePolicy,
     flow_config: FlowConfig,
     market: MarketConfig | None = None,
@@ -316,6 +368,9 @@ def simulate_book(  # noqa: PLR0912, PLR0915  (one loop; splitting it would hide
     mid[0] = market.to_currency(efficient_ticks)
     generator.seed_book(book, efficient_ticks, timestamp=0.0)
     fills: list[dict[str, float | str]] = []
+    # (order_id, price_ticks) of the maker's live quote on each side, or None.
+    resting_bid: tuple[int, int] | None = None
+    resting_ask: tuple[int, int] | None = None
 
     for i in range(n_steps):
         now = float(times[i])
@@ -328,23 +383,15 @@ def simulate_book(  # noqa: PLR0912, PLR0915  (one loop; splitting it would hide
         )
 
         if i % requote_every == 0:
-            book.cancel_all(_MAKER)
             bid_price, ask_price = policy.quote(state)
-            if bid_price is not None:
-                bid_tick = int(np.floor(bid_price / market.tick_size))
-                best_ask = book.best_ask
-                if best_ask is None or bid_tick < best_ask:
-                    book.submit_limit(Side.BID, bid_tick, order_size, now, _MAKER)
-                    bid_quotes[i] = market.to_currency(bid_tick)
-            if ask_price is not None:
-                ask_tick = int(np.ceil(ask_price / market.tick_size))
-                best_bid = book.best_bid
-                if best_bid is None or ask_tick > best_bid:
-                    book.submit_limit(Side.ASK, ask_tick, order_size, now, _MAKER)
-                    ask_quotes[i] = market.to_currency(ask_tick)
-        else:
-            bid_quotes[i] = bid_quotes[i - 1]
-            ask_quotes[i] = ask_quotes[i - 1]
+            bid_tick = (
+                int(np.floor(bid_price / market.tick_size)) if bid_price is not None else None
+            )
+            ask_tick = int(np.ceil(ask_price / market.tick_size)) if ask_price is not None else None
+            resting_bid = _refresh_side(book, Side.BID, bid_tick, resting_bid, order_size, now)
+            resting_ask = _refresh_side(book, Side.ASK, ask_tick, resting_ask, order_size, now)
+        bid_quotes[i] = market.to_currency(resting_bid[1]) if resting_bid is not None else np.nan
+        ask_quotes[i] = market.to_currency(resting_ask[1]) if resting_ask is not None else np.nan
 
         q, c = state.inventory, state.cash
         mid_before = state.mid  # the mid the maker quoted against, before this step moves it
@@ -362,8 +409,12 @@ def simulate_book(  # noqa: PLR0912, PLR0915  (one loop; splitting it would hide
             c -= market.maker_fee * trade.size
             if signed > 0:
                 buy_fills[i + 1 :] += trade.size
+                if resting_bid is not None and trade.maker_order_id == resting_bid[0]:
+                    resting_bid = None
             else:
                 sell_fills[i + 1 :] += trade.size
+                if resting_ask is not None and trade.maker_order_id == resting_ask[0]:
+                    resting_ask = None
             fills.append(
                 {
                     "time": now,
