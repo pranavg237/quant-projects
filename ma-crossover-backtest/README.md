@@ -1,17 +1,173 @@
-# quantbt (work in progress)
+# quantbt
 
-Started as a 60-line moving-average crossover script; being rebuilt into a bias-safe
-backtesting framework. See `AUDIT.md` for what was wrong with the original and
-`DECISIONS.md` for the judgement calls made along the way.
+An event-driven backtesting framework in Python, built around one rule: **a backtest
+should be hard to fool yourself with.** It began as a 60-line moving-average script whose
+results were inflated by a same-bar fill, no transaction costs and no out-of-sample
+discipline. Those bugs, and their measured effect, are documented in
+[AUDIT.md](AUDIT.md).
+
+Five strategies run on it. Four lose to buying and holding the index, and
+[RESULTS.md](RESULTS.md) says so in the first paragraph.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest            # tests + coverage gate
-.venv/bin/ruff check . && .venv/bin/mypy
-.venv/bin/python scripts/run_ma_crossover.py --short 50 --long 200
+.venv/bin/python -m pytest              # 100 tests, 94% coverage, offline
+.venv/bin/ruff check . && .venv/bin/mypy    # both clean, mypy in strict mode
+.venv/bin/python scripts/run_ma_crossover.py
 ```
 
-Corrected SPY 50/200 result, 2018-01-02 to 2023-12-29, fills at the next open with
-5 bps slippage and 1 bp commission, proper 200-bar warm-up: total return 51.1%,
-Sharpe 0.50, max drawdown -33.7%, versus buy-and-hold 95.5% / Sharpe 0.65.
-The original script reported 48.2% with same-bar fills, no costs and no warm-up.
+## What it does
+
+| | |
+|---|---|
+| **Data** | Yahoo Finance with an on-disk cache and a manifest; total-return, split-adjusted and as-traded prices kept separately; tz-naive index enforced at the boundary |
+| **Engine** | Per-bar event loop. Signals at the close of bar `t` can only fill on bar `t+1` or later |
+| **Execution** | Commission models (percentage, per-share with minimum) and slippage models (fixed bps, volume-share impact); next-open or next-close fills; lot rounding and volume caps |
+| **Portfolio** | Cash, positions, average cost, mark-to-market, round-trip P&L, interest on cash |
+| **Universes** | Point-in-time membership; symbols that leave are force-liquidated, and orders for non-members raise |
+| **Metrics** | CAGR, volatility, Sharpe, Sortino, Calmar, max drawdown and its duration, turnover, exposure, hit rate, profit factor, information ratio |
+| **Validation** | Rolling and anchored walk-forward optimisation, stationary bootstrap, probabilistic and deflated Sharpe ratios, probability of backtest overfitting |
+| **Factors** | Fama-French 3/5-factor and momentum data from Ken French's library; regressions with Newey-West standard errors |
+| **Reporting** | Self-contained HTML tearsheets: equity curve, drawdown, rolling Sharpe, monthly heatmap, factor exposures |
+
+## The bias safeguards
+
+Each of these is enforced in code and covered by a test that fails if the safeguard is
+removed. The tests are in [tests/test_vectorized.py](tests/test_vectorized.py) and
+[tests/test_engine.py](tests/test_engine.py), named `test_bias_*`.
+
+**Lookahead is structurally impossible, not merely avoided.** A strategy sees a `Context`
+whose `history()` is sliced at the current bar. Orders go into a queue and are filled
+against the *next* bar. There is a test in which a strategy is handed tomorrow's opening
+price and still cannot profit from it, because the fill happens at that same open.
+
+**Fills never happen at the price that generated the signal.** The original script earned
+`close[t]/close[t-1]` on a signal computed from `close[t-1]`, which means it bought at a
+price it had just finished observing. On SPY 2018-2023 that one bug was worth 4.6
+percentage points of a 48-point return. The default is now a next-open fill.
+
+**Costs are on by default.** 5 bps of slippage per side and 1 bp of commission, charged on
+the notional and included in order sizing. Turnover is reported next to return, because a
+strategy that trades 10x a year and one that trades twice are not comparable on return
+alone.
+
+**Parameters are never chosen on the data they are scored on.** `walk_forward` searches
+the grid on a training window, then scores the winner on the following window only, and
+stitches those out-of-sample windows into the reported series. The in-sample-optimised
+result is reported next to it, and the gap is the overfitting penalty.
+
+**"It worked" is tested against luck.** The probabilistic Sharpe ratio asks whether the
+Sharpe is distinguishable from zero given the sample length, skew and kurtosis. The
+deflated version and the CSCV probability of backtest overfitting account for how many
+configurations were tried. All of these run on *excess* returns, because a strategy that
+sits in cash otherwise shows a high Sharpe on cash's near-zero volatility.
+
+**Prices are adjusted, and the adjustment is not used to cheat.** P&L uses total-return
+prices. Level-based signals get split-adjusted prices, because the dividend
+back-adjustment factor at bar `t` depends on dividends paid *after* `t`. Scale-invariant
+signals (ratios of moving averages, z-scores) are provably immune, and there is a test
+proving it for the MA crossover.
+
+**Universes are point-in-time.** A symbol is tradable only while it has prices; ordering
+one outside the universe raises rather than silently succeeding. This removes look-ahead
+on listing dates. It does **not** fix survivorship bias in the stock list, which is built
+from names that exist today. That limitation is stated wherever the affected results
+appear, and the honest reading is in RESULTS.md.
+
+## Adding a strategy
+
+Subclass `Strategy` and implement `on_bar`. The `Context` is the only way to touch data or
+place orders, which is what makes lookahead impossible.
+
+```python
+from quantbt.strategy import Context, Strategy
+
+class Momentum(Strategy):
+    name = "momentum"
+
+    def __init__(self, lookback: int = 126) -> None:
+        self.lookback = lookback
+        self.warmup = lookback          # the engine warns if history is too short
+
+    def on_bar(self, ctx: Context) -> None:
+        closes = ctx.history("close", self.lookback)      # ends at today, never later
+        winners = [s for s in ctx.symbols if closes[s].iloc[-1] > closes[s].iloc[0]]
+        if winners:
+            ctx.order_target_weights({s: 1 / len(winners) for s in winners})
+        ctx.record(n_winners=len(winners))                # shows up in the results
+```
+
+Run it:
+
+```python
+from quantbt.data import load_yahoo
+from quantbt.engine import run_backtest
+from quantbt.execution import ExecutionSimulator, FixedBpsSlippage, PercentageCommission
+
+data = load_yahoo(["SPY", "QQQ", "TLT"], start="2004-01-01", end="2025-08-29")
+result = run_backtest(
+    data,
+    Momentum(126),
+    start="2006-01-01",                                    # earlier bars are warm-up only
+    execution=ExecutionSimulator(PercentageCommission(1e-4), FixedBpsSlippage(5.0)),
+    rf=0.02,
+    benchmark="SPY",
+)
+print(result.summary())
+```
+
+Then validate it before believing it:
+
+```python
+from quantbt.validation import walk_forward, overfit_report
+
+wf = walk_forward(
+    data, lambda p: Momentum(p["lookback"]), {"lookback": [63, 126, 252]},
+    start="2006-01-01", train_years=5, test_years=1,
+)
+print(wf.summary())                       # out-of-sample beside in-sample
+print(overfit_report(wf.oos_returns, rf=wf.oos_rf).flags)
+```
+
+`scripts/run_strategies.py` wires a strategy into the full pipeline (walk-forward,
+bootstrap, factor regression, tearsheet) by adding one `StrategySpec`.
+
+## Layout
+
+```
+quantbt/
+  data.py          price container, corporate actions, cached Yahoo loader
+  engine.py        the event loop
+  execution.py     orders, fills, commission and slippage models
+  portfolio.py     cash, positions, round trips
+  strategy.py      Strategy base class and the per-bar Context
+  results.py       BacktestResult
+  metrics.py       performance and risk statistics
+  vectorized.py    fast long/flat reference implementation
+  universe.py      point-in-time membership
+  strategies/      MA crossover, TSMOM, XSMOM, mean reversion, pairs
+  validation/      walk-forward, bootstrap, overfitting diagnostics
+  factors/         Ken French data and factor regressions
+  report/          HTML tearsheets
+  research/        the pipeline that produces RESULTS.md
+scripts/           runnable entry points
+tests/             100 tests, including one per bias
+```
+
+The vectorised implementation exists to check the engine: `scripts/verify_port.py` runs
+the same strategy both ways on SPY and asserts the equity curves agree to 4e-15.
+
+## Documents
+
+- [AUDIT.md](AUDIT.md) — what was wrong with the original script, ranked by how much each
+  issue inflated the result
+- [RESULTS.md](RESULTS.md) — all five strategies, including the ones that lose money
+- [DECISIONS.md](DECISIONS.md) — every judgement call and why
+
+## Limitations
+
+Daily bars only. No intraday data, no order book, no borrow costs on shorts, no taxes, no
+capacity model. The universes are built from instruments that exist today, so the
+cross-sectional stock results are an upper bound. Yahoo Finance is the only data source
+and it silently revises history; results are tied to the snapshot recorded in
+`data/cache/MANIFEST.json`.

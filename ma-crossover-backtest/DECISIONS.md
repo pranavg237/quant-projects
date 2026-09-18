@@ -119,3 +119,31 @@ phases. Newest entries at the bottom.
 31. **First factor result: the walk-forward MA crossover on SPY (2005-2025) has FF5
     alpha of +1.8% p.a. with t = 0.93 and a momentum loading of 0.15 (t = 6.2).**
     It is a diluted market-plus-momentum exposure, not alpha.
+
+## Phase 7: Reporting and docs
+
+32. **Tearsheets are hand-rolled inline SVG in a single HTML file**, with no charting
+    library and no external requests. One file per strategy can be emailed or opened
+    from disk, which matters more for a portfolio piece than fancy interactions.
+33. **Colours are CSS custom properties, never literals in the markup**, so light and
+    dark mode are both first-class. The two-series palette was validated for
+    colour-vision-deficiency separation (delta-E 24.7 light, 26.8 dark) and for at
+    least 3:1 contrast against both surfaces. Identity is carried by a legend and
+    direct labels as well as hue.
+34. **The tearsheet leads with a verdict, not with the equity curve.** Four of the five
+    strategies lose to buy and hold, and a reader should not have to work that out from
+    a chart. The verdict is computed from the out-of-sample Sharpe against the
+    benchmark and the probabilistic Sharpe ratio.
+35. **Rolling Sharpe is computed on excess returns and blanked when annualised
+    volatility is under 1%.** A long/flat strategy sitting in Treasury bills for a year
+    has a tiny, nearly constant return and therefore an enormous raw Sharpe; plotting
+    that spike flattens every other year on the axis and says "this was cash", not
+    "this was brilliant". Found by rendering the chart and looking at it.
+36. **Direct end-labels are dropped when they would collide** rather than nudged apart,
+    because a nudged label is detached from its line and reads as noise. The legend and
+    the hover tooltip carry identity in that case.
+37. **Generated tearsheets and result CSVs are committed; raw price data is not.**
+    The reports are the deliverable; the price cache is large and gets revised by the
+    vendor. Per-bar weight files are also ignored, being big and reproducible.
+38. **The README's code examples are executed by the test suite**
+    (`tests/test_docs.py`), so they cannot rot silently.

@@ -31,7 +31,7 @@ the other four start in 2010 after their first 5-year training window.
 
 | Strategy | CAGR | Vol | **Sharpe** | Sortino | Max DD | DD days | Turnover | Exposure |
 |---|---|---|---|---|---|---|---|---|
-| SPY buy & hold (2010-2025) | 13.8% | 17.3% | **0.76** | 1.02 | -33.7% | 1,242 | 0.0 | 100% |
+| SPY buy & hold (2010-2025) | 13.8% | 17.3% | **0.76** | 1.07 | -33.7% | 709 | 0.0 | 100% |
 | ma_crossover | 8.2% | 12.0% | **0.58** | 0.79 | -22.4% | 808 | 2.0 | 78% |
 | mean_reversion | 6.6% | 13.9% | **0.44** | 0.62 | -39.6% | 1,102 | 10.3 | 32% |
 | xsmom | 2.7% | 8.5% | **0.21** | 0.28 | -16.1% | 799 | 5.9 | 100% |
