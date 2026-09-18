@@ -352,9 +352,7 @@ def asian_price(
         control = np.maximum(phi * (geometric_avg - strike), 0.0)
         # The control's known mean is the *undiscounted* expected geometric payoff.
         control_mean = (
-            geometric_asian_price(
-                spot, strike, tau, rate, sigma, n_fixings, opt, dividend_yield
-            )
+            geometric_asian_price(spot, strike, tau, rate, sigma, n_fixings, opt, dividend_yield)
             / discount
         )
     return _summarise(payoff, discount, antithetic, control, control_mean)

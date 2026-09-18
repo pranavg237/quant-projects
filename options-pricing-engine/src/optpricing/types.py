@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import TypeAlias
+from typing import Any, TypeAlias, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -59,6 +59,15 @@ def to_option_type(value: OptionType | str) -> OptionType:
         return OptionType(str(value).lower())
     except ValueError as exc:  # pragma: no cover - message formatting only
         raise ValueError(f"unknown option type {value!r}; expected 'call' or 'put'") from exc
+
+
+def to_float(value: Any) -> float:
+    """Coerce a value to ``float``.
+
+    Exists because ``pandas`` types a ``groupby`` key as ``Hashable``, so a bare
+    ``float(key)`` fails type checking even where the key is obviously numeric.
+    """
+    return float(cast(float, value))
 
 
 def to_exercise_style(value: ExerciseStyle | str) -> ExerciseStyle:

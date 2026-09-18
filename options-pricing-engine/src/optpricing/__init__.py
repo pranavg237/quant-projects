@@ -15,7 +15,7 @@ Modules
 
 from __future__ import annotations
 
-from . import binomial, blackscholes, heston, implied_vol, montecarlo
+from . import binomial, blackscholes, data, heston, implied_vol, montecarlo, surface
 from .types import ExerciseStyle, FloatArray, OptionType
 
 __all__ = [
@@ -24,9 +24,11 @@ __all__ = [
     "OptionType",
     "binomial",
     "blackscholes",
+    "data",
     "heston",
     "implied_vol",
     "montecarlo",
+    "surface",
 ]
 
 __version__ = "1.0.0"

@@ -1,0 +1,435 @@
+{
+  "pricer_benchmarks": {
+    "black_scholes": 10.450583572185565,
+    "binomial_crr_2001": 10.45145952287084,
+    "binomial_lr_101": 10.450549336566478,
+    "binomial_crr_error": 0.0008759506852751286,
+    "binomial_lr_error": -3.4235619086331326e-05,
+    "monte_carlo": [
+      {
+        "scheme": "plain",
+        "price": 10.452451292620134,
+        "std_error": 0.03289740448897809,
+        "effective_samples": 200000,
+        "error_vs_bs": 0.0018677204345696197,
+        "variance_reduction": 1.0
+      },
+      {
+        "scheme": "antithetic",
+        "price": 10.455182242218608,
+        "std_error": 0.016448139837417535,
+        "effective_samples": 200000,
+        "error_vs_bs": 0.004598670033043817,
+        "variance_reduction": 4.000273546646461
+      },
+      {
+        "scheme": "control variate",
+        "price": 10.454280691730878,
+        "std_error": 0.012557909956479488,
+        "effective_samples": 200000,
+        "error_vs_bs": 0.0036971195453130434,
+        "variance_reduction": 6.862597693523928
+      },
+      {
+        "scheme": "antithetic + control",
+        "price": 10.450104469777255,
+        "std_error": 0.004340457657381772,
+        "effective_samples": 200000,
+        "error_vs_bs": -0.0004791024083097284,
+        "variance_reduction": 57.44499839518421
+      }
+    ],
+    "asian": {
+      "plain_se": 0.013261105852894937,
+      "control_se": 0.0005523517639419852,
+      "variance_reduction": 576.405336357363,
+      "control_corr": 0.9991321783161098
+    },
+    "american_put_premium": 0.5173368215379623
+  },
+  "forward_curve": [
+    {
+      "expiry": "2026-09-23",
+      "tau": 0.0142514166362569,
+      "discount": 0.99944421883154,
+      "forward": 759.9644234307863,
+      "rate": 0.0390091515989158,
+      "dividend_yield": 0.030289925938085972,
+      "n_pairs": 34,
+      "forward_dispersion": 0.39827104116466217,
+      "r_squared": NaN
+    },
+    {
+      "expiry": "2026-09-25",
+      "tau": 0.0197308686910514,
+      "discount": 0.9992306116831464,
+      "forward": 760.1670509738002,
+      "rate": 0.03900915159891866,
+      "dividend_yield": 0.019199914901057352,
+      "n_pairs": 69,
+      "forward_dispersion": 0.20861763509924458,
+      "r_squared": NaN
+    },
+    {
+      "expiry": "2026-09-30",
+      "tau": 0.0334294988280377,
+      "discount": 0.9986967935243877,
+      "forward": 760.4123069646857,
+      "rate": 0.039009151598920856,
+      "dividend_yield": 0.017667648651590092,
+      "n_pairs": 110,
+      "forward_dispersion": 0.3691450519203272,
+      "r_squared": NaN
+    },
+    {
+      "expiry": "2026-10-09",
+      "tau": 0.0580870330746131,
+      "discount": 0.9977366393929679,
+      "forward": 761.4241699677747,
+      "rate": 0.03900915159891983,
+      "dividend_yield": 0.003833866207040168,
+      "n_pairs": 89,
+      "forward_dispersion": 1.248359912931619,
+      "r_squared": NaN
+    },
+    {
+      "expiry": "2026-10-16",
+      "tau": 0.0772651152663939,
+      "discount": 0.9969904910836334,
+      "forward": 762.0030662814997,
+      "rate": 0.039009151598919434,
+      "dividend_yield": 0.0027286119455561114,
+      "n_pairs": 111,
+      "forward_dispersion": 1.0009640838627547,
+      "r_squared": NaN
+    },
+    {
+      "expiry": "2026-10-30",
+      "tau": 0.1156212796499556,
+      "discount": 0.9954998680484348,
+      "forward": 763.3028684901353,
+      "rate": 0.03900915159891942,
+      "dividend_yield": 2.3791545141316206e-05,
+      "n_pairs": 128,
+      "forward_dispersion": 0.7685926420490432,
+      "r_squared": NaN
+    },
+    {
+      "expiry": "2026-11-30",
+      "tau": 0.2005527864992707,
+      "discount": 0.9922071290451723,
+      "forward": 765.8949025697918,
+      "rate": 0.039009151598919246,
+      "dividend_yield": -0.0003699962154396913,
+      "n_pairs": 119,
+      "forward_dispersion": 1.5596755440137713,
+      "r_squared": NaN
+    },
+    {
+      "expiry": "2026-12-31",
+      "tau": 0.2854842933485857,
+      "discount": 0.9889075872640698,
+      "forward": 766.7928259910993,
+      "rate": 0.03907182485161849,
+      "dividend_yield": 0.007303717213374167,
+      "n_pairs": 64,
+      "forward_dispersion": 0.9237123978699628,
+      "r_squared": NaN
+    },
+    {
+      "expiry": "2027-03-19",
+      "tau": 0.499182923485572,
+      "discount": 0.9805002294723741,
+      "forward": 774.0259886442823,
+      "rate": 0.03944926475485692,
+      "dividend_yield": 0.002472658333374282,
+      "n_pairs": 31,
+      "forward_dispersion": 2.834000308389136,
+      "r_squared": NaN
+    },
+    {
+      "expiry": "2027-06-17",
+      "tau": 0.7457582659513255,
+      "discount": 0.970693612435626,
+      "forward": 781.2024963259479,
+      "rate": 0.039884772335516856,
+      "dividend_yield": 0.002758754198729174,
+      "n_pairs": 31,
+      "forward_dispersion": 2.6492466682282156,
+      "r_squared": NaN
+    },
+    {
+      "expiry": "2027-12-17",
+      "tau": 1.247128128965024,
+      "discount": 0.9504252210137702,
+      "forward": 796.3461021933857,
+      "rate": 0.04077030441619187,
+      "dividend_yield": 0.0031747018351541145,
+      "n_pairs": 31,
+      "forward_dispersion": 3.538530280562213,
+      "r_squared": NaN
+    },
+    {
+      "expiry": "2028-06-16",
+      "tau": 1.745758265951325,
+      "discount": 0.9298680606090756,
+      "forward": 812.1324706670284,
+      "rate": 0.04165099752374852,
+      "dividend_yield": 0.003549440294044179,
+      "n_pairs": 31,
+      "forward_dispersion": 4.180588213528836,
+      "r_squared": NaN
+    }
+  ],
+  "regression_rate_range": [
+    -0.3325377862042448,
+    0.4170776790170668
+  ],
+  "surface": {
+    "n_quotes": 2012,
+    "n_expiries": 12,
+    "atm_term_structure": [
+      {
+        "expiry": "2026-09-23",
+        "tau": 0.0142514166362569,
+        "atm_vol": 0.11225409751229744,
+        "atm_total_variance": 0.0001795818503268326,
+        "n_quotes": 53
+      },
+      {
+        "expiry": "2026-09-25",
+        "tau": 0.0197308686910514,
+        "atm_vol": 0.12040345691321963,
+        "atm_total_variance": 0.0002860382541827762,
+        "n_quotes": 58
+      },
+      {
+        "expiry": "2026-09-30",
+        "tau": 0.0334294988280377,
+        "atm_vol": 0.11905090005636276,
+        "atm_total_variance": 0.0004738001915966508,
+        "n_quotes": 70
+      },
+      {
+        "expiry": "2026-10-09",
+        "tau": 0.0580870330746131,
+        "atm_vol": 0.12502252234216343,
+        "atm_total_variance": 0.000907936985264361,
+        "n_quotes": 76
+      },
+      {
+        "expiry": "2026-10-16",
+        "tau": 0.0772651152663939,
+        "atm_vol": 0.12810346190672547,
+        "atm_total_variance": 0.0012679589386127806,
+        "n_quotes": 76
+      },
+      {
+        "expiry": "2026-10-30",
+        "tau": 0.1156212796499556,
+        "atm_vol": 0.1333167033915005,
+        "atm_total_variance": 0.002054976707933459,
+        "n_quotes": 76
+      },
+      {
+        "expiry": "2026-11-30",
+        "tau": 0.2005527864992707,
+        "atm_vol": 0.13643579468573372,
+        "atm_total_variance": 0.0037332351835654997,
+        "n_quotes": 77
+      },
+      {
+        "expiry": "2026-12-31",
+        "tau": 0.2854842933485857,
+        "atm_vol": 0.1423453266952522,
+        "atm_total_variance": 0.005784537573942607,
+        "n_quotes": 16
+      },
+      {
+        "expiry": "2027-03-19",
+        "tau": 0.499182923485572,
+        "atm_vol": 0.1514643532123292,
+        "atm_total_variance": 0.011451980226772442,
+        "n_quotes": 15
+      },
+      {
+        "expiry": "2027-06-17",
+        "tau": 0.7457582659513255,
+        "atm_vol": 0.16079115145079526,
+        "atm_total_variance": 0.01928068086872469,
+        "n_quotes": 16
+      },
+      {
+        "expiry": "2027-12-17",
+        "tau": 1.247128128965024,
+        "atm_vol": 0.1727635886024746,
+        "atm_total_variance": 0.03722335445908422,
+        "n_quotes": 16
+      },
+      {
+        "expiry": "2028-06-16",
+        "tau": 1.745758265951325,
+        "atm_vol": 0.18002551591100807,
+        "atm_total_variance": 0.05657860501393933,
+        "n_quotes": 16
+      }
+    ],
+    "arbitrage": {
+      "calendar_violations": 0,
+      "calendar_checks": 228,
+      "butterfly_violations": 57,
+      "butterfly_violations_zero_tol": 517,
+      "butterfly_checks": 1988
+    },
+    "cleaning": [
+      {
+        "stage": "downloaded",
+        "rows_removed": 0,
+        "rows_remaining": 4469
+      },
+      {
+        "stage": "one-sided quote",
+        "rows_removed": 250,
+        "rows_remaining": 4219
+      },
+      {
+        "stage": "crossed quote",
+        "rows_removed": 0,
+        "rows_remaining": 4219
+      },
+      {
+        "stage": "mid < 0.05",
+        "rows_removed": 278,
+        "rows_remaining": 3941
+      },
+      {
+        "stage": "spread > 40% of mid",
+        "rows_removed": 1,
+        "rows_remaining": 3940
+      },
+      {
+        "stage": "no volume and no open interest",
+        "rows_removed": 60,
+        "rows_remaining": 3880
+      },
+      {
+        "stage": "tau < 5 days",
+        "rows_removed": 0,
+        "rows_remaining": 3880
+      }
+    ]
+  },
+  "heston": {
+    "params": {
+      "v0": 0.012986880521723554,
+      "kappa": 6.416092569038266,
+      "theta": 0.04728993490940111,
+      "xi": 1.960561056747072,
+      "rho": -0.6803215594339798
+    },
+    "feller_ratio": 0.15787326448793845,
+    "rmse_vol_points": 2.5062717077124215,
+    "mae_vol_points": 1.3708575294016898,
+    "max_abs_vol_points": 10.908449696794504,
+    "n_quotes": 468,
+    "seed_rmse_vol_points": [
+      2.5062717077124215,
+      2.506281232932096,
+      2.5062916886541236,
+      2.5063052520329907
+    ],
+    "seconds": 93.67615985870361,
+    "body_rmse_vol_points": 1.0870065854155495,
+    "short_dated_put_wing_rmse_vol_points": 5.9247264676734845,
+    "per_expiry_flat_vols": [
+      {
+        "tau": 0.0142514166362569,
+        "flat_vol": 0.12811046719490812,
+        "n_quotes": 36
+      },
+      {
+        "tau": 0.0197308686910514,
+        "flat_vol": 0.1457517611386999,
+        "n_quotes": 32
+      },
+      {
+        "tau": 0.0334294988280377,
+        "flat_vol": 0.18353672474650023,
+        "n_quotes": 40
+      },
+      {
+        "tau": 0.0580870330746131,
+        "flat_vol": 0.2191173419577143,
+        "n_quotes": 40
+      },
+      {
+        "tau": 0.0772651152663939,
+        "flat_vol": 0.2316104974713076,
+        "n_quotes": 40
+      },
+      {
+        "tau": 0.1156212796499556,
+        "flat_vol": 0.22428540462575272,
+        "n_quotes": 40
+      },
+      {
+        "tau": 0.2005527864992707,
+        "flat_vol": 0.21205198011496448,
+        "n_quotes": 40
+      },
+      {
+        "tau": 0.2854842933485857,
+        "flat_vol": 0.20878806354673143,
+        "n_quotes": 40
+      },
+      {
+        "tau": 0.499182923485572,
+        "flat_vol": 0.20070452385034504,
+        "n_quotes": 40
+      },
+      {
+        "tau": 0.7457582659513255,
+        "flat_vol": 0.197352077251503,
+        "n_quotes": 40
+      },
+      {
+        "tau": 1.247128128965024,
+        "flat_vol": 0.19547374341086715,
+        "n_quotes": 40
+      },
+      {
+        "tau": 1.745758265951325,
+        "flat_vol": 0.19581666683127683,
+        "n_quotes": 40
+      }
+    ]
+  },
+  "model_comparison": [
+    {
+      "model": "Black-Scholes, one vol",
+      "free_parameters": 1,
+      "rmse_vol_points": 11.226206615725557,
+      "mae_vol_points": 8.627186024624082,
+      "max_abs_vol_points": 35.43929239248891
+    },
+    {
+      "model": "Black-Scholes, one vol per expiry",
+      "free_parameters": 12,
+      "rmse_vol_points": 10.606669293262769,
+      "mae_vol_points": 8.252491768022017,
+      "max_abs_vol_points": 32.08288456436943
+    },
+    {
+      "model": "Heston",
+      "free_parameters": 5,
+      "rmse_vol_points": 2.5062717077124215,
+      "mae_vol_points": 1.3708575294016898,
+      "max_abs_vol_points": 10.908449696794504
+    }
+  ],
+  "meta": {
+    "ticker": "SPY",
+    "asof": "2026-09-18T11:09:27.324959-04:00",
+    "spot": 759.8699951171875
+  }
+}

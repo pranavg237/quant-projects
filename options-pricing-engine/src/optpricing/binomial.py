@@ -166,9 +166,7 @@ def price(
     if meth is TreeMethod.LR and steps % 2 == 0:
         steps += 1
 
-    u, d, p, discount = tree_parameters(
-        spot, strike, tau, rate, sigma, steps, meth, dividend_yield
-    )
+    u, d, p, discount = tree_parameters(spot, strike, tau, rate, sigma, steps, meth, dividend_yield)
 
     # Terminal spot lattice: node j has had j up-moves and (steps - j) down-moves.
     j = np.arange(steps + 1, dtype=np.float64)

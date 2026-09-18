@@ -134,11 +134,7 @@ def implied_vol(
     lower, upper = no_arbitrage_bounds(s, k, t, r, opt, q)
     # Strict inequality: a quote sitting exactly on a bound implies sigma = 0 or infinity.
     invertible = (
-        (v_mkt > lower + 1e-12)
-        & (v_mkt < upper - 1e-12)
-        & (t > 0.0)
-        & (s > 0.0)
-        & (k > 0.0)
+        (v_mkt > lower + 1e-12) & (v_mkt < upper - 1e-12) & (t > 0.0) & (s > 0.0) & (k > 0.0)
     )
 
     lo = np.full(v_mkt.shape, _MIN_VOL)

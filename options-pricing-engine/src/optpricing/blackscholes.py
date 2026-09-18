@@ -236,8 +236,7 @@ def theta(
     safe_sqrt_t = np.where(sqrt_t > 0.0, sqrt_t, 1.0)
     decay = -np.exp(-q * t) * s * _norm_pdf(d1) * vol / (2.0 * safe_sqrt_t)
     carry = phi * (
-        q * s * np.exp(-q * t) * _norm_cdf(phi * d1)
-        - r * k * np.exp(-r * t) * _norm_cdf(phi * d2)
+        q * s * np.exp(-q * t) * _norm_cdf(phi * d1) - r * k * np.exp(-r * t) * _norm_cdf(phi * d2)
     )
     out = np.where(t > 0.0, decay + carry, 0.0)
     return np.asarray(out, dtype=np.float64)
@@ -401,7 +400,6 @@ def put_call_parity_gap(
     assumption, stale quotes, or genuine arbitrage (almost always the first two).
     """
     c, p, s, k, t, r, q = (
-        as_array(x)
-        for x in (call_price, put_price, spot, strike, tau, rate, dividend_yield)
+        as_array(x) for x in (call_price, put_price, spot, strike, tau, rate, dividend_yield)
     )
     return np.asarray(c - p - (s * np.exp(-q * t) - k * np.exp(-r * t)), dtype=np.float64)
