@@ -1,0 +1,12 @@
+,0
+sharpe,0.6710829572770465
+sharpe_se_annual,0.2234893449149782
+psr,0.9986622458283257
+dsr,
+n_trials,1
+min_track_record_periods,1560.4392327253859
+bootstrap_ci_lo,0.2655228867432514
+bootstrap_ci_hi,1.0962441098036977
+bootstrap_p_sharpe_le_0,0.001
+pbo,
+flags,none

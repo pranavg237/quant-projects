@@ -82,3 +82,23 @@ phases. Newest entries at the bottom.
     rate/profit factor do not depend on lot matching.
 22. **Strategies raise on orders for symbols outside the universe** rather than
     silently ignoring them, so survivorship-biased code fails loudly.
+
+## Phase 4: Metrics and validation
+
+23. **Turnover is one-way, annualised: sum |Δw| / 2 per year.** Hit rate is per closed
+    round trip; "positive periods" is reported separately for bar-level win rate.
+24. **Walk-forward windows are calendar-based (years), rolling by default.** Anchored is
+    an option. The first fold's training window starts at ``start``; the caller supplies
+    warm-up history before it. Fold boundaries never overlap, and the stitched OOS
+    series is checked for duplicate dates.
+25. **The objective defaults to Sharpe on the training window with the same cost model
+    as the test window**, so parameter choice already "sees" costs; cost-free selection
+    is what drives grids to over-trade.
+26. **Overfitting diagnostics: Mertens standard error, PSR, DSR with the expected-max
+    correction, stationary bootstrap (Politis-Romano) with n^(1/3) expected block length,
+    and CSCV-PBO.** Each is a published estimator with known limitations; the report
+    prints flags rather than a single verdict.
+27. **First real result (SPY, 2005-2025 OOS, rolling 5y/1y, 17-point grid):** stitched
+    walk-forward Sharpe 0.67 vs in-sample-best 0.79, PBO 0.50, chosen parameters wander
+    across the whole grid. The strategy is not robustly better than buy-and-hold
+    (Sharpe 0.62 over the same span); the framework says so rather than hiding it.
