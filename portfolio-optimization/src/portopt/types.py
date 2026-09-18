@@ -17,7 +17,7 @@ matters, and the conversion is explicit at that point.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import Any, TypeAlias, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -37,6 +37,8 @@ __all__ = [
     "align",
     "annualise_return",
     "annualise_vol",
+    "as_float",
+    "as_timestamp",
     "is_positive_semidefinite",
     "nearest_positive_definite",
 ]
@@ -100,6 +102,20 @@ def align(expected_returns: pd.Series, covariance: pd.DataFrame) -> tuple[pd.Ser
             "at least 2 are needed"
         )
     return expected_returns.loc[common], covariance.loc[common, common]
+
+
+def as_float(value: Any) -> float:
+    """Coerce to ``float``.
+
+    Exists because pandas types reductions and index lookups as ``Hashable`` or a wide
+    union, so a bare ``float(...)`` on an obviously numeric result fails type checking.
+    """
+    return float(cast(float, value))
+
+
+def as_timestamp(value: Any) -> pd.Timestamp:
+    """Coerce an index label to a ``Timestamp``, for the same reason as :func:`as_float`."""
+    return pd.Timestamp(cast(Any, value))
 
 
 def annualise_return(period_return: float, periods_per_year: float) -> float:

@@ -391,11 +391,23 @@ def max_sharpe(
             vol = float(np.sqrt(max(w @ sigma @ w, 1e-300)))
             return -float(excess @ w) / vol
 
+        cons: list[dict[str, object]] = [
+            {"type": "eq", "fun": lambda w: float(w.sum() - constraints.budget)}
+        ]
+        if constraints.max_leverage is not None:
+            # sum|w| is non-smooth, so SLSQP is given a smooth surrogate: the constraint is
+            # imposed on sqrt(sum(w^2 + eps)), which bounds sum|w| from above and has a
+            # gradient everywhere. Forgetting this constraint entirely was a real bug --
+            # the backtest ran at 785x average leverage while nominally capped at 1.5x.
+            limit = constraints.max_leverage
+            cons.append(
+                {"type": "ineq", "fun": lambda w: float(limit - np.sum(np.sqrt(w * w + 1e-12)))}
+            )
         solution = minimize(
             negative_sharpe,
             np.full(n, constraints.budget / n),
             bounds=constraints.bounds(n),
-            constraints=[{"type": "eq", "fun": lambda w: float(w.sum() - constraints.budget)}],
+            constraints=cons,
             method="SLSQP",
             options={"maxiter": 800, "ftol": 1e-12},
         )

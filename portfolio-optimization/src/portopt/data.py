@@ -35,6 +35,7 @@ import pandas as pd
 __all__ = [
     "DEFAULT_CACHE_DIR",
     "ETF_UNIVERSE",
+    "MARKET_WEIGHTS",
     "PriceHistory",
     "download_prices",
     "load_prices",
@@ -68,6 +69,38 @@ ETF_UNIVERSE: tuple[str, ...] = (
     "IEF",  # 7-10 year Treasuries
     "GLD",  # gold
 )
+
+
+#: A static approximation of global market-capitalisation weights for :data:`ETF_UNIVERSE`.
+#:
+#: Black-Litterman's prior is the market portfolio, so it needs market weights. Real ETF
+#: assets under management would be circular (AUM reflects flows, not the underlying market)
+#: and are not available through this data source, so a static approximation of the global
+#: multi-asset market is used instead: roughly 55% US equity split across sectors in
+#: proportion to their weight in the S&P 500, 12% developed international, 5% emerging, 4%
+#: REITs, 20% Treasuries and 4% gold.
+#:
+#: These are **assumptions, not data**, and they are stated here rather than buried so the
+#: reader can disagree with them. Using equal weights instead makes Black-Litterman with no
+#: views mathematically identical to 1/N, which is a useful implementation check and a
+#: useless backtest.
+MARKET_WEIGHTS: dict[str, float] = {
+    "XLB": 0.018,
+    "XLE": 0.022,
+    "XLF": 0.070,
+    "XLI": 0.045,
+    "XLK": 0.170,
+    "XLP": 0.033,
+    "XLU": 0.014,
+    "XLV": 0.068,
+    "XLY": 0.060,
+    "IYR": 0.040,
+    "EFA": 0.120,
+    "EEM": 0.050,
+    "TLT": 0.090,
+    "IEF": 0.110,
+    "GLD": 0.040,
+}
 
 
 @dataclass
