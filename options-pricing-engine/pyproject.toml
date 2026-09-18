@@ -33,7 +33,14 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["PLR2004", "ANN201", "ANN001", "ARG001"]
+# Tests set the Matplotlib backend before importing pyplot (E402), import inside
+# functions to keep fixtures lazy (PLC0415), use bare lambdas in parametrize (PLW0108),
+# and define stub doubles whose signatures must mirror the real API even where an
+# argument is ignored (ARG002/ARG005, RUF012).
+"tests/*" = [
+    "PLR2004", "ANN201", "ANN001", "ANN202", "ARG001", "ARG002", "ARG005",
+    "E402", "PLC0415", "PLW0108", "RUF012",
+]
 "scripts/*" = ["T201"]
 
 [tool.mypy]

@@ -18,6 +18,15 @@ Newton step is taken when it lands inside the bracket and is shrinking the inter
 enough, and a bisection step is taken otherwise. It cannot diverge and it keeps Newton's
 speed on the well-conditioned majority of the surface.
 
+Convergence is tested in **volatility space, not price space**. Stopping at
+:math:`|V_{BS}(\sigma) - V_{mkt}| < 10^{-10}` sounds strict but is not: a five-day 10%
+out-of-the-money call has a vega around :math:`10^{-6}`, so that price tolerance leaves
+:math:`10^{-4}` of volatility error -- a hundredth of a vol point, on exactly the quotes
+where the answer is already fragile. The solver therefore also requires either the bracket
+to be narrower than ``vol_tol`` or the implied vol uncertainty :math:`|f|/\mathcal{V}` to
+be below it, which costs a handful of extra bisection steps and buys six orders of
+magnitude.
+
 Quotes outside the no-arbitrage bounds return ``nan`` rather than raising -- on real
 chains a few percent of strikes are stale or crossed, and the caller should filter them,
 not crash.
@@ -107,6 +116,7 @@ def implied_vol(
     option_type: OptionType | str = OptionType.CALL,
     dividend_yield: Numeric = 0.0,
     tol: float = 1e-10,
+    vol_tol: float = 1e-9,
     max_iter: int = 100,
     return_diagnostics: bool = False,
 ) -> FloatArray | ImpliedVolResult:
@@ -116,7 +126,11 @@ def implied_vol(
         price: Observed option price(s).
         spot, strike, tau, rate, dividend_yield: Market inputs, broadcastable.
         option_type: ``"call"`` or ``"put"``.
-        tol: Absolute tolerance on the **price** residual.
+        tol: Absolute tolerance on the price residual.
+        vol_tol: Tolerance in volatility units. Convergence requires the price residual to
+            be below ``tol`` *and* the implied vol uncertainty to be below ``vol_tol``, or
+            the bracket to be narrower than ``vol_tol``. Without this second condition the
+            solver stops far too early on low-vega quotes.
         max_iter: Iteration cap. The bisection fallback halves the bracket every
             iteration, so 100 iterations bounds the vol error by ``10 * 2**-100``.
         return_diagnostics: If ``True`` return an :class:`ImpliedVolResult` instead of a
@@ -160,7 +174,11 @@ def implied_vol(
         lo = np.where(active & (resid < 0.0), vol, lo)
         hi = np.where(active & (resid >= 0.0), vol, hi)
 
-        newly_done = active & (np.abs(resid) < tol)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            vol_uncertainty = np.where(vega > 0.0, np.abs(resid) / vega, np.inf)
+        newly_done = active & (
+            ((np.abs(resid) < tol) & (vol_uncertainty < vol_tol)) | ((hi - lo) < vol_tol)
+        )
         converged |= newly_done
         active &= ~newly_done
         if not active.any():
@@ -207,9 +225,12 @@ def implied_vol_scalar(
     option_type: OptionType | str = OptionType.CALL,
     dividend_yield: float = 0.0,
     tol: float = 1e-10,
+    vol_tol: float = 1e-9,
     max_iter: int = 100,
 ) -> float:
     """Scalar convenience wrapper around :func:`implied_vol`."""
-    out = implied_vol(price, spot, strike, tau, rate, option_type, dividend_yield, tol, max_iter)
+    out = implied_vol(
+        price, spot, strike, tau, rate, option_type, dividend_yield, tol, vol_tol, max_iter
+    )
     assert isinstance(out, np.ndarray)
     return float(out)

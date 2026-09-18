@@ -15,9 +15,11 @@ compromise, a **vega-normalised price residual**:
     \;\approx\; \sigma^{\text{model}}_i - \sigma^{\text{mkt}}_i,
 
 where :math:`\mathcal{V}_i` is the market vega. This is a first-order approximation to the
-vol error, costs one quadrature per expiry instead of one root-solve per quote, and agrees
-with the exact vol residual to well inside a vol point at typical surface accuracy.
-:func:`calibrate` can be asked for exact vol residuals when that matters.
+vol error, costs one quadrature per expiry instead of one root-solve per quote, and agrees with
+the exact vol residual to about 1e-4 in the body of the surface, rising to ~1e-3 (a tenth
+of a vol point) in the far wings where volga -- the curvature the linearisation drops --
+is largest. :func:`surface_errors` reports exact inverted vols, so the *reported* RMSE is
+never the approximation.
 
 **Which quotes?** Every quote is additionally weighted by :math:`\sqrt{\text{vega}}` so
 that near-worthless wing options -- whose implied vols are the least reliable numbers on
@@ -128,14 +130,22 @@ def _model_prices(
     spot: float,
     groups: list[tuple[float, FloatArray, FloatArray, FloatArray, FloatArray]],
 ) -> FloatArray:
-    """Price every quote under ``params``, one Fourier quadrature per expiry."""
+    """Price every quote under ``params`` with **one** Fourier quadrature per expiry.
+
+    Calls are integrated; puts come from put-call parity, which is model-free and exact.
+    Pricing both sides with two separate quadratures would double the cost of the inner
+    loop of the calibration for no gain.
+    """
     out: list[FloatArray] = []
     for tau, strikes, rates, divs, is_call in groups:
         rate = float(rates[0])
         div = float(divs[0])
-        call = heston.price(spot, strikes, tau, rate, params, OptionType.CALL, div)
-        put = heston.price(spot, strikes, tau, rate, params, OptionType.PUT, div)
-        out.append(np.where(is_call.astype(bool), call, put))
+        call = np.asarray(
+            heston.price(spot, strikes, tau, rate, params, OptionType.CALL, div),
+            dtype=np.float64,
+        )
+        put = call - spot * np.exp(-div * tau) + strikes * np.exp(-rate * tau)
+        out.append(np.where(is_call.astype(bool), call, np.maximum(put, 0.0)))
     return np.concatenate(out) if out else np.empty(0)
 
 

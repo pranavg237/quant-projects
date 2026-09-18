@@ -145,3 +145,50 @@ itself stays 3.11-compatible (`StrEnum` is 3.11+).
 **`plotting.py` is excluded from coverage.** It produces Matplotlib figures; asserting on
 pixels is brittle and asserting that it "did not raise" is coverage theatre. The
 data-producing functions it calls are all tested directly.
+
+---
+
+## Testing
+
+**The synthetic chain fixture is the backbone of the test suite.** `tests/conftest.py`
+builds an option chain from a *known* smile with a known rate and dividend yield, then the
+tests push it through the real cleaning, forward-extraction and inversion pipeline and
+check the original volatilities come back to 1e-4. Unit-testing each function separately
+would not catch a sign error in how they compose.
+
+**Greeks are tested against central finite differences of the price function**, not against
+a second copy of the analytic formula. The two derivations share only the normal CDF, so an
+algebra slip cannot hide in both.
+
+**Heston is validated three independent ways** -- Black-Scholes limit, a second quadrature
+(Lewis), and a Monte Carlo scheme. A Fourier pricer checked only against itself is not
+checked at all.
+
+**Network paths are tested against a stub `yfinance` injected into `sys.modules`.** The
+download, cache-fallback and rate-curve paths are exactly the ones that break silently in
+production (a renamed Yahoo column, a 404 expiry, an offline laptop) and exactly the ones a
+live-network test cannot pin down, because it passes or fails for reasons outside the repo.
+
+**Three tests encode findings rather than expectations**, because the naive assertion was
+wrong and the reason is interesting:
+
+* *Jarrow-Rudd is not exactly risk-neutral.* It fixes `p = 1/2` and solves for `(u, d)`, so
+  `p*u + (1-p)*d` misses the growth factor by `sigma^4 dt^2 / 12` per step. The test pins
+  that quantity rather than loosening a tolerance. CRR and Leisen-Reimer solve for `p` and
+  are exact to machine precision.
+* *The CRR early-exercise boundary alternates with step parity.* A lattice at step `k` has
+  nodes only at `S0 u^(2j-k)`, so odd and even steps sit on interleaved grids. Within one
+  parity the boundary is monotone.
+* *The SPY smile is not monotone in strike.* The call wing turns back up past about
+  `k = +0.07`, so "ATM vol exceeds everything beyond `k = +0.1`" is false. Skew is tested
+  as an interpolated 5%-moneyness risk reversal instead, which is what the claim actually
+  means.
+
+**One vol per expiry only beats one global vol in the metric both are fitted in.** Both are
+vega-weighted means, so the nesting guarantee holds for the vega-weighted squared error, not
+for plain unweighted RMSE -- on a synthetic Heston surface the unweighted ordering inverts
+by a hair (2.811% vs 2.799%). The test asserts the guarantee that exists.
+
+**Coverage is 99% of statements with branch coverage on.** `plotting.py` is excluded from
+the target (asserting on pixels is brittle) but still has smoke tests, because its figures
+are in the README and a silent breakage would ship.

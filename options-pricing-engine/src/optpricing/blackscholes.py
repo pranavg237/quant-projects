@@ -62,6 +62,16 @@ def _norm_cdf(x: FloatArray) -> FloatArray:
     return np.asarray(norm.cdf(x), dtype=np.float64)
 
 
+def _tau(value: Numeric) -> FloatArray:
+    """Coerce a time-to-expiry to an array and clamp it at zero.
+
+    An expired option is worth its intrinsic value, not a negative-time extrapolation.
+    Clamping here rather than raising keeps the pricers total when a chain contains a
+    contract that expired between the snapshot and the call.
+    """
+    return np.asarray(np.maximum(as_array(value), 0.0), dtype=np.float64)
+
+
 def d1_d2(
     spot: Numeric,
     strike: Numeric,
@@ -79,7 +89,7 @@ def d1_d2(
     s, k, t, r, vol, q = (
         as_array(spot),
         as_array(strike),
-        as_array(tau),
+        _tau(tau),
         as_array(rate),
         as_array(sigma),
         as_array(dividend_yield),
@@ -107,7 +117,7 @@ def forward_price(
     spot: Numeric, tau: Numeric, rate: Numeric, dividend_yield: Numeric = 0.0
 ) -> FloatArray:
     r"""Forward price :math:`F = S e^{(r - q)\tau}`."""
-    s, t, r, q = as_array(spot), as_array(tau), as_array(rate), as_array(dividend_yield)
+    s, t, r, q = as_array(spot), _tau(tau), as_array(rate), as_array(dividend_yield)
     return np.asarray(s * np.exp((r - q) * t), dtype=np.float64)
 
 
@@ -139,7 +149,7 @@ def price(
     s, k, t, r, q = (
         as_array(spot),
         as_array(strike),
-        as_array(tau),
+        _tau(tau),
         as_array(rate),
         as_array(dividend_yield),
     )
@@ -163,7 +173,7 @@ def delta(
     r""":math:`\partial V/\partial S`. Call: :math:`e^{-q\tau}N(d_1)`."""
     opt = to_option_type(option_type)
     phi = opt.sign
-    t, q = as_array(tau), as_array(dividend_yield)
+    t, q = _tau(tau), as_array(dividend_yield)
     d1, _ = d1_d2(spot, strike, tau, rate, sigma, dividend_yield)
     return np.asarray(phi * np.exp(-q * t) * _norm_cdf(phi * d1), dtype=np.float64)
 
@@ -182,7 +192,7 @@ def gamma(
     """
     s, t, vol, q = (
         as_array(spot),
-        as_array(tau),
+        _tau(tau),
         as_array(sigma),
         as_array(dividend_yield),
     )
@@ -205,7 +215,7 @@ def vega(
 
     Quoted per **one unit** of volatility (i.e. per 100 vol points), not per vol point.
     """
-    s, t, q = as_array(spot), as_array(tau), as_array(dividend_yield)
+    s, t, q = as_array(spot), _tau(tau), as_array(dividend_yield)
     d1, _ = d1_d2(spot, strike, tau, rate, sigma, dividend_yield)
     out = np.where(t > 0.0, s * np.exp(-q * t) * _norm_pdf(d1) * np.sqrt(np.maximum(t, 0.0)), 0.0)
     return np.asarray(out, dtype=np.float64)
@@ -226,7 +236,7 @@ def theta(
     s, k, t, r, vol, q = (
         as_array(spot),
         as_array(strike),
-        as_array(tau),
+        _tau(tau),
         as_array(rate),
         as_array(sigma),
         as_array(dividend_yield),
@@ -254,7 +264,7 @@ def rho(
     r""":math:`\partial V/\partial r`. Call: :math:`K\tau e^{-r\tau}N(d_2)`."""
     opt = to_option_type(option_type)
     phi = opt.sign
-    k, t, r = as_array(strike), as_array(tau), as_array(rate)
+    k, t, r = as_array(strike), _tau(tau), as_array(rate)
     _, d2 = d1_d2(spot, strike, tau, rate, sigma, dividend_yield)
     return np.asarray(phi * k * t * np.exp(-r * t) * _norm_cdf(phi * d2), dtype=np.float64)
 
@@ -268,10 +278,13 @@ def vanna(
     dividend_yield: Numeric = 0.0,
 ) -> FloatArray:
     r""":math:`\partial^2 V/\partial S\partial\sigma = -e^{-q\tau} n(d_1) d_2/\sigma`."""
-    t, vol, q = as_array(tau), as_array(sigma), as_array(dividend_yield)
+    t, vol, q = _tau(tau), as_array(sigma), as_array(dividend_yield)
     d1, d2 = d1_d2(spot, strike, tau, rate, sigma, dividend_yield)
     safe_vol = np.where(vol > 0.0, vol, 1.0)
-    out = np.where((vol > 0.0) & (t > 0.0), -np.exp(-q * t) * _norm_pdf(d1) * d2 / safe_vol, 0.0)
+    with np.errstate(invalid="ignore"):  # np.where evaluates the discarded inf*0 branch
+        out = np.where(
+            (vol > 0.0) & (t > 0.0), -np.exp(-q * t) * _norm_pdf(d1) * d2 / safe_vol, 0.0
+        )
     return np.asarray(out, dtype=np.float64)
 
 
@@ -284,11 +297,12 @@ def volga(
     dividend_yield: Numeric = 0.0,
 ) -> FloatArray:
     r""":math:`\partial^2 V/\partial\sigma^2 = \mathcal{V}\, d_1 d_2/\sigma` (a.k.a. vomma)."""
-    vol, t = as_array(sigma), as_array(tau)
+    vol, t = as_array(sigma), _tau(tau)
     d1, d2 = d1_d2(spot, strike, tau, rate, sigma, dividend_yield)
     v = vega(spot, strike, tau, rate, sigma, dividend_yield)
     safe_vol = np.where(vol > 0.0, vol, 1.0)
-    out = np.where((vol > 0.0) & (t > 0.0), v * d1 * d2 / safe_vol, 0.0)
+    with np.errstate(invalid="ignore"):  # np.where evaluates the discarded inf*0 branch
+        out = np.where((vol > 0.0) & (t > 0.0), v * d1 * d2 / safe_vol, 0.0)
     return np.asarray(out, dtype=np.float64)
 
 
@@ -305,7 +319,7 @@ def charm(
     opt = to_option_type(option_type)
     phi = opt.sign
     t, r, vol, q = (
-        as_array(tau),
+        _tau(tau),
         as_array(rate),
         as_array(sigma),
         as_array(dividend_yield),
@@ -314,8 +328,9 @@ def charm(
     sqrt_t = np.sqrt(np.maximum(t, 0.0))
     safe = np.where(sqrt_t > 0.0, sqrt_t, 1.0)
     safe_t = np.maximum(t, 1e-300)
-    term = _norm_pdf(d1) * (2.0 * (r - q) * t - d2 * vol * safe) / (2.0 * safe_t * vol * safe)
-    out = np.exp(-q * t) * (phi * q * _norm_cdf(phi * d1) - term)
+    with np.errstate(invalid="ignore"):  # np.where evaluates the discarded inf*0 branch
+        term = _norm_pdf(d1) * (2.0 * (r - q) * t - d2 * vol * safe) / (2.0 * safe_t * vol * safe)
+        out = np.exp(-q * t) * (phi * q * _norm_cdf(phi * d1) - term)
     return np.asarray(np.where(t > 0.0, out, 0.0), dtype=np.float64)
 
 
@@ -335,7 +350,7 @@ def dual_delta(
     """
     opt = to_option_type(option_type)
     phi = opt.sign
-    t, r = as_array(tau), as_array(rate)
+    t, r = _tau(tau), as_array(rate)
     _, d2 = d1_d2(spot, strike, tau, rate, sigma, dividend_yield)
     return np.asarray(-phi * np.exp(-r * t) * _norm_cdf(phi * d2), dtype=np.float64)
 

@@ -198,6 +198,17 @@ def american_exercise_boundary(
     At each time step the boundary is the most extreme node spot at which immediate
     exercise beats continuation: the highest such spot for a put, the lowest for a call.
 
+    Two lattice artefacts are worth knowing about before reading the output:
+
+    * The boundary **alternates with the parity of the step**. A CRR lattice at step
+      :math:`k` has nodes only at :math:`S_0u^{2j-k}`, so odd and even steps sit on
+      interleaved grids and the most extreme exercising node flips between them. Within
+      one parity the boundary is monotone; across parities it oscillates by roughly one
+      node spacing.
+    * Near :math:`t = 0` the lattice spans only :math:`S_0d^k` to :math:`S_0u^k`, so if
+      the true boundary lies below the lowest node the result is ``nan`` -- not resolved,
+      rather than zero.
+
     Returns:
         ``(times, boundary)`` where ``times`` are years from today and ``boundary`` is the
         critical spot (``nan`` where no node exercises at that step).
