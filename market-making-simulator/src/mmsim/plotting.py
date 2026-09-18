@@ -396,7 +396,8 @@ def plot_volatility_signature(signatures: dict[str, pd.DataFrame]) -> Figure:
     ax.set_ylabel(r"estimated $\sigma$ (price units per $\sqrt{\mathrm{time}}$)")
     ax.set_title("A flat signature means a martingale; a rising one means slow price discovery")
     ax.set_xlim(right=float(next(iter(signatures.values()))["block_steps"].max()) * 3)
-    ax.legend(loc="upper left")
+    ax.set_ylim(bottom=0.0)
+    ax.legend(loc="lower right")
     return _finish(fig, "Feed the model the volatility at the horizon it holds inventory for")
 
 
