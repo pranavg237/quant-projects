@@ -56,3 +56,29 @@ phases. Newest entries at the bottom.
     a next-open fill *is* a same-bar-close fill, so gap-free synthetic data cannot expose
     the bug. `synthetic_prices` therefore models close-to-open and open-to-close moves
     separately, and the detector uses a signal that "knows" the overnight gap.
+
+## Phase 3: Event-driven framework
+
+16. **Bar-level event loop rather than tick-level queues.** With daily bars a full
+    message-queue architecture adds overhead without changing any result; the loop
+    keeps the essential property (orders submitted at close ``t`` fill on bar ``t+1``)
+    and stays fast enough for walk-forward grids. Order/Fill/Rejection are still
+    explicit objects so an intraday extension has somewhere to plug in.
+17. **Target-weight orders are sized at the fill price, net of commission.** A
+    strategy expressing "100% long" gets exactly that with zero residual cash, which
+    is what makes the port agree with the vectorised model to 1e-15 rather than to a
+    tolerance. Share-count orders are available for strategies that size themselves.
+18. **The evaluation window starts flat.** Both the vectorised reference and the engine
+    enter an in-force signal at the first opportunity *inside* the window instead of
+    assuming the position already existed. The SPY 50/200 figure moved from 51.3% to
+    51.1% as a result.
+19. **Interest accrues on cash before fills each bar**, i.e. on the balance held from
+    the previous close; cash raised at an exit earns nothing until the next bar.
+20. **Symbols that leave the universe are force-liquidated on the next bar** at that
+    bar's fill price, or at the last mark if no print exists. There is no delisting
+    haircut; a real delisting typically loses more than that, so this is a known
+    optimistic simplification recorded in REVIEW.md later.
+21. **Cost basis and round trips use average cost, FIFO-free.** Simpler, and hit
+    rate/profit factor do not depend on lot matching.
+22. **Strategies raise on orders for symbols outside the universe** rather than
+    silently ignoring them, so survivorship-biased code fails loudly.

@@ -135,7 +135,8 @@ def test_rf_earned_only_when_flat() -> None:
     assert res2.equity.iloc[-1] == pytest.approx(1.0001**252, rel=1e-9)
     always_in = backtest_long_flat(data, 1 - signal, rf=0.05, slippage_bps=0, commission_bps=0)
     # bar 0 is flat (position = signal.shift(1)), then invested in a flat price: no interest
-    assert always_in.equity.iloc[-1] == pytest.approx(1.05 ** (1 / 252), rel=1e-9)
+    # ... and cash held overnight into the entry bar earns that bar's rate as well
+    assert always_in.equity.iloc[-1] == pytest.approx(1.05 ** (2 / 252), rel=1e-9)
 
 
 def test_input_validation(random_walk: PriceData) -> None:

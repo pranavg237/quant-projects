@@ -12,6 +12,6 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 ```
 
 Corrected SPY 50/200 result, 2018-01-02 to 2023-12-29, fills at the next open with
-5 bps slippage and 1 bp commission, proper 200-bar warm-up: total return 51.3%,
-Sharpe 0.51, max drawdown -33.7%, versus buy-and-hold 95.5% / Sharpe 0.65.
+5 bps slippage and 1 bp commission, proper 200-bar warm-up: total return 51.1%,
+Sharpe 0.50, max drawdown -33.7%, versus buy-and-hold 95.5% / Sharpe 0.65.
 The original script reported 48.2% with same-bar fills, no costs and no warm-up.

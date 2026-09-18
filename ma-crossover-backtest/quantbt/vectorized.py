@@ -8,7 +8,8 @@ event-driven engine (``quantbt.engine``) is checked against. The model:
 * The position is changed at the **open of bar t+1**, paying ``slippage_bps`` against
   the open and ``commission_bps`` of the traded notional.
 * While invested the strategy earns the total-return close-to-close move; while flat it
-  earns the per-period risk-free rate ``rf`` (default zero).
+  earns the per-period risk-free rate ``rf`` (default zero). Cash held overnight into an
+  entry bar earns that bar's rate too; cash raised at an exit earns nothing that bar.
 * Evaluation starts at ``start``; bars before it are warm-up only.
 
 The return of bar ``t+1`` on an entry day is
@@ -120,8 +121,17 @@ def backtest_long_flat(
     else:
         rf_series = pd.Series((1.0 + rf) ** (1.0 / ppy) - 1.0, index=close.index)
 
-    # position[t] is what is held from the open of t (decided at the close of t-1)
+    # position[t] is what is held from the open of t (decided at the close of t-1).
+    # The evaluation window starts flat: a position cannot pre-date the first bar on
+    # which the strategy was allowed to act, so an in-force signal at ``start`` is
+    # entered at the *next* open, exactly as the event-driven engine does.
     position = signal.shift(1).fillna(0).astype(int)
+    first_eval = position.loc[start:end].index[0] if len(position.loc[start:end]) else None
+    if first_eval is None:
+        raise ValueError("no bars in the evaluation window")
+    position = position.copy()
+    position.loc[first_eval] = 0
+    position.loc[: first_eval - pd.Timedelta(days=1)] = 0  # never "in" before the window
     prev_position = position.shift(1).fillna(0).astype(int)
     prev_close = close.shift(1)
 
@@ -136,7 +146,8 @@ def backtest_long_flat(
     # Commission is charged on the notional: buying costs fill * (1 + comm) per unit of
     # equity, selling returns fill * (1 - comm). This is exactly how the event-driven
     # engine sizes a target-weight order, so the two agree to floating-point precision.
-    ret[enter] = (close / (buy_fill * (1.0 + comm)) - 1.0)[enter]
+    # Cash held overnight into the entry bar still earns that bar's rate.
+    ret[enter] = ((1.0 + rf_series) * close / (buy_fill * (1.0 + comm)) - 1.0)[enter]
     ret[exit_] = (sell_fill * (1.0 - comm) / prev_close - 1.0)[exit_]
     ret[hold] = (close / prev_close - 1.0)[hold]
     ret[flat] = rf_series[flat]
@@ -161,10 +172,7 @@ def backtest_long_flat(
             "rf": rf_series,
         }
     )
-    frame = frame.loc[start:end]
-    if len(frame) == 0:
-        raise ValueError("no bars in the evaluation window")
-    frame = frame.copy()
+    frame = frame.loc[start:end].copy()
     frame.loc[frame.index[0], "benchmark_return"] = 0.0
     # The first evaluation bar cannot be an entry/exit decided before the window in a way
     # that the caller did not intend; we keep it as computed (warm-up is the caller's job).
