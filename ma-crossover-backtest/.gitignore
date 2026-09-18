@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Data caches and generated output (see data/README.md for reproducibility)
+data/cache/
+reports/*.html
+reports/*.png
