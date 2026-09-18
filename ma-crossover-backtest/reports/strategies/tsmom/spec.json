@@ -1,0 +1,42 @@
+{
+  "name": "tsmom",
+  "description": "Long/short each of 13 asset-class ETFs by the sign of its trailing return, volatility-scaled, rebalanced monthly.",
+  "symbols": [
+    "SPY",
+    "QQQ",
+    "IWM",
+    "EFA",
+    "EEM",
+    "VNQ",
+    "TLT",
+    "IEF",
+    "LQD",
+    "HYG",
+    "GLD",
+    "SLV",
+    "DBC"
+  ],
+  "grid": {
+    "lookback": [
+      63,
+      126,
+      252
+    ],
+    "skip": [
+      0,
+      21
+    ],
+    "vol_target": [
+      0.08,
+      0.12
+    ]
+  },
+  "start": "2005-01-01",
+  "end": "2025-08-29",
+  "benchmark": "SPY",
+  "train_years": 5.0,
+  "test_years": 1.0,
+  "caveats": [
+    "ETF list chosen today (selection bias); no borrow cost on shorts."
+  ]
+}

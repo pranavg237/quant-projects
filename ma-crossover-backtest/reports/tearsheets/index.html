@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang='en'><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>quantbt tearsheets</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
+         padding: 40px 16px; background: light-dark(#f9f9f7, #0d0d0d);
+         color: light-dark(#0b0b0b, #ffffff); }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  table { border-collapse: collapse; width: 100%; margin-top: 16px; font-size: 14px; }
+  th, td { text-align: right; padding: 8px 10px;
+            border-bottom: 1px solid light-dark(#e1e0d9, #2c2c2a);
+            font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: light-dark(#898781, #898781); font-weight: 500; }
+  a { color: light-dark(#2a78d6, #3987e5); }
+  p { color: light-dark(#52514e, #c3c2b7); }
+</style></head>
+<body><div class='wrap'>
+<h1>Strategy tearsheets</h1>
+<p>Walk-forward out-of-sample results. Parameters were chosen on training windows only;
+every number is net of commission and slippage.</p>
+<table><thead><tr><th>Strategy</th><th>Sharpe</th><th>Benchmark Sharpe</th><th>CAGR</th>
+<th>Max drawdown</th><th>FF5 alpha</th></tr></thead><tbody><tr><td><a href='ma_crossover.html'>ma_crossover</a></td><td>0.58</td><td>0.53</td><td>8.2%</td><td>-22.4%</td><td>+2.4% (t=1.22)</td></tr><tr><td><a href='tsmom.html'>tsmom</a></td><td>-0.05</td><td>0.76</td><td>0.8%</td><td>-19.9%</td><td>-2.1% (t=-1.20)</td></tr><tr><td><a href='xsmom.html'>xsmom</a></td><td>0.21</td><td>0.76</td><td>2.7%</td><td>-16.1%</td><td>+1.3% (t=0.62)</td></tr><tr><td><a href='mean_reversion.html'>mean_reversion</a></td><td>0.44</td><td>0.76</td><td>6.6%</td><td>-39.6%</td><td>-2.0% (t=-0.78)</td></tr><tr><td><a href='pairs.html'>pairs</a></td><td>-0.14</td><td>0.76</td><td>1.1%</td><td>-3.8%</td><td>-0.2% (t=-0.69)</td></tr></tbody></table>
+</div></body></html>

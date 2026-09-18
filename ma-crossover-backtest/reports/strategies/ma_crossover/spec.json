@@ -1,0 +1,28 @@
+{
+  "name": "ma_crossover",
+  "description": "Long SPY when the short MA is above the long MA, else cash at the T-bill rate.",
+  "symbols": [
+    "SPY"
+  ],
+  "grid": {
+    "short": [
+      10,
+      20,
+      50,
+      100
+    ],
+    "long": [
+      50,
+      100,
+      150,
+      200,
+      250
+    ]
+  },
+  "start": "2000-01-01",
+  "end": "2025-08-29",
+  "benchmark": "SPY",
+  "train_years": 5.0,
+  "test_years": 1.0,
+  "caveats": []
+}

@@ -55,6 +55,9 @@ ignore = ["ANN401", "RUF012"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ANN"]
 "scripts/*" = ["ANN"]
+# The tearsheet embeds a CSS stylesheet and a hover script as string literals; wrapping
+# those to 100 columns would hurt them more than it helps.
+"quantbt/report/tearsheet.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

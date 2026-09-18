@@ -1,0 +1,12 @@
+,0
+sharpe,-0.04655548580023777
+sharpe_se_annual,0.25253414561971665
+psr,0.42686817839934604
+dsr,
+n_trials,1
+min_track_record_periods,inf
+bootstrap_ci_lo,-0.5098210969156926
+bootstrap_ci_hi,0.45822342664957405
+bootstrap_p_sharpe_le_0,0.574
+pbo,
+flags,non-positive Sharpe; PSR 0.43 < 0.95: Sharpe not distinguishable from zero; bootstrap P(Sharpe<=0) = 0.57

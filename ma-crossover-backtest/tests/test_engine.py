@@ -440,3 +440,30 @@ def test_order_target_weights_closes_others() -> None:
     assert res.positions["B"].iloc[3] > 0
     assert res.positions["B"].iloc[10] == 0
     assert len(res.round_trips) == 1 and res.round_trips[0].symbol == "B"
+
+
+def test_portfolio_zeroes_floating_point_dust_on_full_exit() -> None:
+    """A target-weight-0 order sizes as -value/price, which is not exactly -quantity.
+
+    With an absolute epsilon the leftover dust persisted as a phantom position and a
+    phantom open round trip, and eventually divided by a zero cost basis.
+    """
+    p = Portfolio(cash=1_000_000.0)
+    qty = 1_000_000.0 / 137.77  # a price that does not divide evenly
+    p.apply_fill(_fill("A", qty, 137.77, 0))
+    p.mark({"A": 140.0})
+    # sell "everything" the way the simulator sizes it: -(quantity * price) / price
+    sell = -(p.quantity("A") * 140.0) / 140.0
+    p.apply_fill(_fill("A", sell, 140.0, 1))
+    assert p.quantity("A") == 0.0
+    assert len(p.round_trips) == 1
+    assert p.round_trips[0].return_pct == pytest.approx(140.0 / 137.77 - 1.0, rel=1e-9)
+    assert not p._open  # no phantom trip left behind
+
+
+def test_round_trip_with_zero_cost_basis_reports_zero_return() -> None:
+    p = Portfolio(cash=100.0)
+    p.apply_fill(_fill("A", 10, 0.0, 0))  # a zero-priced fill (bad data, not a crash)
+    p.apply_fill(_fill("A", -10, 0.0, 1))
+    assert len(p.round_trips) == 1
+    assert p.round_trips[0].return_pct == 0.0

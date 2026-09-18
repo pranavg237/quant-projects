@@ -17,6 +17,7 @@ from quantbt.strategy import Context, Strategy
 from quantbt.validation import (
     bootstrap_metrics,
     deflated_sharpe_ratio,
+    excess_returns,
     expand_grid,
     grid_search,
     min_track_record_length,
@@ -258,3 +259,38 @@ def test_overfit_report_flags() -> None:
     bad = -good
     rep3 = overfit_report(bad, n_trials=3, n_samples=50)
     assert "non-positive Sharpe" in rep3.flags
+
+
+def test_overfit_report_uses_excess_returns() -> None:
+    """A cash-like series has a high raw Sharpe and a negative excess one.
+
+    The two must not be mixed: the summary metrics are excess, so the diagnostics are too.
+    """
+    n = 2000
+    rng = np.random.default_rng(31)
+    idx = pd.bdate_range("2010-01-01", periods=n)
+    rf = pd.Series(2e-5, index=idx)  # about 0.5% a year
+    cash_like = rf + rng.normal(-2e-6, 1e-5, n)  # tracks cash, a hair below it on average
+    assert metrics.sharpe(cash_like) > 5  # raw: almost no volatility, positive mean
+    raw = overfit_report(cash_like, n_samples=50)
+    excess = overfit_report(cash_like, rf=rf, n_samples=50)
+    assert raw.sharpe > 5 and excess.sharpe < 0
+    assert "non-positive Sharpe" in excess.flags
+    assert excess.psr < 0.5
+    # a float annual rate works the same way
+    flat = overfit_report(cash_like, rf=0.005, n_samples=50)
+    assert flat.sharpe < raw.sharpe
+    assert excess_returns(cash_like, None) is cash_like
+    # a constant series has no Sharpe at all, and must not crash the bootstrap
+    flat_returns = pd.Series(0.0, index=idx)
+    quiet = overfit_report(flat_returns, n_samples=20)
+    assert not np.isfinite(quiet.sharpe) and "non-positive Sharpe" in quiet.flags
+
+
+def test_pbo_uses_excess_returns_for_the_grid() -> None:
+    rng = np.random.default_rng(21)
+    idx = pd.bdate_range("2010-01-01", periods=1200)
+    grid = pd.DataFrame(rng.normal(0, 0.01, (1200, 8)), index=idx)
+    rf = pd.Series(1e-4, index=idx)
+    rep = overfit_report(grid[0], rf=rf, grid_returns=grid, n_samples=50, n_trials=8)
+    assert rep.pbo is not None and 0.0 <= rep.pbo <= 1.0

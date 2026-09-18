@@ -1,0 +1,12 @@
+,0
+sharpe,0.2344279741536188
+sharpe_se_annual,0.2512442518103178
+psr,0.8246075726961348
+dsr,0.004196088877580254
+n_trials,8
+min_track_record_periods,12238.807712521439
+bootstrap_ci_lo,-0.23424293312640915
+bootstrap_ci_hi,0.6418255846264801
+bootstrap_p_sharpe_le_0,0.156
+pbo,0.0
+flags,PSR 0.82 < 0.95: Sharpe not distinguishable from zero; DSR 0.00 < 0.95 after 8 trials: likely selection effect; bootstrap P(Sharpe<=0) = 0.16

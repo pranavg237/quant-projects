@@ -124,12 +124,16 @@ class BootstrapResult:
     block_len: float
 
     def ci(self, column: str = "sharpe", level: float = 0.95) -> tuple[float, float]:
-        lo, hi = np.quantile(self.samples[column].dropna(), [(1 - level) / 2, 1 - (1 - level) / 2])
+        values = self.samples[column].dropna()
+        if values.empty:  # e.g. a constant return series, where Sharpe is undefined
+            return float("nan"), float("nan")
+        lo, hi = np.quantile(values, [(1 - level) / 2, 1 - (1 - level) / 2])
         return float(lo), float(hi)
 
     def p_value(self, column: str = "sharpe", threshold: float = 0.0) -> float:
         """Fraction of resamples at or below ``threshold`` (one-sided, e.g. P(Sharpe <= 0))."""
-        return float((self.samples[column].dropna() <= threshold).mean())
+        values = self.samples[column].dropna()
+        return float((values <= threshold).mean()) if not values.empty else float("nan")
 
 
 def stationary_bootstrap(
@@ -290,18 +294,40 @@ class OverfitReport:
         )
 
 
+def excess_returns(returns: pd.Series, rf: pd.Series | float | None) -> pd.Series:
+    """``returns`` net of the risk-free rate, so every Sharpe-like statistic is excess.
+
+    Mixing the two is a real reporting bug rather than a nicety: a strategy that sits in
+    cash most of the time has a high *raw* Sharpe, because cash has almost no volatility,
+    and a negative *excess* one.
+    """
+    if rf is None:
+        return returns
+    if isinstance(rf, pd.Series):
+        return returns - rf.reindex(returns.index).fillna(0.0)
+    ppy = metrics.periods_per_year(returns.index)
+    per_period = (1.0 + float(rf)) ** (1.0 / ppy) - 1.0
+    out: pd.Series = returns - per_period
+    return out
+
+
 def overfit_report(
     returns: pd.Series,
     *,
+    rf: pd.Series | float | None = None,
     trials_sharpe_annual: np.ndarray | pd.Series | None = None,
     n_trials: int | None = None,
     grid_returns: pd.DataFrame | None = None,
     n_samples: int = 1000,
     seed: int | None = 0,
 ) -> OverfitReport:
-    """One-stop overfitting check. Supply the grid's Sharpe ratios (and, optionally, the
-    grid's return matrix) so the deflated Sharpe and PBO account for the search."""
-    r = returns.dropna()
+    """One-stop overfitting check, computed on returns in excess of ``rf``.
+
+    Supply the grid's Sharpe ratios (and, optionally, its return matrix) so the deflated
+    Sharpe ratio and the probability of backtest overfitting account for the search.
+    ``grid_returns`` is put in excess terms with the same rate.
+    """
+    r = excess_returns(returns, rf).dropna()
     ppy = metrics.periods_per_year(r.index)
     sr = metrics.sharpe(r, ppy=ppy)
     se = sharpe_std_error(r) * np.sqrt(ppy)
@@ -317,11 +343,11 @@ def overfit_report(
     boot = stationary_bootstrap(r, n_samples=n_samples, seed=seed)
     ci = boot.ci("sharpe")
     p0 = boot.p_value("sharpe", 0.0)
-    pbo = (
-        pbo_cscv(grid_returns)["pbo"]
-        if grid_returns is not None and grid_returns.shape[1] > 1
-        else None
-    )
+    pbo = None
+    if grid_returns is not None and grid_returns.shape[1] > 1:
+        # Put the whole grid in excess terms with the same rate before ranking.
+        shift = grid_returns.iloc[:, 0] - excess_returns(grid_returns.iloc[:, 0], rf)
+        pbo = pbo_cscv(grid_returns.sub(shift, axis=0))["pbo"]
     flags: list[str] = []
     if not np.isfinite(sr) or sr <= 0:
         flags.append("non-positive Sharpe")
@@ -329,7 +355,7 @@ def overfit_report(
         flags.append(f"PSR {psr:.2f} < 0.95: Sharpe not distinguishable from zero")
     if dsr is not None and dsr < 0.95:
         flags.append(f"DSR {dsr:.2f} < 0.95 after {trials} trials: likely selection effect")
-    if p0 > 0.05:
+    if np.isfinite(p0) and p0 > 0.05:
         flags.append(f"bootstrap P(Sharpe<=0) = {p0:.2f}")
     if pbo is not None and pbo > 0.5:
         flags.append(f"PBO {pbo:.2f} > 0.5: in-sample best is usually below median OOS")

@@ -47,6 +47,15 @@ class _OpenTrip:
     bars: int = 0
 
 
+def _safe_return(pnl: float, cost: float) -> float:
+    """P&L as a fraction of the capital committed; 0 when nothing was committed.
+
+    A trip can end with a zero cost basis after floating-point dust or a zero-priced
+    fill; the trade is still recorded, with a return of zero rather than a crash.
+    """
+    return pnl / cost if cost else 0.0
+
+
 @dataclass
 class Portfolio:
     """Holds cash and positions; applies fills; marks to market.
@@ -102,11 +111,16 @@ class Portfolio:
         if old_qty == 0 or (old_qty > 0) == (fill.quantity > 0):
             total_cost = pos.cost_basis * abs(old_qty) + fill.price * abs(fill.quantity)
             pos.cost_basis = total_cost / abs(new_qty) if new_qty else 0.0
-        elif abs(new_qty) < 1e-12 or (old_qty > 0) != (new_qty > 0):
+        elif new_qty == 0.0 or (old_qty > 0) != (new_qty > 0):
             # closed or flipped: the remainder (if any) starts a new basis at the fill price
             pos.cost_basis = fill.price if abs(new_qty) >= 1e-12 else 0.0
 
-        pos.quantity = 0.0 if abs(new_qty) < 1e-12 else new_qty
+        # A "sell everything" order sizes as -value/price, which need not be exactly
+        # -quantity in floating point. An absolute epsilon is wrong here: 20,000 shares
+        # leave ~2e-12 of dust, which would otherwise persist as a phantom position and
+        # a phantom open round trip. Compare relative to the sizes involved.
+        scale = max(abs(old_qty), abs(fill.quantity), 1.0)
+        pos.quantity = 0.0 if abs(new_qty) < 1e-9 * scale else new_qty
         pos.last_price = fill.price
         self._track_round_trip(fill, old_qty, pos.quantity)
 
@@ -127,11 +141,11 @@ class Portfolio:
             trip.costs += fill.commission
             return
         # reducing, closing or flipping
-        closed_qty = min(abs(fill.quantity), abs(old_qty))
-        avg_entry = trip.entry_notional / trip.quantity
+        closed_qty = min(abs(fill.quantity), abs(old_qty), trip.quantity)
+        avg_entry = trip.entry_notional / trip.quantity if trip.quantity > 0 else fill.price
         exit_notional = closed_qty * fill.price
-        cost_share = fill.commission * (closed_qty / abs(fill.quantity))
-        entry_cost_share = trip.costs * (closed_qty / trip.quantity)
+        cost_share = fill.commission * (closed_qty / abs(fill.quantity)) if fill.quantity else 0.0
+        entry_cost_share = trip.costs * (closed_qty / trip.quantity) if trip.quantity > 0 else 0.0
         pnl = (
             trip.direction * (exit_notional - closed_qty * avg_entry)
             - cost_share
@@ -148,7 +162,7 @@ class Portfolio:
                     entry_price=avg_entry,
                     exit_price=fill.price,
                     pnl=pnl,
-                    return_pct=pnl / (trip.quantity * avg_entry),
+                    return_pct=_safe_return(pnl, trip.quantity * avg_entry),
                     bars_held=trip.bars,
                 )
             )
@@ -177,7 +191,7 @@ class Portfolio:
                     entry_price=avg_entry,
                     exit_price=fill.price,
                     pnl=pnl,
-                    return_pct=pnl / (closed_qty * avg_entry),
+                    return_pct=_safe_return(pnl, closed_qty * avg_entry),
                     bars_held=trip.bars,
                 )
             )
