@@ -632,7 +632,11 @@ def plot_smile_grid(surface: pd.DataFrame, ncols: int = 4) -> Figure:
         ax.set_xlabel("$k=\\ln(K/F)$")
     flat[0].legend(loc="upper right", fontsize=7)
     fig.suptitle("SPY smiles by expiry, with the bid-ask implied-vol band", x=0.01, ha="left")
-    return _finish(fig, "Each panel has its own axes: wing depth and vol level differ by expiry")
+    return _finish(
+        fig,
+        "Shaded: bid-to-ask implied vol. Thinner than the line almost everywhere -- widest in"
+        " the short-dated deep put wing",
+    )
 
 
 def plot_parity_residuals(
@@ -681,7 +685,7 @@ def plot_parity_residuals(
     for ax in flat[len(taus) :]:
         ax.set_visible(False)
     for ax in flat[::ncols]:
-        ax.set_ylabel("$C-P-D(F-K)$  ($)")
+        ax.set_ylabel(r"$C-P-D(F-K)$  (\$)")
     for ax in flat[max(len(taus) - ncols, 0) : len(taus)]:
         ax.set_xlabel("$k=\\ln(K/F)$")
     flat[0].legend(loc="lower left", fontsize=7)
@@ -729,7 +733,7 @@ def plot_greeks_fd(
     right.set_xlabel("days to expiry")
     right.set_ylabel("worst relative error on the grid")
     right.set_title("Worst case across moneyness, vol, calls and puts")
-    right.legend(loc="upper right")
+    right.legend(loc="center right")
     return _finish(fig, "Dots on the left: the step used. Dashed on the right: the test tolerances")
 
 
