@@ -11,7 +11,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from black_scholes import price, greeks, implied_vol  # noqa: E402
+from black_scholes import greeks, implied_vol, no_arbitrage_bounds, price  # noqa: E402
 
 
 class TestBlackScholesPrice(unittest.TestCase):
@@ -86,6 +86,32 @@ class TestImpliedVol(unittest.TestCase):
     def test_rejects_price_below_intrinsic(self):
         with self.assertRaises(ValueError):
             implied_vol(0.0, 150, 100, 30 / 365, 0.05, "call")  # 50 intrinsic, priced at 0
+
+
+class TestNoArbitrageBounds(unittest.TestCase):
+    def test_deep_itm_european_put_below_intrinsic_round_trips(self):
+        # Regression test: with r=10% this put is worth ~40.49, below its intrinsic
+        # value of 50, which is correct for a European put. The old bound check used
+        # undiscounted intrinsic value and rejected it.
+        p = price(50, 100, 1.0, 0.10, 0.20, "put")
+        self.assertLess(p, 50)
+        self.assertAlmostEqual(implied_vol(p, 50, 100, 1.0, 0.10, "put"), 0.20, places=6)
+
+    def test_call_below_discounted_intrinsic_is_rejected(self):
+        # S - K e^-rT = 100 - 90 e^-0.05 ~= 14.39, so 12 admits no volatility.
+        with self.assertRaises(ValueError):
+            implied_vol(12.0, 100, 90, 1.0, 0.05, "call")
+
+    def test_call_above_spot_is_rejected(self):
+        with self.assertRaises(ValueError):
+            implied_vol(101.0, 100, 90, 1.0, 0.05, "call")
+
+    def test_prices_lie_inside_the_bounds(self):
+        for opt in ("call", "put"):
+            for sigma in (0.05, 0.3, 1.5):
+                lower, upper = no_arbitrage_bounds(100, 95, 0.5, 0.04, opt, 0.01)
+                p = price(100, 95, 0.5, 0.04, sigma, opt, 0.01)
+                self.assertTrue(lower - 1e-12 <= p <= upper + 1e-12)
 
 
 if __name__ == "__main__":
