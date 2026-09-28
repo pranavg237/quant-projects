@@ -204,3 +204,28 @@ phases. Newest entries at the bottom.
 49. **Heatmap cells are colored relative to buy-and-hold, not to zero.** The question the
     figure answers is "does any region beat simply holding SPY?", so buy-and-hold's Sharpe
     over the same dates is the diverging midpoint (white).
+
+## Phase 9: Frozen inputs
+
+50. **Every reported number is computed from a committed snapshot, read by default.**
+    Entries 12, 28 and 37 are superseded: raw downloads still go to the git-ignored
+    `data/cache/`, but `data/snapshot-2026-09-28/` is what the scripts read unless
+    `--live-data` is passed. The rule this serves is that every number in the README and
+    RESULTS.md must come back when someone runs the code, and a vendor that restates its
+    history makes that impossible without frozen inputs. Two same-day downloads gave two
+    different `mean_reversion` results, which settled it.
+51. **The snapshot holds what the pipeline reads, at full precision, and nothing else.**
+    Yahoo's raw Open, Close, Adj Close, Volume, Dividends and Stock Splits are kept exactly
+    (float64 text, read back with round-trip parsing), so the snapshot reproduces the
+    cache run bit for bit. High and Low are dropped because no code reads them. They load
+    as NaN, and `Context.history` refuses to serve them rather than handing a strategy
+    NaNs. Rounding prices to 8-9 significant digits was tried and saved only 1.5-2 MB, not
+    worth giving up exactness. History starts at the earliest date any committed script
+    loads (1998 for SPY, 2003 for the rest) and runs to the download date, because splits
+    after the analysis end still feed the as-traded price reconstruction. The total is
+    12.6 MB.
+52. **The loaders fail loudly instead of degrading.** A missing symbol, a hash mismatch, a
+    later end date or a start before the trim date raises. The alternatives are a silent
+    download, which brings back the drift, or a silently shorter series, which changes the
+    warm-up. Both would produce a number that looks fine and is wrong.
+

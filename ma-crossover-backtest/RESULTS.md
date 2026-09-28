@@ -25,7 +25,7 @@ python scripts/ma_sensitivity.py      # ~15 seconds, writes reports/sensitivity/
 | Parameters | re-chosen every year on the preceding 5 years, by Sharpe, in-sample only |
 | Reported series | the stitched out-of-sample windows, never the training windows |
 | Benchmark | buy and hold SPY over the identical dates |
-| Data | Yahoo Finance daily bars, split- and dividend-adjusted, through 2025-08-29; downloaded 2026-09-28 |
+| Data | Yahoo Finance daily bars, split- and dividend-adjusted, through 2025-08-29; downloaded 2026-09-28 and committed in `data/snapshot-2026-09-28/` (sha256 per file), together with the Ken French daily factor files |
 
 ## The table
 
@@ -36,7 +36,7 @@ the other four start in 2010 after their first 5-year training window.
 |---|---|---|---|---|---|---|---|---|
 | SPY buy & hold (2010-2025) | 13.8% | 17.3% | **0.76** | 1.07 | -33.7% | 709 | 0.0 | 100% |
 | ma_crossover | 8.2% | 12.0% | **0.58** | 0.79 | -22.4% | 808 | 2.0 | 78% |
-| mean_reversion | 6.3% | 13.8% | **0.42** | 0.60 | -39.6% | 636 | 10.6 | 32% |
+| mean_reversion | 6.6% | 13.9% | **0.44** | 0.62 | -39.6% | 1,102 | 10.4 | 32% |
 | xsmom | 2.5% | 8.5% | **0.18** | 0.24 | -16.1% | 799 | 5.9 | 100% |
 | tsmom | 0.7% | 6.4% | **-0.06** | -0.08 | -19.9% | 2,051 | 3.8 | 91% |
 | pairs | 1.0% | 1.5% | **-0.17** | -0.24 | -3.8% | 2,291 | 4.7 | 14% |
@@ -50,7 +50,7 @@ is a coin flip out of sample.
 | Strategy | Sharpe | Bootstrap 95% CI | PSR | PBO | FF5 alpha (ann.) | t | R² | Momentum beta | t |
 |---|---|---|---|---|---|---|---|---|---|
 | ma_crossover | 0.58 | 0.21 to 1.01 | 0.995 | 0.54 | +2.4% | 1.22 | 0.41 | +0.14 | 5.7 |
-| mean_reversion | 0.42 | 0.00 to 0.96 | 0.950 | 0.71 | -2.3% | -0.89 | 0.57 | +0.04 | 1.5 |
+| mean_reversion | 0.44 | 0.01 to 0.98 | 0.956 | 0.71 | -2.0% | -0.78 | 0.57 | +0.03 | 1.0 |
 | xsmom | 0.18 | -0.30 to 0.61 | 0.757 | 0.91 | +1.0% | 0.50 | 0.07 | +0.39 | 21.1 |
 | tsmom | -0.06 | -0.52 to 0.44 | 0.407 | 0.43 | -2.2% | -1.25 | 0.12 | +0.13 | 7.7 |
 | pairs | -0.17 | -0.63 to 0.27 | 0.257 | 0.00 | -0.3% | -0.80 | 0.01 | -0.00 | -1.0 |
@@ -78,11 +78,11 @@ annualised Sharpe of **0.90**.
 | Series | Sharpe | PSR | DSR, N = 63 |
 |---|---|---|---|
 | ma_crossover walk-forward OOS | 0.58 | 0.995 | 0.076 |
-| mean_reversion walk-forward OOS | 0.42 | 0.950 | 0.031 |
+| mean_reversion walk-forward OOS | 0.44 | 0.956 | 0.036 |
 | xsmom walk-forward OOS | 0.18 | 0.757 | 0.002 |
 | tsmom walk-forward OOS | -0.06 | 0.407 | 0.000 |
 | pairs walk-forward OOS | -0.17 | 0.257 | 0.000 |
-| ma_crossover 10/200, in-sample best of all 63 | 0.68 | 0.999 | 0.159 |
+| ma_crossover 10/200, in-sample best of all 63 | 0.68 | 0.999 | 0.160 |
 
 The last row is the textbook use of the DSR: the single best configuration found, over the
 2005-2025 span on which it was best. Its PSR of 0.999 says "almost certainly not zero".
@@ -98,10 +98,10 @@ trial counts, columns are the cross-trial variance `V`:
 | N | V = 0.006 (17 MA configs only) | V = 0.050 (noise in one Sharpe) | V = 0.145 (all 63 configs) |
 |---|---|---|---|
 | 1 (no correction, = PSR) | 0.999 (0.995) | 0.999 (0.995) | 0.999 (0.995) |
-| 5 (one per strategy) | 0.996 (0.986) | 0.965 (0.920) | 0.838 (0.715) |
-| 17 (MA grid only) | 0.992 (0.977) | 0.881 (0.777) | 0.464 (0.302) |
-| **63 (all five grids)** | 0.987 (0.965) | 0.741 (0.588) | **0.159 (0.076)** |
-| 162 (+ every heatmap cell below) | 0.983 (0.955) | 0.623 (0.456) | 0.059 (0.023) |
+| 5 (one per strategy) | 0.996 (0.986) | 0.965 (0.920) | 0.839 (0.715) |
+| 17 (MA grid only) | 0.992 (0.977) | 0.881 (0.777) | 0.465 (0.303) |
+| **63 (all five grids)** | 0.987 (0.965) | 0.741 (0.588) | **0.160 (0.076)** |
+| 162 (+ every heatmap cell below) | 0.983 (0.955) | 0.623 (0.456) | 0.060 (0.023) |
 
 How to read it:
 
@@ -187,8 +187,8 @@ What the surface says:
 
 ### mean_reversion: buys dips, and buys them all the way down
 
-Sharpe 0.42 with a -39.6% drawdown, worse than the index it is trading, on only 32%
-average exposure. Turnover of 10.6x a year is the highest here, so it is also the most
+Sharpe 0.44 with a -39.6% drawdown, worse than the index it is trading, on only 32%
+average exposure. Turnover of 10.4x a year is the highest here, so it is also the most
 cost-sensitive: it is the one strategy whose ranking would change materially under a
 harsher cost model. Its market beta is 0.60 with R² of 0.57 and a *negative* five-factor
 alpha, which is the signature of an expensive way to be long. 13 of 16 folds were
@@ -240,7 +240,7 @@ walk-forward one, which is the overfitting penalty:
 | Strategy | In-sample best | Walk-forward OOS | Penalty |
 |---|---|---|---|
 | ma_crossover | 0.68 | 0.58 | -0.10 |
-| mean_reversion | 0.51 | 0.42 | -0.09 |
+| mean_reversion | 0.51 | 0.44 | -0.07 |
 | tsmom | 0.37 | -0.06 | -0.42 |
 | xsmom | 0.13 | 0.18 | +0.05 |
 | pairs | 0.21 | -0.17 | -0.38 |
@@ -274,30 +274,43 @@ reachable at the settings used here — re-running the fixed code with the borro
 switched off reproduces the previous table to six decimals — so the movement above is the
 borrow fee and nothing else. Both are written up in [REVIEW.md](REVIEW.md).
 
-## Reproducibility check (2026-09-28)
+## Reproducibility
 
-The whole pipeline was re-run from a fresh Yahoo download on 2026-09-28, with the same
-end date (2025-08-29) and code. Four of the five strategies reproduced the previous table
-to at least five significant figures. **`mean_reversion` did not**: Sharpe 0.44 → 0.42,
-longest drawdown 1,102 → 636 days, turnover 10.3 → 10.6. The tables above are the new run.
+**Every number on this page is computed from the committed snapshot
+`data/snapshot-2026-09-28/`** (see [data/README.md](data/README.md)): the Yahoo prices and
+Ken French factor files as downloaded on 2026-09-28, with a sha256 per file. The loaders read
+it by default and never touch the network. Two full runs of `scripts/run_strategies.py` from
+it produced byte-identical reports, apart from the recorded runtime. So did two runs each of
+the heatmap and deflated-Sharpe scripts.
 
-The likely cause is that five of its twelve ETFs (XLB, XLE, XLK, XLU, XLY) split 2-for-1 on
-2025-12-05, after the original download, and Yahoo re-adjusted their whole history. The
-z-score signal is unaffected by a constant rescaling of prices, but whole-share order
-rounding and the volume cap are not, so the fills differ slightly. The drawdown-duration
-change is large because duration is fragile: it depends on whether equity gets back to a
-previous high, and a small P&L difference can decide that. This was not isolated further,
-because the original raw download was not kept (`data/cache/` is gitignored).
+The snapshot was needed because two fresh Yahoo downloads on the same day gave two
+different `mean_reversion` results: Sharpe 0.42, longest drawdown 636 days, turnover 10.6 on
+one, and 0.44, 1,102 days, 10.4 on the other. The other four strategies agreed to about 1e-5
+in Sharpe. The snapshot is the second download, so the tables above changed from 0.42 to
+0.44 when it was adopted.
 
-The lesson is the one in `data/README.md`: a result tied to a data vendor's current
-adjustment is only reproducible against a stored snapshot.
+**What caused the flip.** It was one exit decision. `mean_reversion` exits a position when
+the z-score of the close against its 20-day mean recovers to 0. On 2021-04-27 XLE's z-score
+in the snapshot is **+0.0000039**, so the strategy exits the next morning. Yahoo's prices are
+float32 values, good to about 7 significant digits, and two downloads can differ in the last
+of them. Two tests:
 
-**A second fresh download on the same day contradicts that explanation.** The pipeline was
-run again from another fresh Yahoo download (also 2026-09-28) while adding the
-deflated-Sharpe and heatmap work. `ma_crossover`, `tsmom`, `xsmom` and `pairs` matched the
-tables above to within about 1e-5 in Sharpe. `mean_reversion` came back at the
-*original* numbers instead: Sharpe 0.44, longest drawdown 1,102 days, turnover 10.4. Both
-downloads postdate the December 2025 splits, so the splits alone cannot explain the
-difference. `mean_reversion` moves between two states depending on the download, and the
-cause is not isolated. The tables above keep the committed run. The fix is a committed
-price snapshot, which this repository still lacks.
+* Adding random noise of that size (6e-8 relative) to every price flipped exactly this
+  XLE exit in two of three draws. The in-sample best configuration's Sharpe then moved from
+  0.506795 to 0.510777; the earlier download's run had 0.510776.
+* Lowering that one XLE close by 3e-7 (19.868521 → 19.868515), and changing nothing else,
+  reproduces the earlier download's whole walk-forward result: Sharpe 0.4215 against 0.4219,
+  longest drawdown 636 days, turnover 10.57 against 10.57, PBO 0.709 against 0.708. The
+  small remaining gaps are the 1e-6-level differences every strategy shows between
+  downloads.
+
+A walk-forward amplifies the flip: a slightly different training Sharpe can change which
+parameters win a fold, and the drawdown duration jumps because it depends on whether equity
+regains an old high. The earlier explanation on this page, that December 2025 ETF splits
+changed order rounding, was wrong. These runs use fractional shares and no volume cap, and
+rescaling every price by a constant changes nothing.
+
+The lesson is less about data plumbing than about the strategy. A result that moves by 0.02
+of Sharpe when one price changes in its seventh digit is reporting its own noise floor.
+`mean_reversion`'s 0.44 should be read as "somewhere around 0.42-0.44, and probably less
+certain than that".
