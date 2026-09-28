@@ -47,7 +47,7 @@ class FillModel(StrEnum):
     ``LINEAR``
         :math:`\lambda\Delta t`, the first-order approximation used in the original
         Avellaneda-Stoikov discretisation. It agrees with ``EXACT`` to
-        :math:`O(\Delta t^2)` but **overstates** the fill rate -- by about 10% at the
+        :math:`O(\Delta t^2)` but **overstates** the fill rate -- by about 12% at the
         paper's own parameters -- and exceeds 1 for tight quotes on a coarse grid.
         Provided so the published Table 1 can be reproduced exactly; not recommended.
     """
@@ -154,7 +154,7 @@ def simulate_reference(
         first-order :math:`\lambda\Delta t` the paper's discretisation implies. They agree to
         :math:`O(\Delta t^2)`, but at the paper's own parameters
         (:math:`\lambda \approx 45`, :math:`\Delta t = 0.005`) the linear form overstates the
-        fill rate by 10%, and it exceeds 1 outright for tight quotes on a coarse grid. Pass
+        fill rate by about 12%, and it exceeds 1 outright for tight quotes on a coarse grid. Pass
         ``fill_model="linear"`` to reproduce the published numbers.
 
         Quotes are evaluated against the mid *before* the move, so a fill never uses

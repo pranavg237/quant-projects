@@ -17,7 +17,7 @@ The published Table 1 of Avellaneda & Stoikov (2008) is reproduced to two decima
 | **Fair benchmark** | Against a naive maker *with a hard position limit*, A-S still wins: per-session Sharpe* 11.7 vs 6.9 and **+1.33 PnL per run, t = 10.7**. |
 | **Markout** | The A-S maker's fills against informed takers lose **−1.24 / −1.89 ticks** at +20 / +100 steps, against the model's own −1.28 / −1.99; uninformed fills lose ~0. Adverse selection takes 4-7% of the edge at 15% informed flow. |
 | **Adverse selection** | From 0% to 30% informed flow the symmetric maker's per-session Sharpe* falls **8.8 → 1.5**; A-S's stays flat (10.5 → 12.0, ± 0.8-0.9). A-S's smaller total adverse-selection cost comes from *when it unwinds*, not from dodging informed flow. |
-| **Sensitivity** | Five parameters, three policies, standard errors on everything. A-S's edge grows with $\kappa$, $\sigma$ and informed flow; at too-low $\gamma$ the naive position limit beats it. |
+| **Sensitivity** | Five parameters, three policies, standard errors on everything. A-S's edge grows with $\kappa$, $\sigma$ and informed flow; at the lowest $\gamma$ swept (0.01) the naive position limit beats it. |
 | **Honest finding** | The published finite-horizon model **throws away its inventory control at the bell**: inventory std grows 1.06 → 2.90 over the session. The time-homogeneous variant stays flat at ~1.2. |
 
 \* **Every Sharpe ratio in this README is per simulated session**: the mean of session
@@ -98,7 +98,7 @@ against the paper's reported 1.49. That single number pins both terms of the for
 
 Six of the seven entries land within Monte Carlo error. The exception is `Std(final q)` for the inventory strategy: 3.01 against 2.0. That the *symmetric* strategy's inventory spread matches (8.34 vs 8.4) argues the quoting logic is right and something about the paper's measurement of that one number differs; I could not identify what, and it is reported rather than tuned away.
 
-**The paper's discretisation overstates fills by ~13%.** It uses $\lambda\Delta t$ where the true probability of at least one arrival is $1-e^{-\lambda\Delta t}$. At $\lambda\approx45$, $\Delta t=0.005$ the gap is 10%, and it accounts for the entire difference between reproducing the paper (65.0) and the exact simulation (57.4). The exact form is the default here; `fill_model="linear"` exists to reproduce the published numbers.
+**The paper's discretisation overstates fills, and with them profit by ~13%.** It uses $\lambda\Delta t$ where the true probability of at least one arrival is $1-e^{-\lambda\Delta t}$. At the average quote distance (0.745, so $\lambda\approx46$) and $\Delta t=0.005$, that is 0.229 against 0.205 — the linear form is about 12% too high — and it accounts for the entire difference between reproducing the paper (64.98) and the exact simulation (57.35). The exact form is the default here; `fill_model="linear"` exists to reproduce the published numbers.
 
 ---
 
@@ -118,15 +118,15 @@ The third exists because beating a maker with *no* inventory control is too easy
 
 | Policy | Mean PnL | Std PnL | **Sharpe*** | Mean \|q\| | Std final q | Max \|q\| | Trades | Max DD |
 |---|---|---|---|---|---|---|---|---|
-| Avellaneda-Stoikov | 57.18 | 6.16 | **9.29** | 0.92 | 1.24 | 6.0 | 85.9 | 0.99 |
-| Symmetric | 61.17 | 13.19 | 4.64 | 4.29 | 8.07 | 29.0 | 82.0 | 5.72 |
+| Avellaneda-Stoikov | 57.17 | 6.15 | **9.29** | 0.92 | 1.24 | 6.0 | 85.9 | 0.99 |
+| Symmetric | 61.17 | 13.18 | 4.64 | 4.29 | 8.07 | 29.0 | 82.0 | 5.72 |
 | Symmetric + position limit | 54.22 | 7.48 | 7.25 | 1.57 | 1.94 | 3.0 | 72.7 | 1.84 |
 
 ![Risk and return](figures/risk_return.png)
 
 **A-S makes less money than naive symmetric quoting**, by 3.99 per session (paired $t = -15.6$). That is not a defect, it is the trade: it gives up the option value of running a big position in exchange for halving PnL volatility, and doubles the per-session Sharpe doing so. Being explicit about this is more useful than a chart showing only the ratio.
 
-Against the *fair* benchmark it wins on both axes: **+2.96 PnL per session** ($t = 25.9$) **and** a higher per-session Sharpe. The hard limit captures roughly three quarters of the risk benefit; the continuous skew supplies the rest while trading 18% more.
+Against the *fair* benchmark it wins on both axes: **+2.96 PnL per session** ($t = 25.9$) **and** a higher per-session Sharpe. The hard limit delivers about 80% of the reduction in PnL volatility (std 13.18 → 7.48, against 6.15 for A-S); the continuous skew supplies the rest while trading 18% more.
 
 ![PnL distributions](figures/pnl_distribution.png)
 
@@ -148,7 +148,7 @@ The fit gives $A = 458$, $\kappa = 21.96$ per price unit ($1/\kappa = 4.55$ tick
 
 ![Volatility signature](figures/volatility_signature.png)
 
-This chart caught a real bug. Informed impact is released gradually, so the efficient price is **positively autocorrelated** at short horizons and a one-step volatility estimate understates what a maker faces by about 4x ($\sigma = 0.094$ at one step against $0.33$ at the horizon the maker actually holds inventory). With no informed flow the signature is flat — a pure martingale. With instantaneous impact it is flat again at the higher level. Only *slow price discovery* tilts it.
+This chart caught a real bug. Informed impact is released gradually, so the efficient price is **positively autocorrelated** at short horizons and a one-step volatility estimate understates what a maker faces by about 3.5x ($\sigma = 0.094$ at one step against $0.33$ at the horizon the maker actually holds inventory). With no informed flow the signature is flat — a pure martingale. With instantaneous impact it is flat again at the higher level. Only *slow price discovery* tilts it.
 
 ### Results
 
@@ -160,7 +160,7 @@ This chart caught a real bug. Informed impact is released gradually, so the effi
 | Symmetric | 12.47 | 4.44 | 2.8 | 8.69 | 53.3 | 241 | 2.26 |
 | Symmetric + position limit | 11.34 | 1.65 | 6.9 | 3.40 | 8.6 | 220 | 0.59 |
 
-In the book world A-S's PnL is **statistically indistinguishable** from symmetric quoting ($p = 0.53$) while its per-session Sharpe is 4.2x higher and its worst drawdown 12x smaller. It still beats the position-limit benchmark on PnL by 1.33 per session ($t = 10.7$).
+In the book world A-S's PnL is **statistically indistinguishable** from symmetric quoting ($p = 0.53$) while its per-session Sharpe is 4.2x higher and its worst drawdown 13x smaller. It still beats the position-limit benchmark on PnL by 1.33 per session ($t = 10.7$).
 
 PnL decomposes exactly into spread capture and inventory mark-to-market (reconciliation error 0.00000 in every run):
 
@@ -185,8 +185,8 @@ A simulation knows which takers were informed, so the informed markout has a num
 | Steps after fill | Theory, informed | A-S, informed | Symmetric, informed | Limit, informed | A-S, uninformed | Symmetric, uninformed |
 |---|---|---|---|---|---|---|
 | +1 | −0.10 | −0.10 | −0.10 | −0.10 | +0.00 | −0.00 |
-| +5 | −0.45 | −0.44 | −0.46 | −0.46 | +0.02 | −0.01 |
-| +20 | −1.28 | −1.24 ± 0.02 | −1.31 ± 0.03 | −1.29 ± 0.02 | +0.04 ± 0.01 | −0.04 ± 0.01 |
+| +5 | −0.45 | −0.44 | −0.46 | −0.46 | +0.01 | −0.01 |
+| +20 | −1.28 | −1.24 ± 0.02 | −1.31 ± 0.02 | −1.29 ± 0.02 | +0.04 ± 0.01 | −0.04 ± 0.01 |
 | +100 | −1.99 | −1.89 ± 0.07 | −1.98 ± 0.07 | −1.91 ± 0.07 | +0.08 ± 0.02 | −0.07 ± 0.03 |
 
 (Ticks per unit filled; ± one session-clustered standard error.) Uninformed fills carry essentially no adverse selection; informed fills lose exactly what the model says they should. That agreement is what makes the rest of the table believable.
@@ -223,15 +223,17 @@ Informed fraction swept in the order book, all three policies, 100 sessions each
 
 | Informed fraction | Expected cost (ticks) | A-S Sharpe* | Symmetric Sharpe* | Limit Sharpe* | A-S mean PnL | Symmetric mean PnL |
 |---|---|---|---|---|---|---|
-| 0% | 0.00 | 10.5 ± 0.8 | 8.8 ± 0.6 | 9.9 ± 0.7 | 12.85 ± 0.12 | 12.81 ± 0.15 |
-| 10% | 0.20 | 11.2 ± 0.8 | 4.4 ± 0.4 | 7.6 ± 0.6 | 12.60 ± 0.11 | 12.51 ± 0.29 |
+| 0% | 0.00 | 10.5 ± 0.8 | 8.8 ± 0.6 | 9.9 ± 0.7 | 12.85 ± 0.12 | 12.80 ± 0.15 |
+| 10% | 0.20 | 11.2 ± 0.8 | 4.4 ± 0.4 | 7.6 ± 0.6 | 12.59 ± 0.11 | 12.51 ± 0.29 |
 | 20% | 0.40 | 10.8 ± 0.9 | 2.8 ± 0.3 | 6.5 ± 0.5 | 12.68 ± 0.12 | 12.54 ± 0.44 |
 | 30% | 0.60 | 12.0 ± 0.9 | 1.5 ± 0.3 | 5.6 ± 0.4 | 12.68 ± 0.11 | 9.85 ± 0.66 |
 | 40% | 0.80 | 10.2 ± 0.7 | 1.5 ± 0.2 | 4.5 ± 0.3 | 12.76 ± 0.13 | 11.85 ± 0.79 |
 
 \* per session, not annualised; ± one bootstrap standard error across sessions.
 
-**With no informed flow the policies are close** (A-S 10.5 ± 0.8 vs symmetric 8.8 ± 0.6). Inventory control only pays once inventory is genuinely risky, and informed flow is what makes it so: it drives the measured $\sigma$ up fourfold (section 5), which drives the skew. As the informed fraction rises the symmetric maker's per-session Sharpe collapses, the position-limited maker degrades steadily, and A-S's stays flat within its standard errors. The previous version of this table (66 sessions, a different seed block, no standard errors) showed 12.9 vs 12.2 at 0%; that row does not reproduce on the new seeds, and the gap is about two standard errors — which is why the table now carries them.
+**With no informed flow the policies are close** (A-S 10.5 ± 0.8 vs symmetric 8.8 ± 0.6). Inventory control only pays once inventory is genuinely risky, and informed flow is what makes it so: it drives the fitted $\sigma$ from 0.07 with no informed flow to 0.36 at 20%, and the skew scales with $\sigma^2$. As the informed fraction rises the symmetric maker's per-session Sharpe collapses, the position-limited maker degrades steadily, and A-S's stays flat within its standard errors. The previous version of this table (66 sessions, a different seed block, no standard errors) showed 12.9 vs 12.2 at 0%; that row does not reproduce on the new seeds, and the gap is about two standard errors — which is why the table now carries them.
+
+The A-S maker's final-inventory standard deviation in this sweep is 8.1 at 0% informed flow, against 1.0-3.3 everywhere else. That is not a bug. With no informed flow the fitted $\sigma$ is 0.071, so the skew $q\gamma\sigma^2 h$ is only 0.026 ticks per unit of inventory, and since quotes sit on whole ticks the maker needs a position of about 39 before its quotes move by a full tick; it behaves almost like the symmetric maker (whose std is 17.2). At 10% informed flow $\sigma = 0.19$ and a one-tick skew needs a position of about 5 (`informed_sweep_fits` in `results/results.json`).
 
 ---
 
@@ -247,17 +249,17 @@ Per-session Sharpe*, ± one bootstrap standard error:
 |---|---|---|---|
 | $\gamma = 0.01$ | 7.37 ± 0.27 | 4.82 ± 0.23 | **8.04 ± 0.26** |
 | $\gamma = 0.17$ (A-S peak) | **9.91 ± 0.31** | 4.88 ± 0.24 | 7.20 ± 0.24 |
-| $\gamma = 3.0$ | 1.32 ± 0.06 | 1.31 ± 0.06 | 1.31 ± 0.06 |
+| $\gamma = 3.0$ | 1.32 ± 0.06 | 1.31 ± 0.05 | 1.31 ± 0.06 |
 | $\kappa = 0.5$ | **11.82 ± 0.37** | 9.66 ± 0.37 | 9.68 ± 0.30 |
 | $\kappa = 4.5$ | **7.41 ± 0.25** | 2.04 ± 0.12 | 3.75 ± 0.13 |
 | $\sigma = 0.5$ | **11.43 ± 0.37** | 10.47 ± 0.38 | 9.63 ± 0.30 |
 | $\sigma = 5.0$ | **6.37 ± 0.20** | 2.34 ± 0.13 | 3.66 ± 0.13 |
 | $A = 20$ | **2.82 ± 0.09** | 1.85 ± 0.10 | 2.18 ± 0.10 |
-| $A = 600$ | **22.68 ± 0.73** | 11.90 ± 0.56 | 18.35 ± 0.65 |
+| $A = 600$ | **22.68 ± 0.73** | 11.89 ± 0.56 | 18.35 ± 0.65 |
 
 \* per simulated session, not annualised, and not comparable to a trading strategy's Sharpe.
 
-**Risk aversion $\gamma$ has an interior optimum — and below it, the naive limit wins.** The A-S per-session Sharpe peaks near $\gamma \approx 0.17$ and falls off on both sides: too much and the quotes are so wide the maker stops trading (at $\gamma = 3$ it makes 3.5 trades a session and all three policies are tied at 1.3); too little and the skew is too weak to control inventory. At $\gamma \le 0.04$ the hard position limit beats A-S (8.04 vs 7.37 at $\gamma = 0.01$; final-inventory std 1.90 vs 3.69). The model is only better than the naive rule when its one free preference parameter is set sensibly.
+**Risk aversion $\gamma$ has an interior optimum — and at the bottom of the range, the naive limit wins.** The A-S per-session Sharpe peaks near $\gamma \approx 0.17$ and falls off on both sides: too much and the quotes are so wide the maker stops trading (at $\gamma = 3$ it makes 3.5 trades a session and all three policies are tied at 1.3); too little and the skew is too weak to control inventory. At $\gamma = 0.01$, the lowest value swept, the hard position limit beats A-S (8.04 ± 0.26 vs 7.37 ± 0.27; final-inventory std 1.90 vs 3.69). One grid step up, at $\gamma = 0.02$, A-S is back in front (8.47 ± 0.28 vs 8.05 ± 0.26, within about one standard error), and at 0.04 clearly so (9.32 ± 0.29 vs 7.98 ± 0.27). The model beats the naive rule only if its one free preference parameter is not set far too low.
 
 **The advantage grows with $\kappa$ and $\sigma$** — both make inventory more dangerous relative to what the spread earns. Higher $\kappa$ forces tighter quotes (matched spread 3.85 → 0.64 as $\kappa$ goes 0.5 → 4.5) against unchanged price risk, and the A-S lead over symmetric quoting widens from 1.2x to 3.6x. At low volatility the three policies are close ($\sigma = 0.5$: 11.4 vs 10.5 vs 9.6); at $\sigma = 5$ A-S is 2.7x the symmetric maker. A-S widens as $\sigma$ rises (spread 1.30 → 2.54) and trades 39% less.
 

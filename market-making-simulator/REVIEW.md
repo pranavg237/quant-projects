@@ -41,7 +41,7 @@ Switched to a humped Gamma profile, which is what real books look like.
 
 ### 7. The Monte Carlo fill probability used `lambda*dt` — **FIXED (and kept as an option)**
 The exact Poisson probability `1 - exp(-lambda*dt)` is the default. The linear form is
-retained because it is what reproduces the paper's published table, and the ~10% gap
+retained because it is what reproduces the paper's published table, and the ~12% gap
 between them is the explanation for a discrepancy that would otherwise look like a bug.
 
 ---
@@ -87,14 +87,14 @@ Sharpe; only the *ratio between strategies* is meaningful. The README says so, b
 real limitation of any simulation study of this kind.
 
 ### G. The fill curve is not exponential, and the model assumes it is
-Measured R-squared on the log-linear fit is ~0.85. The tail is fatter than exponential
+Measured R-squared on the log-linear fit is ~0.86. The tail is fatter than exponential
 because market-order sizes are Pareto. The A-S solution is derived under the exponential
 assumption, so the "optimal" quotes are optimal for a market slightly different from the
 one they are used in. Quantified and reported rather than hidden, but not corrected.
 
 ### H. `std(final q) = 3.0` against the paper's 2.0
 Every other entry in the Table 1 reproduction matches within Monte Carlo error, including
-the symmetric strategy's inventory spread (8.2 against 8.4) and both profit volatilities.
+the symmetric strategy's inventory spread (8.3 against 8.4) and both profit volatilities.
 That the *symmetric* number matches while the inventory one does not argues the quoting
 logic is right and something about the paper's inventory measurement differs, but I could
 not identify what. It is reported rather than tuned away.
