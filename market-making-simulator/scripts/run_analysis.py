@@ -463,6 +463,17 @@ def main() -> int:
         local, _, _ = fit_as_params_to_book(
             cfg, market, gamma=0.5, risk_horizon=0.1, n_steps=2500, seed=2
         )
+        # How strongly does the fitted model skew? The quote moves by q*gamma*sigma^2*h,
+        # and prices are whole ticks, so a tiny fitted sigma means a near-symmetric maker.
+        skew_ticks = local.gamma * local.sigma**2 * local.horizon / market.tick_size
+        informed_fits.append(
+            {
+                "informed_fraction": value,
+                "sigma": local.sigma,
+                "skew_ticks_per_unit_inventory": skew_ticks,
+                "inventory_for_one_tick_skew": 1.0 / skew_ticks,
+            }
+        )
         return (
             build_policy_set(local, inventory_limit=6.0),
             book_runner(cfg, market, n_steps=args.book_steps),
@@ -480,6 +491,7 @@ def main() -> int:
             args.runs_informed,
         ),
     ]
+    informed_fits: list[dict[str, float]] = []
     sweep_frames = []
     for parameter, values, builder, n_runs in sweep_specs:
         frame = policy_sensitivity_sweep(values, builder, parameter, n_runs=n_runs)
@@ -507,6 +519,15 @@ def main() -> int:
             .replace("\n", "\n  ")
         )
     sweep = pd.concat(sweep_frames, ignore_index=True)
+    fits_frame = pd.DataFrame(informed_fits)
+    print("\n  Fitted sigma and inventory skew in the informed-fraction sweep:")
+    print(
+        "  "
+        + fits_frame.to_string(index=False, float_format=lambda x: f"{x:8.4f}").replace(
+            "\n", "\n  "
+        )
+    )
+    results["informed_sweep_fits"] = informed_fits
     results["sensitivity"] = sweep.to_dict(orient="records")
 
     _banner("7. Figures")
@@ -531,11 +552,15 @@ def main() -> int:
         print(f"  wrote {_shown(path)}")
 
     args.results.mkdir(parents=True, exist_ok=True)
+    # The Markdown tables carry the per-session label in the column name itself.
+    per_session = {"sharpe": "sharpe_per_session"}
     (args.results / "results.json").write_text(json.dumps(results, indent=2, default=str))
     (args.results / "reference_comparison.md").write_text(
-        _to_markdown(reference_comparison.metrics[display])
+        _to_markdown(reference_comparison.metrics[display].rename(columns=per_session))
     )
-    (args.results / "book_comparison.md").write_text(_to_markdown(book_comparison.metrics[display]))
+    (args.results / "book_comparison.md").write_text(
+        _to_markdown(book_comparison.metrics[display].rename(columns=per_session))
+    )
     informed = sweep[sweep["parameter"] == "informed_fraction"]
     adverse_frame = pd.DataFrame(
         {

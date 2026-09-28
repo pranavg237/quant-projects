@@ -65,7 +65,7 @@ It costs nothing and it is the cheapest way to make a simulation study trustwort
 
 The paper's discretisation uses `lambda*dt`; the true probability of at least one Poisson
 arrival in `dt` is `1 - exp(-lambda*dt)`. They agree to `O(dt^2)`, but at the paper's own
-parameters (`lambda ~ 45`, `dt = 0.005`) the linear form overstates the fill rate by 10%,
+parameters (`lambda ~ 45`, `dt = 0.005`) the linear form overstates the fill rate by about 12%,
 and it exceeds 1 outright for tight quotes on a coarse grid. The default is exact;
 `fill_model="linear"` exists so the published table can be reproduced, and it is what makes
 the reproduction land on 64.98 against 65.0 rather than 57.35.
