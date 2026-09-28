@@ -127,4 +127,24 @@ reviewer who opens it second sees the weaker version of work they've already see
 All 14 items above were executed. [CHANGES.md](CHANGES.md) describes what each one changed,
 including findings the audit did not anticipate: the options engine ignored its snapshot,
 the market-making defaults didn't match its README, and fama-french's `--end` was broken.
-The recommendation to delete `options-pricing-toolkit` is left to the owner.
+The owner has since accepted the recommendation: `options-pricing-toolkit` was deleted in
+round 2 (below).
+
+## Round 2: from "correct and tested" to "shows quant judgment"
+
+Round 1 made every project run, test and report honestly. Round 2 deepens each one where
+a quant interviewer would push next. Depth over breadth: a task that couldn't be done
+properly is skipped and the README says why.
+
+| Project | Work |
+|---|---|
+| repo | Delete `options-pricing-toolkit` (the options engine replaces it). |
+| portfolio-optimization | Keep "nothing beats 1/N" as the headline. Verify Ledoit-Wolf and the walk-forward, report turnover and cost drag per method, and explain why estimation error defeats mean-variance (DeMiguel, Garlappi & Uppal 2009). |
+| ma-crossover-backtest | Verify the walk-forward, add a parameter-sensitivity heatmap, and make the multiple-testing correction (deflated Sharpe) count every trial. |
+| options-pricing-engine | Report Greek-vs-finite-difference errors, test put-call parity on the SPY snapshot, and plot the implied-vol smile and surface. |
+| market-making-simulator | Verify the Avellaneda-Stoikov formulas, add a markout-based adverse-selection analysis, and a parameter-sensitivity study. Every Sharpe stays labelled per session. |
+| fama-french-factor-model | Rolling betas, Newey-West alpha errors checked against statsmodels, and a plain interpretation of which exposures are significant. |
+| alpaca-ma-crossover-bot | No keys, so no live or paper trading. Add pre-trade risk checks, a kill switch, structured logging, and tests that simulate API errors and partial fills. |
+
+After merging, an agent that had not seen the work re-ran every project from a clean
+clone and checked every README number. [CHANGES.md](CHANGES.md) records the outcome.
