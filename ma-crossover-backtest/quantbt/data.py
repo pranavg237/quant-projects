@@ -468,10 +468,11 @@ def load_snapshot(
         path = snapshot_file(rel, snapshot_dir)
         meta = files[rel]
         first, last = pd.Timestamp(meta["first_date"]), pd.Timestamp(meta["last_date"])
+        trimmed = pd.Timestamp(meta["trimmed_before"])
         truncated = pd.Timestamp(meta["source_first_date"]) < first
-        if start is not None and pd.Timestamp(start) < first and truncated:
+        if start is not None and pd.Timestamp(start) < trimmed and truncated:
             raise DataError(
-                f"{symbol}: snapshot starts {first.date()} but {pd.Timestamp(start).date()} "
+                f"{symbol}: snapshot starts {trimmed.date()} but {pd.Timestamp(start).date()} "
                 "was requested; pass --live-data to use the full download"
             )
         if end is not None and pd.Timestamp(end) > last:

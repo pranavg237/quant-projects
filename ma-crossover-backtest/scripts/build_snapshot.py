@@ -65,6 +65,7 @@ def main() -> None:
             "first_date": str(frame.index[0].date()),
             "last_date": str(frame.index[-1].date()),
             "source_first_date": str(raw.index[0].date()),
+            "trimmed_before": start,  # a request starting on or after this is complete
             "downloaded_at": cache_manifest[symbol]["downloaded_at"],
         }
     for name in FRENCH:

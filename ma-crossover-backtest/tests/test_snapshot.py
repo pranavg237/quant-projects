@@ -77,7 +77,14 @@ def test_snapshot_refuses_what_it_does_not_hold() -> None:
     with pytest.raises(DataError, match="snapshot ends"):
         load_yahoo("SPY", end="2030-01-01")
     with pytest.raises(DataError, match="snapshot starts"):
-        load_yahoo("AAPL", start="1995-01-01", end="2025-08-29")  # trimmed to 2003
+        load_yahoo("AAPL", start="2002-12-31", end="2025-08-29")  # trimmed to 2003
+    # a start on the trim date itself (a holiday here) is complete, so it is allowed
+    assert load_yahoo("AAPL", start="2003-01-01", end="2003-01-31").index[0] == pd.Timestamp(
+        "2003-01-02"
+    )
+    assert load_yahoo("SPY", start="1998-01-01", end="1998-01-31").index[0] == pd.Timestamp(
+        "1998-01-02"
+    )
     with pytest.raises(DataError, match="not in the snapshot"):
         load_factors("ff3", "monthly")  # only the daily files are frozen
 
