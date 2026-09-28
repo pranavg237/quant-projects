@@ -106,8 +106,19 @@ def _build_table(title: str, columns: List[str], block: List[str]) -> Optional[F
     return FrenchTable(title, _FREQ_BY_WIDTH[width], values)
 
 
-def fetch_dataset(name: str, refresh: bool = False, cache_dir: Optional[Path] = None) -> List[FrenchTable]:
-    """Return the parsed tables of ``<name>_CSV.zip``, downloading it if the cache is stale."""
+def fetch_dataset(
+    name: str, refresh: bool = False, cache_dir: Optional[Path] = None, data_dir: Optional[Path] = None
+) -> List[FrenchTable]:
+    """Return the parsed tables of ``<name>_CSV.zip``, downloading it if the cache is stale.
+
+    With ``data_dir`` (a saved snapshot, see ``save_snapshot``) the file is read from that
+    directory and nothing is downloaded, so results are reproducible offline.
+    """
+    if data_dir is not None:
+        path = Path(data_dir) / f"{name}_CSV.zip"
+        if not path.exists():
+            raise RuntimeError(f"{name}_CSV.zip is not in the data snapshot {data_dir}")
+        return _read_zip(path)
     path = Path(cache_dir or CACHE_DIR) / f"{name}_CSV.zip"
     stale = not path.exists() or time.time() - path.stat().st_mtime > CACHE_MAX_AGE_DAYS * 86400
     if refresh or stale:
@@ -117,6 +128,10 @@ def fetch_dataset(name: str, refresh: bool = False, cache_dir: Optional[Path] = 
             if not path.exists():
                 raise RuntimeError(f"Could not download {name!r} from the French data library: {exc}") from exc
             warnings.warn(f"Could not refresh {name!r} ({exc}); using the cached copy.")
+    return _read_zip(path)
+
+
+def _read_zip(path: Path) -> List[FrenchTable]:
     with zipfile.ZipFile(path) as zf:
         member = next(n for n in zf.namelist() if n.lower().endswith(".csv"))
         text = zf.read(member).decode("latin-1")
@@ -143,13 +158,17 @@ def load_factors(
     start: Optional[str] = None,
     end: Optional[str] = None,
     refresh: bool = False,
+    data_dir: Optional[Path] = None,
 ) -> pd.DataFrame:
-    """Factor returns for ``model`` plus the risk-free rate ``RF``, in decimals."""
+    """Factor returns for ``model`` plus the risk-free rate ``RF``, in decimals.
+
+    ``data_dir`` reads the French files from a saved snapshot instead of downloading them.
+    """
     spec = get_model(model)
     _check_frequency(frequency)
-    parts = [_factor_table(spec.source, frequency, refresh)]
+    parts = [_factor_table(spec.source, frequency, refresh, data_dir)]
     if "MOM" in spec.factors:
-        parts.append(_factor_table("mom", frequency, refresh))
+        parts.append(_factor_table("mom", frequency, refresh, data_dir))
     factors = pd.concat(parts, axis=1, join="inner")[list(spec.factors) + ["RF"]]
     return factors.loc[start:end].dropna()
 
@@ -161,6 +180,7 @@ def load_portfolios(
     start: Optional[str] = None,
     end: Optional[str] = None,
     refresh: bool = False,
+    data_dir: Optional[Path] = None,
 ) -> pd.DataFrame:
     """Raw (not excess) returns of a French test-portfolio set, in decimals.
 
@@ -173,12 +193,12 @@ def load_portfolios(
     name = dataset
     if frequency == "daily" and not name.lower().endswith("_daily"):
         name += "_Daily"
-    table = _select(fetch_dataset(name, refresh=refresh), frequency, (f"{weighting} weight", "return"))
+    table = _select(fetch_dataset(name, refresh=refresh, data_dir=data_dir), frequency, (f"{weighting} weight", "return"))
     return table.data.loc[start:end] / 100.0
 
 
-def _factor_table(key: str, frequency: str, refresh: bool) -> pd.DataFrame:
-    table = _select(fetch_dataset(FACTOR_FILES[(key, frequency)], refresh=refresh), frequency)
+def _factor_table(key: str, frequency: str, refresh: bool, data_dir: Optional[Path] = None) -> pd.DataFrame:
+    table = _select(fetch_dataset(FACTOR_FILES[(key, frequency)], refresh=refresh, data_dir=data_dir), frequency)
     return table.data.rename(columns=lambda c: "MOM" if c.upper() == "MOM" else c) / 100.0
 
 

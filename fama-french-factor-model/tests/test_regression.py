@@ -9,6 +9,7 @@ from ffmodel.regression import (
     infer_periods_per_year,
     newey_west_lags,
     rolling_regression,
+    stability_test,
     summarize,
 )
 
@@ -68,6 +69,28 @@ def test_rolling_regression_tracks_constant_betas(factors, rng):
     assert len(rolled) == len(factors) - 120 + 1
     assert list(rolled.columns) == ["alpha"] + FF5 + ["R2"]
     np.testing.assert_allclose(rolled[FF5].mean().to_numpy(), TRUE_BETAS, atol=0.1)
+
+
+def test_stability_test_detects_a_beta_shift_and_not_noise(factors, rng):
+    stable = simulate_asset(factors, rng)
+    table = stability_test(stable, factors, model="ff5", block=100)
+    assert table.attrs["blocks"] == 6 and table.attrs["start"] == factors.index[0]
+    assert list(table.index) == ["alpha"] + FF5
+    assert (table["p-value"] > 0.001).all()
+
+    shifted = stable.copy()
+    half = len(factors) // 2
+    shifted.iloc[half:] += 0.8 * factors["HML"].iloc[half:]  # HML beta jumps from -0.3 to 0.5
+    table = stability_test(shifted, factors, model="ff5", block=100)
+    assert table.loc["HML", "p-value"] < 1e-6
+    assert table.loc["HML", "lowest block"] == pytest.approx(-0.3, abs=0.15)
+    assert table.loc["HML", "highest block"] == pytest.approx(0.5, abs=0.15)
+    assert table.loc["Mkt-RF", "p-value"] > 0.001
+
+    odd = stability_test(stable, factors, model="ff5", block=110)  # 600 = 5 * 110 + 50: oldest 50 dropped
+    assert odd.attrs["blocks"] == 5 and odd.attrs["start"] == factors.index[50]
+    with pytest.raises(ValueError, match="two blocks"):
+        stability_test(stable, factors, block=400)
 
 
 def test_compare_models_nested_r2(factors, rng):

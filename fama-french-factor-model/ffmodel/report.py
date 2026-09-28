@@ -234,12 +234,18 @@ def plot_rolling(rolled: pd.DataFrame, factors: Sequence[str], name: str, model:
     fig, axes = _figure(
         3.3 * ncols + 0.4, 2.0 * nrows,
         f"{name}: rolling {get_model(model).label} estimates",
-        f"Re-estimated over a trailing {window}-period window. Alpha is annualized.",
+        f"Re-estimated over a trailing {window}-period window, dated at the window's last period. Alpha is annualized."
+        + (" Bands: pointwise 95% intervals." if any(c.startswith("se(") for c in rolled.columns) else ""),
         nrows, ncols, sharex=True,
     )
     for ax, column in zip(axes.flat, panels):
-        series = rolled[column] * (periods_per_year if column == "alpha" else 1)
-        ax.plot(series.index, series.values, color=ENTITY_COLORS.get(column, SERIES[0]))
+        scale = periods_per_year if column == "alpha" else 1
+        series = rolled[column] * scale
+        color = ENTITY_COLORS.get(column, SERIES[0])
+        if f"se({column})" in rolled:
+            half = 1.96 * rolled[f"se({column})"] * scale
+            ax.fill_between(series.index, series - half, series + half, color=color, alpha=0.18, linewidth=0)
+        ax.plot(series.index, series.values, color=color)
         ax.axhline(0, color=BASELINE, linewidth=1.0, zorder=1)
         ax.set_title("Alpha (annualized)" if column == "alpha" else f"{column} beta")
         last = f"{series.iloc[-1]:.1%}" if column == "alpha" else f"{series.iloc[-1]:.2f}"
@@ -379,7 +385,7 @@ def format_value(column: Any, value: Any, decimals: Optional[int] = None) -> str
         return f"{value:.{decimals}f}"
     if any(key in column for key in _PCT_KEYS):
         return f"{value:.2%}"
-    if column == "p-value":
+    if column.endswith("p-value") or column.startswith("p ("):
         return f"{value:.3f}" if value >= 0.001 else f"{value:.1e}"
     if column.endswith("R2"):
         return f"{value:.3f}"

@@ -5,17 +5,26 @@ import argparse
 import re
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Optional, Sequence, Tuple
 
 import pandas as pd
 
-from . import data, report
+from . import data, report, snapshot
 from .asset_pricing import fama_macbeth, grs_test
 from .assets import build_portfolio, download_returns, load_returns_csv
 from .attribution import attribute_returns
 from .factor_stats import factor_summary, spanning_regressions
 from .models import MODELS, get_model
-from .regression import compare_models, fit_many, rolling_regression, summarize
+from .regression import (
+    compare_models,
+    compare_standard_errors,
+    fit_many,
+    holm_adjust,
+    rolling_regression,
+    stability_test,
+    summarize,
+)
 
 PORTFOLIO = "Portfolio"
 COV_LABELS = {"hac": "Newey-West (HAC)", "robust": "White (HC1)", "ols": "classical OLS"}
@@ -51,6 +60,8 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--refresh", action="store_true", help="re-download French data even if the cache is fresh")
     common.add_argument("--out", help="report directory (default: reports/<command>-<timestamp>)")
     common.add_argument("--no-report", action="store_true", help="print results only; write no files")
+    common.add_argument("--data-dir", help="read French library files from this snapshot directory (no download); "
+                                           "see the snapshot command")
 
     a = sub.add_parser("analyze", parents=[common], help="factor regressions for stocks, funds or portfolios")
     source = a.add_mutually_exclusive_group(required=True)
@@ -75,6 +86,14 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--beta-window", type=int, help="rolling beta window for Fama-MacBeth (default: full sample)")
     t.add_argument("--fm-lags", type=int, default=0, help="Newey-West lags for Fama-MacBeth errors (default: 0)")
     t.set_defaults(func=cmd_test_portfolios)
+
+    s = sub.add_parser("snapshot", help="download factor files and Yahoo returns into a directory for offline runs")
+    s.add_argument("--tickers", nargs="+", required=True, help="Yahoo Finance tickers")
+    s.add_argument("--freq", choices=["monthly", "daily"], default="monthly")
+    s.add_argument("--start", help="first date, e.g. 1990-01")
+    s.add_argument("--end", help="last date, e.g. 2024-12")
+    s.add_argument("--out", required=True, help="snapshot directory")
+    s.set_defaults(func=cmd_snapshot)
 
     f = sub.add_parser("factors", parents=[common], help="summary statistics and spanning tests for the factors")
     f.add_argument("--model", default="ff6", choices=list(MODELS))
@@ -121,6 +140,10 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         returns = load_returns_csv(args.csv, prices=args.prices, percent=args.percent, frequency=args.freq)
         returns = returns.loc[args.start:args.end]
         source = args.csv
+        manifest = snapshot.read_manifest(Path(args.csv).parent)
+        if manifest:
+            source = (f"{manifest['returns']['source']}, saved snapshot `{Path(args.csv).parent.name}` "
+                      f"(downloaded {manifest['downloaded_utc'][:10]})")
     if args.weights:
         by_upper = {str(c).upper(): c for c in returns.columns}
         weights = {}
@@ -131,7 +154,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         returns[PORTFOLIO] = build_portfolio(returns, weights)
 
     models = list(MODELS) if args.compare else [args.model]
-    factor_sets = {m: data.load_factors(m, args.freq, args.start, args.end, refresh=args.refresh) for m in models}
+    factor_sets = {m: _load_factors(args, m) for m in models}
     factors = factor_sets[args.model]
     spec = get_model(args.model)
     fit_kw = dict(excess=args.excess, cov=args.cov, lags=args.lags)
@@ -140,9 +163,16 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         raise ValueError("none of the assets has enough data overlapping the factors")
 
     rep = _open_report(args, f"{spec.label} analysis")
-    _note(rep, f"Factors: Kenneth R. French Data Library ({args.freq}). Asset returns: {source}. "
-               f"Standard errors: {COV_LABELS[args.cov]}. Alphas and returns are annualized.")
+    first = next(iter(results.values()))
+    lag_note = ""
+    if first.hac_lags is not None:
+        lag_note = (f" with {first.hac_lags} lags" if args.lags is not None else
+                    f" with {first.hac_lags} lags (rule floor(4(T/100)^(2/9)) at T = {first.nobs})")
+    _note(rep, f"Factors: Kenneth R. French Data Library ({args.freq}{_factor_source(args)}). Asset returns: {source}. "
+               f"Standard errors: {COV_LABELS[args.cov]}{lag_note}; p-values use the normal distribution. "
+               f"Alphas and returns are annualized.")
     _show(rep, f"{spec.label} regressions", summarize(results), "summary", level=2)
+    _significance_section(rep, results, args)
 
     for name, res in results.items():
         print("\n" + "=" * 100 + "\n" + res.summary())
@@ -154,6 +184,9 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                      f"residual volatility {res.resid_vol_annual:.2%}, information ratio {res.information_ratio:.2f}.")
             rep.table(res.table(), f"{name}-coefficients", decimals=4)
             rep.figure(report.plot_loadings(res), f"{name}-loadings", f"{name} factor loadings")
+        if args.cov == "hac" and args.lags is None:
+            _show(rep, f"{name}: t-statistics under different standard errors", compare_standard_errors(res),
+                  f"{name}-standard-errors")
 
         attribution = attribute_returns(res, factors)
         _show(rep, f"{name}: return attribution", attribution.summary, f"{name}-attribution")
@@ -169,22 +202,86 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             _show(rep, f"{name}: model comparison (common sample)", table, f"{name}-models")
 
         if args.rolling:
+            # Short windows use HC3 whatever --cov says: Newey-West is far too narrow with ~36 observations
+            # (see scripts/window_se_simulation.py). --cov ols keeps classical errors.
+            window_se = "ols" if args.cov == "ols" else "hc3"
+            errors = "HC3, MacKinnon-White" if window_se == "hc3" else COV_LABELS[window_se]
             try:
-                rolled = rolling_regression(returns[name], factors, args.model, args.rolling, excess=args.excess)
+                rolled = rolling_regression(returns[name], factors, args.model, args.rolling, excess=args.excess,
+                                            se=window_se)
             except ValueError as exc:
                 print(f"(rolling estimates skipped for {name}: {exc})")
                 continue
-            shown = rolled.rename(columns={"alpha": "alpha (ann.)"})
+            shown = rolled[[c for c in rolled.columns if not c.startswith("se(")]].rename(columns={"alpha": "alpha (ann.)"})
             shown["alpha (ann.)"] *= res.periods_per_year
             stats = pd.DataFrame({"latest": shown.iloc[-1], "mean": shown.mean(), "min": shown.min(), "max": shown.max()}).T
             _show(rep, f"{name}: rolling {args.rolling}-period estimates", stats, f"{name}-rolling-summary")
+            _note(rep, f"{len(rolled)} overlapping windows of {args.rolling} periods; the first ends "
+                       f"{rolled.index[0]:%b %Y} and the last {rolled.index[-1]:%b %Y}. Shaded bands in the chart are "
+                       f"estimate ± 1.96 standard errors ({errors}) for each window on its own: they are pointwise, "
+                       f"not joint, and neighbouring windows share {args.rolling - 1} of {args.rolling} observations.")
             if rep:
                 rep.figure(report.plot_rolling(rolled, res.factors, str(name), args.model, args.rolling,
                                                res.periods_per_year),
                            f"{name}-rolling", f"{name} rolling estimates", data=rolled)
+            try:
+                stability = stability_test(returns[name], factors, args.model, args.rolling, excess=args.excess,
+                                           se=window_se)
+            except ValueError as exc:
+                print(f"(stability test skipped for {name}: {exc})")
+                continue
+            info = stability.attrs
+            shown = stability.astype(object)
+            for col in ("lowest block", "highest block"):
+                shown.loc["alpha", col] = f"{stability.loc['alpha', col] * res.periods_per_year:.1%}"
+            shown = shown.rename(index={"alpha": "alpha (ann.)"})
+            _show(rep, f"{name}: did the exposures change? ({info['blocks']} separate {args.rolling}-period blocks)",
+                  shown, f"{name}-stability")
+            _note(rep, f"Blocks run from {info['start']:%b %Y} to {info['end']:%b %Y} and do not overlap. Each row tests "
+                       f"that one coefficient is the same in all {info['blocks']} blocks (Wald chi-squared, "
+                       f"{info['blocks'] - 1} degrees of freedom, {errors} within each block). A small p-value "
+                       f"says the exposure moved by more than estimation noise; a large one says the rolling "
+                       f"chart's wiggles are consistent with a constant exposure.")
 
     if rep:
         print(f"\nReport: {rep.save()}")
+    return 0
+
+
+def _load_factors(args: argparse.Namespace, model: str) -> pd.DataFrame:
+    return data.load_factors(model, args.freq, args.start, args.end, refresh=args.refresh, data_dir=args.data_dir)
+
+
+def _factor_source(args: argparse.Namespace) -> str:
+    if not args.data_dir:
+        return ""
+    manifest = snapshot.read_manifest(args.data_dir)
+    when = f", downloaded {manifest['downloaded_utc'][:10]}" if manifest else ""
+    return f"; saved snapshot `{Path(args.data_dir).name}`{when}"
+
+
+def _significance_section(rep: Optional[report.Report], results: Dict, args: argparse.Namespace) -> None:
+    """Alpha significance across assets, with a Holm correction for testing several alphas at once."""
+    if len(results) < 2:
+        return
+    table = pd.DataFrame({
+        "alpha (ann.)": {n: r.alpha_annual for n, r in results.items()},
+        "t(alpha)": {n: float(r.tvalues["alpha"]) for n, r in results.items()},
+        "p-value": {n: float(r.pvalues["alpha"]) for n, r in results.items()},
+    })
+    table["Holm p-value"] = holm_adjust(table["p-value"])
+    _show(rep, "Alphas: one test per asset vs. the whole family", table, "alpha-tests", level=2)
+    _note(rep, f"{len(table)} alphas are tested here. The Holm column adjusts each p-value so that the chance of "
+               f"any false rejection across all {len(table)} stays at the nominal level (valid even though the assets "
+               f"are correlated). Standard errors: {COV_LABELS[args.cov]}.")
+
+
+def cmd_snapshot(args: argparse.Namespace) -> int:
+    """Save factor files and Yahoo returns so a later analysis can run offline."""
+    manifest = snapshot.save_snapshot(args.out, args.tickers, args.start, args.end, args.freq)
+    r = manifest["returns"]
+    print(f"Saved {len(manifest['french_library'])} French library files and {r['periods']} periods of returns "
+          f"for {', '.join(r['tickers'])} ({r['first']} to {r['last']}) to {args.out}")
     return 0
 
 
@@ -204,9 +301,10 @@ def _sort_layout(dataset: str, n: int) -> Optional[Tuple[Tuple[int, int], str, s
 
 def cmd_test_portfolios(args: argparse.Namespace) -> int:
     """GRS and Fama-MacBeth tests on a set of French test portfolios."""
-    raw = data.load_portfolios(args.dataset, args.freq, args.weighting, args.start, args.end, refresh=args.refresh)
+    raw = data.load_portfolios(args.dataset, args.freq, args.weighting, args.start, args.end, refresh=args.refresh,
+                               data_dir=args.data_dir)
     models = list(MODELS) if args.compare else [args.model]
-    factor_sets = {m: data.load_factors(m, args.freq, args.start, args.end, refresh=args.refresh) for m in models}
+    factor_sets = {m: _load_factors(args, m) for m in models}
     index = raw.dropna().index
     for factors in factor_sets.values():
         index = index.intersection(factors.index)
@@ -271,7 +369,7 @@ def cmd_test_portfolios(args: argparse.Namespace) -> int:
 
 def cmd_factors(args: argparse.Namespace) -> int:
     """Summary statistics, correlations and spanning regressions for the factors themselves."""
-    factors = data.load_factors(args.model, args.freq, args.start, args.end, refresh=args.refresh)
+    factors = _load_factors(args, args.model)
     spec = get_model(args.model)
     rep = _open_report(args, f"{spec.label} factors")
     _note(rep, f"{args.freq.capitalize()} factor returns, {factors.index[0]:%b %Y} to {factors.index[-1]:%b %Y} "
