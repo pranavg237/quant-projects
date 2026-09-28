@@ -52,6 +52,12 @@ from portopt.types import Constraints  # noqa: E402
 PERIODS = 12.0
 
 
+def _shown(path: Path) -> str:
+    """``path`` relative to the project when it is inside it, else absolute."""
+    resolved = path.resolve()
+    return str(resolved.relative_to(REPO_ROOT)) if resolved.is_relative_to(REPO_ROOT) else str(path)
+
+
 def _to_markdown(df: pd.DataFrame, floatfmt: str = "{:.3f}") -> str:
     """Render a DataFrame as Markdown without pulling in ``tabulate``."""
 
@@ -455,7 +461,7 @@ def main() -> int:
         ),
     }
     for path in plotting.save_all(figures, args.out):
-        print(f"  wrote {path.relative_to(REPO_ROOT)}")
+        print(f"  wrote {_shown(path)}")
 
     args.results.mkdir(parents=True, exist_ok=True)
     (args.results / "results.json").write_text(json.dumps(results, indent=2, default=str))
@@ -476,7 +482,7 @@ def main() -> int:
             ]
         )
     )
-    print(f"  wrote {(args.results / 'results.json').relative_to(REPO_ROOT)}")
+    print(f"  wrote {_shown(args.results / 'results.json')}")
     return 0
 
 

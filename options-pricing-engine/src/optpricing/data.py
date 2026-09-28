@@ -283,10 +283,11 @@ def load_chain(
 ) -> ChainSnapshot:
     """Return a chain snapshot, preferring the local cache over the network.
 
-    Search order: today's cache, then (unless ``force_refresh``) the most recent cached
-    snapshot for this ticker, then a fresh download. If the download fails and any cache
-    exists, the cache is used and a warning is emitted -- an offline rerun should still
-    reproduce the analysis rather than crash.
+    Unless ``force_refresh`` is set, the most recent cached snapshot for this ticker is
+    returned (a download from today counts), and the network is only used when nothing is
+    cached. This is what makes the analysis reproducible: rerunning it next month uses the
+    same committed snapshot rather than whatever the market looks like at the time. If a
+    requested download fails and any cache exists, the cache is used with a warning.
 
     Args:
         ticker: Underlying symbol.
@@ -295,18 +296,14 @@ def load_chain(
         **download_kwargs: Forwarded to :func:`download_chain`.
     """
     cache_dir = cache_dir or DEFAULT_CACHE_DIR
-    today = dt.datetime.now(tz=_NY).date()
-
     candidates = (
         sorted((cache_dir / "raw").glob(f"{ticker.upper()}_*.csv")) if cache_dir.exists() else []
     )
     candidates += sorted((cache_dir / "snapshots").glob(f"{ticker.upper()}_*.csv"))
     candidates = sorted(candidates, key=lambda p: p.stem.split("_")[-1])
 
-    if not force_refresh:
-        todays = [p for p in candidates if p.stem.endswith(today.isoformat())]
-        if todays:
-            return ChainSnapshot.from_csv(todays[-1])
+    if not force_refresh and candidates:
+        return ChainSnapshot.from_csv(candidates[-1])
 
     try:
         return download_chain(ticker, cache_dir=cache_dir, **download_kwargs)
@@ -421,11 +418,15 @@ class RateCurve:
 FALLBACK_RATES: dict[float, float] = {0.25: 0.040, 5.0: 0.038, 10.0: 0.042, 30.0: 0.046}
 
 
-def load_rate_curve(cache_dir: Path | None = None, force_refresh: bool = False) -> RateCurve:
+def load_rate_curve(
+    cache_dir: Path | None = None, force_refresh: bool = False, asof: dt.date | None = None
+) -> RateCurve:
     """Load the Treasury zero curve, preferring the local cache.
 
-    Falls back to :data:`FALLBACK_RATES` (with a warning) if Yahoo is unreachable and
-    nothing is cached, so an offline run degrades rather than crashes.
+    Unless ``force_refresh`` is set, a cached curve is used: the one dated ``asof`` if
+    given (so an option chain is priced with the rates from the same day), otherwise the
+    most recent. Falls back to :data:`FALLBACK_RATES` (with a warning) if Yahoo is
+    unreachable and nothing is cached, so an offline run degrades rather than crashes.
     """
     cache_dir = cache_dir or DEFAULT_CACHE_DIR
     today = dt.datetime.now(tz=_NY).date()
@@ -434,9 +435,13 @@ def load_rate_curve(cache_dir: Path | None = None, force_refresh: bool = False) 
         sorted((cache_dir / "raw").glob("ratecurve_*.csv")) if (cache_dir / "raw").exists() else []
     )
     older += sorted((cache_dir / "snapshots").glob("ratecurve_*.csv"))
+    older = sorted(older, key=lambda p: p.stem.split("_")[-1])
 
-    if not force_refresh and cache_file.exists():
-        df = pd.read_csv(cache_file)
+    if not force_refresh and older:
+        dated = [p for p in older if asof is not None and p.stem.endswith(asof.isoformat())]
+        if asof is not None and not dated:
+            warnings.warn(f"no rate curve cached for {asof}; using {older[-1].name}", stacklevel=2)
+        df = pd.read_csv((dated or older)[-1])
         return RateCurve(df["tenor"].to_numpy(), df["rate"].to_numpy())
 
     symbols = {"^IRX": 0.25, "^FVX": 5.0, "^TNX": 10.0, "^TYX": 30.0}
