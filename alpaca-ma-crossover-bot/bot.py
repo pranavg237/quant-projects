@@ -23,7 +23,7 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from alpaca_client import AlpacaClient
-from strategy import compute_signal, position_size, decide_order, Signal
+from strategy import completed_bars, compute_signal, decide_order, position_size
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 log = logging.getLogger("bot")
@@ -31,6 +31,8 @@ log = logging.getLogger("bot")
 
 def run_once(client: AlpacaClient, symbol: str, short_window: int, long_window: int,
              risk_fraction: float, max_position_fraction: float, dry_run: bool) -> None:
+    """Run one decision cycle: fetch completed daily bars, compute the signal, and
+    submit (or, with dry_run, log) the order needed to match it."""
     account = client.get_account()
     equity = float(account["equity"])
     if account["status"] != "ACTIVE" or account.get("trading_blocked"):
@@ -38,7 +40,8 @@ def run_once(client: AlpacaClient, symbol: str, short_window: int, long_window: 
                             f"trading_blocked={account.get('trading_blocked')}")
 
     lookback_start = (dt.date.today() - dt.timedelta(days=long_window * 3)).isoformat()
-    bars = client.get_daily_bars(symbol, start=lookback_start)
+    bars = completed_bars(client.get_daily_bars(symbol, start=lookback_start),
+                          dt.datetime.now(dt.timezone.utc))
     if len(bars) < long_window:
         raise RuntimeError(f"Only got {len(bars)} bars for {symbol}, need >= {long_window}. "
                             f"(Market data may lag on a free/paper account.)")
@@ -50,7 +53,9 @@ def run_once(client: AlpacaClient, symbol: str, short_window: int, long_window: 
     position = client.get_position(symbol)
     current_qty = position.qty if position else 0.0
 
-    target_qty = position_size(equity, last_price, risk_fraction, max_position_fraction)
+    buying_power = float(account.get("buying_power", equity))
+    target_qty = position_size(equity, last_price, risk_fraction, max_position_fraction,
+                               buying_power=buying_power)
     order = decide_order(current_qty, signal, target_qty)
 
     log.info(f"{symbol}: signal={signal.value}  last_price={last_price:.2f}  "
@@ -70,7 +75,8 @@ def run_once(client: AlpacaClient, symbol: str, short_window: int, long_window: 
               f"status={result.get('status')}")
 
 
-def main():
+def main() -> None:
+    """Parse arguments and run one decision cycle."""
     p = argparse.ArgumentParser(description="MA crossover paper trading bot (one decision cycle)")
     p.add_argument("--symbol", required=True)
     p.add_argument("--short", type=int, default=50, dest="short_window")

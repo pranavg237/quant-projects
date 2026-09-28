@@ -86,8 +86,13 @@ class AlpacaClient:
 
     # -- market data ---------------------------------------------------
     def get_daily_bars(self, symbol: str, start: str, end: str | None = None, limit: int = 1000) -> list[dict]:
-        """Daily OHLCV bars. `start`/`end` are YYYY-MM-DD strings."""
-        params = {"timeframe": "1Day", "start": start, "limit": limit}
+        """Daily OHLCV bars, oldest first. `start`/`end` are YYYY-MM-DD strings.
+
+        Requests split- and dividend-adjusted prices (`adjustment=all`). Alpaca's default
+        is raw prices, where a 4-for-1 split looks like a 75% crash and can flip a
+        moving-average signal on a corporate action rather than a trend.
+        """
+        params = {"timeframe": "1Day", "start": start, "limit": limit, "adjustment": "all"}
         if end:
             params["end"] = end
         data = self._get(self.data_base_url, f"/v2/stocks/{symbol}/bars", params=params)
