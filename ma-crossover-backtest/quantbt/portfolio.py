@@ -11,6 +11,8 @@ from quantbt.execution import Fill
 
 @dataclass
 class Position:
+    """Holdings in one symbol with its average cost and realised P&L."""
+
     symbol: str
     quantity: float = 0.0
     cost_basis: float = 0.0  # average price paid for the open quantity

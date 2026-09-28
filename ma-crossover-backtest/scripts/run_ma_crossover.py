@@ -14,8 +14,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from quantbt import metrics
 from quantbt.data import load_yahoo
 from quantbt.metrics import format_summary
+from quantbt.research.runner import load_rf
 from quantbt.vectorized import backtest_ma_crossover
 
 
@@ -29,12 +31,19 @@ def main() -> None:
     parser.add_argument("--slippage-bps", type=float, default=5.0)
     parser.add_argument("--commission-bps", type=float, default=1.0)
     parser.add_argument("--rf", type=float, default=0.0, help="annual cash yield while flat")
+    parser.add_argument(
+        "--french-rf",
+        action="store_true",
+        help="cash earns the daily Ken French T-bill rate, and Sharpe is in excess of it "
+        "(overrides --rf)",
+    )
     parser.add_argument("--out", default="reports/ma_crossover.png")
     args = parser.parse_args()
 
     # Warm-up: pull enough history before --start so the long MA is defined on day one.
     warmup_start = pd.Timestamp(args.start) - pd.tseries.offsets.BDay(args.long + 10)
     data = load_yahoo(args.ticker, start=warmup_start, end=args.end)
+    rf: pd.Series | float = load_rf(warmup_start, args.end) if args.french_rf else args.rf
     res = backtest_ma_crossover(
         data,
         args.short,
@@ -43,14 +52,20 @@ def main() -> None:
         end=args.end,
         slippage_bps=args.slippage_bps,
         commission_bps=args.commission_bps,
-        rf=args.rf,
+        rf=rf,
     )
     print(f"{args.ticker} MA({args.short}/{args.long}) {args.start} to {args.end}")
     print(
         f"fills at next open, slippage {args.slippage_bps} bps, "
         f"commission {args.commission_bps} bps"
     )
-    print(format_summary(res.summary(rf=args.rf)))
+    print("cash: Ken French daily T-bill rate" if args.french_rf else f"cash: {args.rf:.2%} a year")
+    print(format_summary(res.summary(rf=rf)))
+    bench = res.frame["benchmark_equity"]
+    print(
+        f"buy-and-hold: CAGR {metrics.cagr(bench):.2%}, "
+        f"max drawdown {metrics.max_drawdown(bench):.2%}"
+    )
 
     _fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
     f = res.frame

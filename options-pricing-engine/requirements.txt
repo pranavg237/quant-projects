@@ -14,3 +14,6 @@ ruff>=0.5
 mypy>=1.10
 pandas-stubs>=2.1
 cycler>=0.11
+
+# This project itself, so `import optpricing` works in tests and scripts
+-e .

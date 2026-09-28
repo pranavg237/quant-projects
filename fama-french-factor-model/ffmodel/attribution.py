@@ -10,6 +10,8 @@ from .regression import RegressionResult
 
 @dataclass
 class Attribution:
+    """Return and variance attribution of one regression."""
+
     # Per-period components: alpha, beta_k * f_k for each factor, residual.
     # Each row sums to that period's excess return.
     contributions: pd.DataFrame
@@ -24,6 +26,11 @@ class Attribution:
 
 
 def attribute_returns(result: RegressionResult, factors: pd.DataFrame) -> Attribution:
+    """Split each period's excess return into alpha, beta_k * f_k per factor and residual.
+
+    The components add up exactly to the excess return every period. The variance split
+    is an Euler decomposition, so a factor that hedges the others can have a negative share.
+    """
     index = result.resid.index
     parts = factors.loc[index, result.factors].mul(result.betas, axis=1)
     contributions = pd.concat(

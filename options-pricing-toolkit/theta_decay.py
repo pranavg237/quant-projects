@@ -10,6 +10,8 @@ evaporates independent of the underlying moving your way.
 Usage:
   python3 theta_decay.py --S 230 --K 235 --sigma 0.55 --r 0.045 --type call
 """
+from __future__ import annotations
+
 import argparse
 
 import matplotlib.pyplot as plt
@@ -18,7 +20,14 @@ import numpy as np
 from black_scholes import price, greeks
 
 
-def decay_curve(S, K, r, sigma, option_type, q=0.0, max_dte=10, points=200):
+def decay_curve(S: float, K: float, r: float, sigma: float, option_type: str, q: float = 0.0,
+                max_dte: float = 10, points: int = 200
+                ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Price, theta (per day) and gamma on a grid from ``max_dte`` days down to 0.05 days.
+
+    Spot and volatility are held fixed, so this isolates the effect of time alone.
+    Returns ``(dtes, prices, thetas, gammas)``.
+    """
     dtes = np.linspace(max_dte, 0.05, points)  # avoid T=0 (undefined)
     prices, thetas, gammas = [], [], []
     for dte in dtes:
@@ -30,7 +39,10 @@ def decay_curve(S, K, r, sigma, option_type, q=0.0, max_dte=10, points=200):
     return dtes, np.array(prices), np.array(thetas), np.array(gammas)
 
 
-def plot_decay(S, K, r, sigma, option_type, q=0.0, max_dte=10, out="theta_decay.png"):
+def plot_decay(S: float, K: float, r: float, sigma: float, option_type: str, q: float = 0.0,
+               max_dte: float = 10, out: str = "theta_decay.png") -> None:
+    """Save a three-panel chart of price, theta and gamma against days to expiry, and print
+    the values at 2, 1 and 0.25 days."""
     dtes, prices, thetas, gammas = decay_curve(S, K, r, sigma, option_type, q, max_dte)
 
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
@@ -64,7 +76,8 @@ def plot_decay(S, K, r, sigma, option_type, q=0.0, max_dte=10, out="theta_decay.
         print(f"{dtes[idx]:.2f}  {prices[idx]:8.4f}  {thetas[idx]:9.4f}  {gammas[idx]:.4f}")
 
 
-def main():
+def main() -> None:
+    """Command-line entry point."""
     p = argparse.ArgumentParser(description="Plot theta/gamma decay into 0-2 DTE")
     p.add_argument("--S", type=float, required=True)
     p.add_argument("--K", type=float, required=True)

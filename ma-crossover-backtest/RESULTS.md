@@ -8,7 +8,7 @@ removed. Four of the five do not beat buying and holding the index.
 Rebuild everything with:
 
 ```bash
-python scripts/run_strategies.py      # ~7 minutes, writes reports/strategies/
+python scripts/run_strategies.py      # ~25 minutes, writes reports/strategies/
 python scripts/build_tearsheets.py    # writes reports/tearsheets/
 ```
 
@@ -23,7 +23,7 @@ python scripts/build_tearsheets.py    # writes reports/tearsheets/
 | Parameters | re-chosen every year on the preceding 5 years, by Sharpe, in-sample only |
 | Reported series | the stitched out-of-sample windows, never the training windows |
 | Benchmark | buy and hold SPY over the identical dates |
-| Data | Yahoo Finance daily bars, split- and dividend-adjusted, snapshot of 2025-08-29 |
+| Data | Yahoo Finance daily bars, split- and dividend-adjusted, through 2025-08-29; downloaded 2026-09-28 |
 
 ## The table
 
@@ -34,7 +34,7 @@ the other four start in 2010 after their first 5-year training window.
 |---|---|---|---|---|---|---|---|---|
 | SPY buy & hold (2010-2025) | 13.8% | 17.3% | **0.76** | 1.07 | -33.7% | 709 | 0.0 | 100% |
 | ma_crossover | 8.2% | 12.0% | **0.58** | 0.79 | -22.4% | 808 | 2.0 | 78% |
-| mean_reversion | 6.6% | 13.9% | **0.44** | 0.62 | -39.6% | 1,102 | 10.3 | 32% |
+| mean_reversion | 6.3% | 13.8% | **0.42** | 0.60 | -39.6% | 636 | 10.6 | 32% |
 | xsmom | 2.5% | 8.5% | **0.18** | 0.24 | -16.1% | 799 | 5.9 | 100% |
 | tsmom | 0.7% | 6.4% | **-0.06** | -0.08 | -19.9% | 2,051 | 3.8 | 91% |
 | pairs | 1.0% | 1.5% | **-0.17** | -0.24 | -3.8% | 2,291 | 4.7 | 14% |
@@ -48,7 +48,7 @@ is a coin flip out of sample.
 | Strategy | Sharpe | Bootstrap 95% CI | PSR | PBO | FF5 alpha (ann.) | t | R² | Momentum beta | t |
 |---|---|---|---|---|---|---|---|---|---|
 | ma_crossover | 0.58 | 0.21 to 1.01 | 0.995 | 0.54 | +2.4% | 1.22 | 0.41 | +0.14 | 5.7 |
-| mean_reversion | 0.44 | 0.01 to 0.98 | 0.956 | 0.71 | -2.0% | -0.78 | 0.57 | +0.03 | 1.0 |
+| mean_reversion | 0.42 | 0.00 to 0.96 | 0.950 | 0.71 | -2.3% | -0.89 | 0.57 | +0.04 | 1.5 |
 | xsmom | 0.18 | -0.30 to 0.61 | 0.757 | 0.91 | +1.0% | 0.50 | 0.07 | +0.39 | 21.1 |
 | tsmom | -0.06 | -0.52 to 0.44 | 0.407 | 0.43 | -2.2% | -1.25 | 0.12 | +0.13 | 7.7 |
 | pairs | -0.17 | -0.63 to 0.27 | 0.257 | 0.00 | -0.3% | -0.80 | 0.01 | -0.00 | -1.0 |
@@ -76,8 +76,8 @@ below the median out of sample about half the time.
 
 ### mean_reversion: buys dips, and buys them all the way down
 
-Sharpe 0.44 with a -39.6% drawdown, worse than the index it is trading, on only 32%
-average exposure. Turnover of 10.3x a year is the highest here, so it is also the most
+Sharpe 0.42 with a -39.6% drawdown, worse than the index it is trading, on only 32%
+average exposure. Turnover of 10.6x a year is the highest here, so it is also the most
 cost-sensitive: it is the one strategy whose ranking would change materially under a
 harsher cost model. Its market beta is 0.60 with R² of 0.57 and a *negative* five-factor
 alpha, which is the signature of an expensive way to be long. 13 of 16 folds were
@@ -129,7 +129,7 @@ walk-forward one, which is the overfitting penalty:
 | Strategy | In-sample best | Walk-forward OOS | Penalty |
 |---|---|---|---|
 | ma_crossover | 0.68 | 0.58 | -0.10 |
-| mean_reversion | 0.51 | 0.44 | -0.07 |
+| mean_reversion | 0.51 | 0.42 | -0.09 |
 | tsmom | 0.37 | -0.06 | -0.42 |
 | xsmom | 0.13 | 0.18 | +0.05 |
 | pairs | 0.21 | -0.17 | -0.38 |
@@ -162,3 +162,21 @@ Two implementation bugs in `tsmom` and `xsmom` were fixed in the same pass. Neit
 reachable at the settings used here — re-running the fixed code with the borrow charge
 switched off reproduces the previous table to six decimals — so the movement above is the
 borrow fee and nothing else. Both are written up in [REVIEW.md](REVIEW.md).
+
+## Reproducibility check (2026-09-28)
+
+The whole pipeline was re-run from a fresh Yahoo download on 2026-09-28, with the same
+end date (2025-08-29) and code. Four of the five strategies reproduced the previous table
+to at least five significant figures. **`mean_reversion` did not**: Sharpe 0.44 → 0.42,
+longest drawdown 1,102 → 636 days, turnover 10.3 → 10.6. The tables above are the new run.
+
+The likely cause is that five of its twelve ETFs (XLB, XLE, XLK, XLU, XLY) split 2-for-1 on
+2025-12-05, after the original download, and Yahoo re-adjusted their whole history. The
+z-score signal is unaffected by a constant rescaling of prices, but whole-share order
+rounding and the volume cap are not, so the fills differ slightly. The drawdown-duration
+change is large because duration is fragile: it depends on whether equity gets back to a
+previous high, and a small P&L difference can decide that. This was not isolated further,
+because the original raw download was not kept (`data/cache/` is gitignored).
+
+The lesson is the one in `data/README.md`: a result tied to a data vendor's current
+adjustment is only reproducible against a stored snapshot.

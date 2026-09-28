@@ -17,6 +17,8 @@ import pandas as pd
 
 
 class OrderKind(StrEnum):
+    """Whether an order is for a share quantity or a target portfolio weight."""
+
     QUANTITY = "quantity"
     TARGET_WEIGHT = "target_weight"
 
@@ -42,6 +44,8 @@ class Order:
 
 @dataclass(frozen=True)
 class Fill:
+    """An executed order: price, quantity, and the commission and slippage paid."""
+
     order_id: int
     symbol: str
     timestamp: pd.Timestamp
@@ -61,6 +65,8 @@ class Fill:
 
 @dataclass(frozen=True)
 class Rejection:
+    """An order the simulator refused, with the reason."""
+
     order: Order
     timestamp: pd.Timestamp
     reason: str
@@ -70,6 +76,8 @@ class Rejection:
 
 
 class CommissionModel(Protocol):
+    """Anything that can price the commission on a fill."""
+
     def calculate(self, quantity: float, price: float) -> float:
         """Commission for filling ``|quantity|`` shares at ``price``."""
         ...
@@ -81,6 +89,8 @@ class CommissionModel(Protocol):
 
 @dataclass(frozen=True)
 class NoCommission:
+    """Zero commission. Only for tests and for isolating other effects."""
+
     def calculate(self, quantity: float, price: float) -> float:
         return 0.0
 
@@ -128,6 +138,8 @@ class PerShareCommission:
 
 
 class SlippageModel(Protocol):
+    """Anything that can turn a reference price into an execution price."""
+
     def fill_price(self, price: float, quantity: float, volume: float) -> float:
         """Execution price for a signed ``quantity`` against a bar with ``volume`` shares."""
         ...
@@ -135,6 +147,8 @@ class SlippageModel(Protocol):
 
 @dataclass(frozen=True)
 class NoSlippage:
+    """Fill exactly at the reference price. Only for tests and for isolating other effects."""
+
     def fill_price(self, price: float, quantity: float, volume: float) -> float:
         return price
 

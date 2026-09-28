@@ -17,9 +17,16 @@ factor models, using the official factor data from Kenneth French's data library
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest          # 26 offline tests
+.venv/bin/pip install -r requirements.txt   # installs ffmodel and the `ffmodel` command
+.venv/bin/python -m pytest                  # 37 offline tests
 ```
+
+This is an analysis tool, not a trading strategy, so there is no Sharpe ratio, drawdown
+or turnover of its own to report. Its outputs are factor loadings, alphas and asset-pricing
+test statistics. The worked examples below were produced by the commands in the next
+section with `--end 2026-07` (French data through July 2026, Yahoo prices downloaded
+2026-09-28). Re-running them reproduces every table to the last printed digit, except
+where the data vendors have since revised history.
 
 French data is cached in `~/.cache/ffmodel` (override with `FFMODEL_CACHE`) and re-downloaded
 when it is more than 7 days old or when you pass `--refresh`.
@@ -100,7 +107,7 @@ fm.table()                            # premia with FM and Shanken t-stats vs. f
 - **Yahoo prices** are split- and dividend-adjusted closes. Monthly returns use month-end
   prices, and a trailing partial month is dropped.
 
-## Sanity checks against known results (live data, Jul 1963 – Jul 2026)
+## Sanity checks against known results (Jul 1963 – Jul 2026)
 
 - SPY on FF5 (2005–2026): market beta 0.99, R² 0.997, alpha −0.36%/yr, about the fund's
   cost drag.

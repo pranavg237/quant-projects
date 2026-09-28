@@ -10,11 +10,37 @@ Five strategies run on it. Four lose to buying and holding the index, and
 [RESULTS.md](RESULTS.md) says so in the first paragraph.
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest              # 100 tests, 94% coverage, offline
+python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pytest              # 125 tests, 98% coverage, offline
 .venv/bin/ruff check . && .venv/bin/mypy    # both clean, mypy in strict mode
 .venv/bin/python scripts/run_ma_crossover.py
 ```
+
+## Results
+
+Out-of-sample walk-forward results, net of 5 bp slippage, 1 bp commission and short
+borrow fees. Parameters are re-chosen each year on the previous 5 years only. Data: Yahoo
+Finance daily bars through 2025-08-29, downloaded 2026-09-28. The benchmark is buy-and-hold
+SPY over the same dates. `ma_crossover` starts in 2005, and the others start in 2010 after
+their first training window.
+
+| Strategy | CAGR | Vol | **Sharpe** | Sortino | Max DD | DD days | Turnover | Exposure |
+|---|---|---|---|---|---|---|---|---|
+| SPY buy & hold (2010-2025) | 13.8% | 17.3% | **0.76** | 1.07 | -33.7% | 709 | 0.0 | 100% |
+| ma_crossover | 8.2% | 12.0% | **0.58** | 0.79 | -22.4% | 808 | 2.0 | 78% |
+| mean_reversion | 6.3% | 13.8% | **0.42** | 0.60 | -39.6% | 636 | 10.6 | 32% |
+| xsmom | 2.5% | 8.5% | **0.18** | 0.24 | -16.1% | 799 | 5.9 | 100% |
+| tsmom | 0.7% | 6.4% | **-0.06** | -0.08 | -19.9% | 2,051 | 3.8 | 91% |
+| pairs | 1.0% | 1.5% | **-0.17** | -0.24 | -3.8% | 2,291 | 4.7 | 14% |
+
+Turnover is one-way, as a multiple of capital per year.
+
+**None of the five strategies beats buy-and-hold SPY on a risk-adjusted basis, and none has
+a statistically significant Fama-French five-factor alpha** (every |t| < 2). The MA
+crossover's real contribution is a smaller drawdown than SPY over its own 2005-2025 window
+(-22% vs -55%), not extra return. [RESULTS.md](RESULTS.md) has the bootstrap intervals,
+probability of backtest overfitting and factor loadings, plus a reproducibility check
+that found one strategy moved after a data vendor re-adjustment.
 
 ## What it does
 
@@ -158,7 +184,7 @@ quantbt/
   report/          HTML tearsheets
   research/        the pipeline that produces RESULTS.md
 scripts/           runnable entry points
-tests/             100 tests, including one per bias
+tests/             125 tests, including one per bias
 ```
 
 The vectorised implementation exists to check the engine: `scripts/verify_port.py` runs

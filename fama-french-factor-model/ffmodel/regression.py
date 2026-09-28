@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict, List, Mapping, Optional, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -146,7 +146,7 @@ class RegressionResult:
         return "\n".join(lines)
 
 
-def _prepare(returns: pd.Series, factors: pd.DataFrame, factor_names, excess: bool) -> pd.DataFrame:
+def _prepare(returns: pd.Series, factors: pd.DataFrame, factor_names: Sequence[str], excess: bool) -> pd.DataFrame:
     missing = [f for f in factor_names if f not in factors.columns]
     if missing:
         raise KeyError(f"factor data is missing columns {missing}")
@@ -158,7 +158,7 @@ def _prepare(returns: pd.Series, factors: pd.DataFrame, factor_names, excess: bo
     return pd.concat([y.rename("excess_return"), factors[list(factor_names)]], axis=1, join="inner").dropna()
 
 
-def _design(data: pd.DataFrame, factor_names) -> pd.DataFrame:
+def _design(data: pd.DataFrame, factor_names: Sequence[str]) -> pd.DataFrame:
     X = sm.add_constant(data[list(factor_names)], has_constant="add")
     return X.rename(columns={"const": "alpha"})
 

@@ -10,6 +10,8 @@ ALL_FACTORS: Tuple[str, ...] = ("Mkt-RF", "SMB", "HML", "RMW", "CMA", "MOM")
 
 @dataclass(frozen=True)
 class FactorModel:
+    """A named factor model: which factors it uses and which French file supplies them."""
+
     name: str
     label: str
     factors: Tuple[str, ...]
@@ -31,6 +33,7 @@ MODELS: Dict[str, FactorModel] = {
 
 
 def get_model(name: str) -> FactorModel:
+    """Look up a model by name (case-insensitive). Raises ValueError for unknown names."""
     try:
         return MODELS[name.lower()]
     except KeyError:

@@ -179,7 +179,7 @@ def test_expiries_are_spread_in_log_time(monkeypatch: pytest.MonkeyPatch, tmp_pa
 def test_load_chain_falls_back_to_a_cache_when_the_download_fails(
     synthetic_snapshot: data_mod.ChainSnapshot, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """An offline rerun must degrade to the cache with a warning, not crash."""
+    """A requested refresh that fails offline must degrade to the cache, not crash."""
     (tmp_path / "snapshots").mkdir(parents=True)
     stale = dt.datetime.now(tz=NY) - dt.timedelta(days=3)
     data_mod.ChainSnapshot("FALL", stale, 321.0, synthetic_snapshot.quotes).to_csv(
@@ -191,7 +191,7 @@ def test_load_chain_falls_back_to_a_cache_when_the_download_fails(
 
     _install_stub(monkeypatch, _explode)
     with pytest.warns(UserWarning, match="falling back to cached snapshot"):
-        loaded = data_mod.load_chain("FALL", cache_dir=tmp_path)
+        loaded = data_mod.load_chain("FALL", cache_dir=tmp_path, force_refresh=True)
     assert loaded.spot == pytest.approx(321.0)
 
 
@@ -208,6 +208,39 @@ def test_load_chain_force_refresh_bypasses_todays_cache(
     assert data_mod.load_chain("STUB", cache_dir=tmp_path).spot == pytest.approx(111.0)
     refreshed = data_mod.load_chain("STUB", cache_dir=tmp_path, force_refresh=True)
     assert refreshed.spot == pytest.approx(999.0)
+
+
+def test_load_chain_uses_the_committed_snapshot_without_touching_the_network(
+    synthetic_snapshot: data_mod.ChainSnapshot, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Regression test: an old snapshot used to be ignored in favour of a live download,
+    so the analysis silently changed with the date it was run (and failed on weekends,
+    when most live quotes are one-sided)."""
+    (tmp_path / "snapshots").mkdir(parents=True)
+    old = dt.datetime(2026, 9, 18, 15, 30, tzinfo=NY)
+    data_mod.ChainSnapshot("SNAP", old, 654.0, synthetic_snapshot.quotes).to_csv(
+        tmp_path / "snapshots" / "SNAP_2026-09-18.csv"
+    )
+
+    def _must_not_download(ticker: str):
+        raise AssertionError("load_chain went to the network despite a cached snapshot")
+
+    _install_stub(monkeypatch, _must_not_download)
+    assert data_mod.load_chain("SNAP", cache_dir=tmp_path).spot == pytest.approx(654.0)
+
+
+def test_load_rate_curve_matches_the_requested_date(tmp_path: Path) -> None:
+    (tmp_path / "snapshots").mkdir(parents=True)
+    for day, rate in (("2026-09-18", 0.040), ("2026-09-25", 0.050)):
+        pd.DataFrame({"tenor": [0.25, 10.0], "rate": [rate, rate]}).to_csv(
+            tmp_path / "snapshots" / f"ratecurve_{day}.csv", index=False
+        )
+    matched = data_mod.load_rate_curve(cache_dir=tmp_path, asof=dt.date(2026, 9, 18))
+    assert float(matched.rate(1.0)[0]) == pytest.approx(0.040)
+    latest = data_mod.load_rate_curve(cache_dir=tmp_path)
+    assert float(latest.rate(1.0)[0]) == pytest.approx(0.050)
+    with pytest.warns(UserWarning, match="no rate curve cached"):
+        data_mod.load_rate_curve(cache_dir=tmp_path, asof=dt.date(2020, 1, 1))
 
 
 class _StubIndexTicker:

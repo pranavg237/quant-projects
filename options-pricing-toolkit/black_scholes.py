@@ -25,7 +25,8 @@ N = norm.cdf          # standard normal CDF
 n = norm.pdf          # standard normal PDF
 
 
-def _d1_d2(S: float, K: float, T: float, r: float, sigma: float, q: float = 0.0):
+def _d1_d2(S: float, K: float, T: float, r: float, sigma: float, q: float = 0.0) -> tuple[float, float]:
+    """The d1 and d2 terms shared by the price and every Greek."""
     if T <= 0 or sigma <= 0:
         raise ValueError("T and sigma must be positive")
     d1 = (math.log(S / K) + (r - q + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
@@ -45,6 +46,8 @@ def price(S: float, K: float, T: float, r: float, sigma: float, option_type: str
 
 @dataclass
 class Greeks:
+    """Option sensitivities, scaled the way brokers display them."""
+
     delta: float
     gamma: float
     vega: float     # price change per 1 vol point (0.01)
@@ -88,20 +91,41 @@ def greeks(S: float, K: float, T: float, r: float, sigma: float, option_type: st
     return Greeks(delta=delta, gamma=gamma, vega=vega, theta=theta_per_day, rho=rho)
 
 
+def no_arbitrage_bounds(S: float, K: float, T: float, r: float,
+                        option_type: str = "call", q: float = 0.0) -> tuple[float, float]:
+    """Model-free (lower, upper) price bounds for a European option.
+
+    Call: max(0, S e^-qT - K e^-rT) <= C <= S e^-qT.
+    Put:  max(0, K e^-rT - S e^-qT) <= P <= K e^-rT.
+    """
+    spot = S * math.exp(-q * T)
+    strike = K * math.exp(-r * T)
+    if option_type == "call":
+        return max(0.0, spot - strike), spot
+    if option_type == "put":
+        return max(0.0, strike - spot), strike
+    raise ValueError("option_type must be 'call' or 'put'")
+
+
 def implied_vol(market_price: float, S: float, K: float, T: float, r: float,
                  option_type: str = "call", q: float = 0.0,
                  lo: float = 1e-4, hi: float = 5.0) -> float:
     """Solve for the volatility that reproduces market_price, via Brent's method
     (robust bisection-style root finder - no starting guess needed, unlike Newton)."""
 
-    def f(sigma):
+    def f(sigma: float) -> float:
         return price(S, K, T, r, sigma, option_type, q) - market_price
 
     # Sanity check: market price must be within no-arbitrage bounds, otherwise
-    # there's no sigma that reproduces it.
-    intrinsic = max(0.0, (S - K) if option_type == "call" else (K - S))
-    if market_price < intrinsic * math.exp(-q * T) - 1e-9:
-        raise ValueError("market_price is below intrinsic value - not arbitrage-free")
+    # there's no sigma that reproduces it. For a European option the lower bound is
+    # the *discounted* forward intrinsic value, max(0, S e^-qT - K e^-rT) for a call.
+    # Undiscounted intrinsic (S - K) is the wrong test: a deep in-the-money European
+    # put can legitimately trade below K - S, because the strike is paid later.
+    lower, upper = no_arbitrage_bounds(S, K, T, r, option_type, q)
+    if market_price < lower - 1e-9:
+        raise ValueError(f"market_price {market_price} is below the no-arbitrage lower bound {lower:.6f}")
+    if market_price > upper + 1e-9:
+        raise ValueError(f"market_price {market_price} is above the no-arbitrage upper bound {upper:.6f}")
 
     try:
         return brentq(f, lo, hi, xtol=1e-8, maxiter=200)

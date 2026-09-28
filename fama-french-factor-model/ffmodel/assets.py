@@ -39,7 +39,13 @@ def download_returns(
     if start is not None:
         pad = pd.DateOffset(months=1) if frequency == "monthly" else pd.DateOffset(days=7)
         fetch_start = (pd.Timestamp(start) - pad).strftime("%Y-%m-%d")
-    raw = yf.download(tickers, start=fetch_start, end=end, auto_adjust=True, progress=False, threads=True)
+    # `end` may be a month ("2024-12", as the CLI documents) or a day. Yahoo wants a day and
+    # treats it as exclusive, so ask for the day after the last day wanted.
+    fetch_end = None
+    if end is not None:
+        last_day = pd.Period(end, freq="M" if len(str(end)) <= 7 else "D").end_time.normalize()
+        fetch_end = (last_day + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    raw = yf.download(tickers, start=fetch_start, end=fetch_end, auto_adjust=True, progress=False, threads=True)
     if raw is None or raw.empty:
         raise RuntimeError(f"Yahoo Finance returned no data for {tickers}")
     close = raw["Close"]
@@ -55,7 +61,7 @@ def download_returns(
     close.index = pd.DatetimeIndex(close.index).tz_localize(None)
     close.columns.name = None
     returns = prices_to_returns(close, frequency)
-    return returns.loc[start:] if start is not None else returns
+    return returns.loc[start:end]
 
 
 def load_returns_csv(path: str, prices: bool = False, percent: bool = False, frequency: str = "monthly") -> pd.DataFrame:

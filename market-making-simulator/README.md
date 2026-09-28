@@ -12,16 +12,23 @@ The published Table 1 of Avellaneda & Stoikov (2008) is reproduced to two decima
 |---|---|
 | **Order book** | Price-time priority matching engine, O(1) cancels, self-trade prevention. 23 tests on the invariants that flatter a strategy when broken. |
 | **Validation** | Avellaneda & Stoikov Table 1 reproduced with their own discretisation: profit **64.98** vs published 65.0, std **6.62** vs 6.6; symmetric **68.44** vs 68.4, std **13.70** vs 13.4. Analytic average spread **1.4908** vs 1.49. |
-| **Idealised world** | A-S Sharpe **9.29** vs symmetric **4.64** — at an identical average spread. Inventory std 1.24 vs 8.07. |
+| **Idealised world** | A-S per-session Sharpe* **9.29** vs symmetric **4.64** — at an identical average spread. Inventory std 1.24 vs 8.07. |
 | **Full order book** | A-S Sharpe **11.7** vs symmetric **2.8**, at statistically identical PnL (p = 0.53). Max position 10.7 vs 53.3. |
-| **Fair benchmark** | Against a naive maker *with a hard position limit*, A-S still wins: Sharpe 11.7 vs 6.9 and **+1.35 PnL per run, t = 11.0**. |
+| **Fair benchmark** | Against a naive maker *with a hard position limit*, A-S still wins: Sharpe 11.7 vs 6.9 and **+1.33 PnL per run, t = 10.7**. |
 | **Adverse selection** | With 30% informed flow, the symmetric maker's Sharpe collapses from 12.2 to **2.0**. A-S goes 12.9 → **12.0**. |
 | **Honest finding** | The published finite-horizon model **throws away its inventory control at the bell**: inventory std grows 1.06 → 2.90 over the session. The time-homogeneous variant stays flat at ~1.2. |
 
+\* **Every Sharpe ratio in this README is per simulated session**: the mean of session
+PnL divided by its standard deviation across independent sessions, *not annualised* and
+not comparable to a trading strategy's Sharpe. Its level is set by how much order flow the
+simulation generates (section 7). Only the ratios *between* policies mean anything. This
+is a simulation study, so there is no market data, drawdown history or buy-and-hold
+benchmark. The benchmarks are the naive quoting policies below.
+
 ```bash
 pip install -r requirements.txt
-python scripts/run_analysis.py      # ~12 min; writes figures/ and results/
-pytest --cov=src/mmsim              # 124 tests, 98% coverage
+python scripts/run_analysis.py      # ~4 min; writes figures/ and results/
+python -m pytest                    # 124 tests, 98% branch coverage
 ```
 
 ---
@@ -149,9 +156,9 @@ This chart caught a real bug. Informed impact is released gradually, so the effi
 |---|---|---|---|---|---|---|---|
 | Avellaneda-Stoikov | 12.66 | 1.08 | **11.7** | 1.49 | 10.7 | 262 | 0.18 |
 | Symmetric | 12.47 | 4.44 | 2.8 | 8.69 | 53.3 | 241 | 2.26 |
-| Symmetric + position limit | 11.31 | 1.65 | 6.9 | 3.40 | 8.6 | 220 | 0.59 |
+| Symmetric + position limit | 11.34 | 1.65 | 6.9 | 3.40 | 8.6 | 220 | 0.59 |
 
-In the book world A-S's PnL is **statistically indistinguishable** from symmetric quoting ($p = 0.53$) while its Sharpe is 4.2x higher and its worst drawdown 12x smaller. It still beats the position-limit benchmark on PnL by 1.35 per session ($t = 11.0$).
+In the book world A-S's PnL is **statistically indistinguishable** from symmetric quoting ($p = 0.53$) while its Sharpe is 4.2x higher and its worst drawdown 12x smaller. It still beats the position-limit benchmark on PnL by 1.33 per session ($t = 10.7$).
 
 PnL decomposes exactly into spread capture and inventory mark-to-market (reconciliation error 0.00000 in every run):
 
@@ -159,7 +166,7 @@ PnL decomposes exactly into spread capture and inventory mark-to-market (reconci
 |---|---|---|---|
 | Avellaneda-Stoikov | 13.25 | −0.59 | 12.66 |
 | Symmetric | 12.89 | −0.42 | 12.47 |
-| Symmetric + position limit | 11.77 | −0.46 | 11.31 |
+| Symmetric + position limit | 11.78 | −0.44 | 11.34 |
 
 ---
 
@@ -234,7 +241,7 @@ tests/                   124 tests, 98% statement + branch coverage
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-python scripts/run_analysis.py                       # full study, ~12 minutes
+python scripts/run_analysis.py                       # full study, ~4 minutes
 python scripts/run_analysis.py --runs-book 40        # a quick version
 
 pytest -q
@@ -242,4 +249,12 @@ pytest -q --cov=src/mmsim --cov-report=term-missing
 ruff check src tests scripts && mypy src scripts
 ```
 
-Everything is seeded; the numbers above reproduce exactly.
+Everything is seeded, and the defaults (2,000 reference sessions, 200 order-book sessions,
+500 per sweep point) are the settings behind every number above.
+
+**Reproducibility check (2026-09-28).** The study was re-run with numpy 2.5 and pandas 3.0.
+Every table reproduced exactly except the position-limited policy in the order-book world,
+whose mean PnL moved from 11.31 to 11.34 (paired t against A-S from 11.0 to 10.7), and a few
+average trade counts, which moved in the fourth significant figure. The tables above show
+the new run. The runs are deterministic within one environment, and the cause across
+environments was not isolated.

@@ -26,6 +26,8 @@ from quantbt.validation import grid_search, overfit_report, walk_forward
 
 @dataclass(frozen=True)
 class StrategySpec:
+    """Everything the research pipeline needs to evaluate one strategy."""
+
     name: str
     symbols: Sequence[str]
     factory: Callable[[Mapping[str, Any]], Strategy]
@@ -40,6 +42,8 @@ class StrategySpec:
 
 @dataclass(frozen=True)
 class SpecResult:
+    """The summary row and output directory of one pipeline run."""
+
     name: str
     row: pd.Series
     oos_returns: pd.Series
@@ -71,6 +75,10 @@ def run_spec(
     n_bootstrap: int = 1000,
     log: Callable[[str], None] = print,
 ) -> SpecResult:
+    """Run one strategy through walk-forward, bootstrap, overfitting and factor analysis.
+
+    Writes every intermediate table to ``out_root/<spec.name>/`` and returns the summary.
+    """
     t0 = time.time()
     out_dir = Path(out_root) / spec.name
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -228,5 +236,6 @@ def run_spec(
 
 
 def results_table(rows: Sequence[pd.Series]) -> pd.DataFrame:
+    """Stack per-strategy summary rows into one table indexed by strategy."""
     frame = pd.DataFrame(list(rows)).set_index("strategy")
     return frame.replace({np.nan: None})

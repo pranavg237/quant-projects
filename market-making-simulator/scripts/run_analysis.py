@@ -51,6 +51,12 @@ PAPER_TABLE_1 = {
 }
 
 
+def _shown(path: Path) -> str:
+    """``path`` relative to the project when it is inside it, else absolute."""
+    resolved = path.resolve()
+    return str(resolved.relative_to(REPO_ROOT)) if resolved.is_relative_to(REPO_ROOT) else str(path)
+
+
 def _to_markdown(df: pd.DataFrame, floatfmt: str = "{:.3f}") -> str:
     """Render a DataFrame as a Markdown table without pulling in ``tabulate``."""
 
@@ -156,9 +162,9 @@ def horizon_study(n_runs: int) -> list[dict[str, Any]]:
 def main() -> int:
     """Run the whole study."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runs-reference", type=int, default=1000)
-    parser.add_argument("--runs-book", type=int, default=120)
-    parser.add_argument("--runs-sweep", type=int, default=300)
+    parser.add_argument("--runs-reference", type=int, default=2000)
+    parser.add_argument("--runs-book", type=int, default=200)
+    parser.add_argument("--runs-sweep", type=int, default=500)
     parser.add_argument("--book-steps", type=int, default=3000)
     parser.add_argument("--out", type=Path, default=REPO_ROOT / "figures")
     parser.add_argument("--results", type=Path, default=REPO_ROOT / "results")
@@ -436,7 +442,7 @@ def main() -> int:
         ),
     }
     for path in plotting.save_all(figures, args.out):
-        print(f"  wrote {path.relative_to(REPO_ROOT)}")
+        print(f"  wrote {_shown(path)}")
 
     args.results.mkdir(parents=True, exist_ok=True)
     (args.results / "results.json").write_text(json.dumps(results, indent=2, default=str))
@@ -445,7 +451,7 @@ def main() -> int:
     )
     (args.results / "book_comparison.md").write_text(_to_markdown(book_comparison.metrics[display]))
     (args.results / "adverse_selection.md").write_text(_to_markdown(adverse_frame))
-    print(f"  wrote {(args.results / 'results.json').relative_to(REPO_ROOT)}")
+    print(f"  wrote {_shown(args.results / 'results.json')}")
     return 0
 
 

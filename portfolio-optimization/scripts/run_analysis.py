@@ -31,7 +31,16 @@ from portopt import plotting  # noqa: E402
 from portopt import riskparity as rp  # noqa: E402
 from portopt import strategies as st  # noqa: E402
 from portopt.blacklitterman import View, black_litterman  # noqa: E402
-from portopt.data import ETF_UNIVERSE, MARKET_WEIGHTS, load_prices, to_returns  # noqa: E402
+from portopt.data import (  # noqa: E402
+    ETF_UNIVERSE,
+    MARKET_WEIGHTS,
+    PriceHistory,
+    drop_partial_last_month,
+    load_benchmark,
+    load_prices,
+    load_risk_free,
+    to_returns,
+)
 from portopt.hrp import (  # noqa: E402
     correlation_distance,
     hierarchical_risk_parity,
@@ -41,6 +50,12 @@ from portopt.optimizers import efficient_frontier, max_sharpe, min_variance  # n
 from portopt.types import Constraints  # noqa: E402
 
 PERIODS = 12.0
+
+
+def _shown(path: Path) -> str:
+    """``path`` relative to the project when it is inside it, else absolute."""
+    resolved = path.resolve()
+    return str(resolved.relative_to(REPO_ROOT)) if resolved.is_relative_to(REPO_ROOT) else str(path)
 
 
 def _to_markdown(df: pd.DataFrame, floatfmt: str = "{:.3f}") -> str:
@@ -74,11 +89,58 @@ def _show(frame: pd.DataFrame, fmt: str = "{:8.3f}") -> None:
     print("  " + frame.to_string(index=False, float_format=formatter).replace("\n", "\n  "))
 
 
+def _load_inputs(
+    refresh: bool,
+) -> tuple[PriceHistory, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    """Load prices, monthly returns, the risk-free series and the SPY benchmark.
+
+    Returns everything on one monthly index, with the partial final month removed.
+    """
+    history = load_prices(ETF_UNIVERSE, force_refresh=refresh)
+    prices = drop_partial_last_month(history.prices)
+    returns = to_returns(prices, "monthly")
+    print(f"  {history}")
+    if len(prices) < len(history.prices):
+        print(f"  Dropped the partial final month; last full month is {prices.index[-1]:%Y-%m}")
+    print(f"  {len(returns)} monthly observations")
+
+    # Cash earns the 13-week T-bill rate, known at the start of each month. Every Sharpe
+    # ratio below is on returns in excess of it.
+    risk_free = load_risk_free(force_refresh=refresh)
+    missing_rf = returns.index.difference(risk_free.index)
+    if len(missing_rf):
+        raise RuntimeError(f"risk-free series does not cover {list(missing_rf[:3])}")
+    rf = risk_free.reindex(returns.index)
+    print(f"  Risk-free: 13-week T-bill (^IRX), mean {rf.mean() * PERIODS:.2%}/yr over the sample")
+
+    # Buy-and-hold SPY over the same months is the market benchmark.
+    spy_prices = load_benchmark("SPY", force_refresh=refresh).loc[: prices.index[-1]]
+    spy_returns = to_returns(spy_prices.to_frame(), "monthly")["SPY"].reindex(returns.index)
+    if spy_returns.isna().any():
+        raise RuntimeError("SPY benchmark does not cover the sample")
+    return history, prices, returns, rf, spy_returns
+
+
+def _p_values_against(
+    runs: dict[str, bt.BacktestResult], reference: str, rf: pd.Series
+) -> dict[str, float]:
+    """Paired test of equal Sharpe ratio between every run and ``reference``."""
+    base = runs[reference].returns
+    return {
+        name: mx.sharpe_difference_test(run.returns, base, rf, PERIODS).p_value
+        for name, run in runs.items()
+        if name != reference
+    }
+
+
 def main() -> int:
     """Run the whole study."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lookback", type=int, default=60, help="estimation window in months")
     parser.add_argument("--cost-bps", type=float, default=10.0)
+    parser.add_argument(
+        "--borrow-bps", type=float, default=50.0, help="annual stock-loan fee on shorts"
+    )
     parser.add_argument("--refresh", action="store_true")
     parser.add_argument("--out", type=Path, default=REPO_ROOT / "figures")
     parser.add_argument("--results", type=Path, default=REPO_ROOT / "results")
@@ -87,17 +149,15 @@ def main() -> int:
     results: dict[str, Any] = {}
 
     _banner("1. Universe")
-    history = load_prices(ETF_UNIVERSE, force_refresh=args.refresh)
-    returns = to_returns(history.prices, "monthly")
-    print(f"  {history}")
-    print(f"  Common start set by {history.binding_ticker}; {len(returns)} monthly observations")
+    history, prices, returns, rf, spy_returns = _load_inputs(args.refresh)
+    excess_assets = returns.sub(rf, axis=0)
     asset_stats = pd.DataFrame(
         {
-            "return": (1.0 + returns.mean()) ** PERIODS - 1.0,
+            "return": (1.0 + returns).prod() ** (PERIODS / len(returns)) - 1.0,
             "volatility": returns.std(ddof=1) * np.sqrt(PERIODS),
+            "sharpe": excess_assets.mean() / excess_assets.std(ddof=1) * np.sqrt(PERIODS),
         }
     )
-    asset_stats["sharpe"] = asset_stats["return"] / asset_stats["volatility"]
     _show(asset_stats.reset_index().rename(columns={"index": "asset", "Ticker": "asset"}))
     correlation = returns.corr()
     upper = np.triu_indices(len(correlation), 1)
@@ -105,7 +165,10 @@ def main() -> int:
     print(f"\n  Mean pairwise correlation: {mean_correlation:.3f}")
     results["universe"] = {
         "start": str(history.start.date()),
-        "end": str(history.end.date()),
+        "end": str(prices.index[-1].date()),
+        "risk_free": "13-week T-bill (^IRX), previous month-end yield / 12",
+        "mean_risk_free_annual": float(rf.mean() * PERIODS),
+        "benchmark": "SPY buy-and-hold, dividends reinvested",
         "n_assets": len(history.tickers),
         "n_months": len(returns),
         "mean_correlation": mean_correlation,
@@ -180,8 +243,15 @@ def main() -> int:
         rebalance_every=1,
         cost_bps=args.cost_bps,
         periods_per_year=PERIODS,
+        borrow_bps=args.borrow_bps,
     )
-    summary = mx.summarise(backtests)
+    oos_index = next(iter(backtests.values())).returns.index
+    benchmark = bt.buy_and_hold(spy_returns.loc[oos_index], "SPY buy-and-hold (benchmark)")
+    summary = mx.summarise({**backtests, benchmark.name: benchmark}, risk_free=rf)
+    p_vs_equal = _p_values_against(
+        {**backtests, benchmark.name: benchmark}, "Equal weight (1/N)", rf
+    )
+    summary["p_vs_1N"] = summary["strategy"].map(p_vs_equal)
     display = [
         "strategy",
         "annual_return",
@@ -194,7 +264,7 @@ def main() -> int:
         "annual_turnover",
         "annual_cost_drag",
         "gross_sharpe",
-        "hit_rate",
+        "p_vs_1N",
     ]
     _show(summary[display])
     print(
@@ -202,11 +272,21 @@ def main() -> int:
         f"({summary['n_periods'].iloc[0] / 12:.1f} years), "
         f"{args.lookback}-month estimation window, {args.cost_bps:.0f}bp one-way costs"
     )
+    n_significant = int((summary["p_vs_1N"] < 0.05).sum())
     print(
-        "  Sharpe confidence intervals overlap for every pair: with 17 years of monthly "
-        "data\n  the standard error of a Sharpe ratio is about 0.25."
+        f"  Sample: {oos_index[0]:%Y-%m} to {oos_index[-1]:%Y-%m}. "
+        f"p_vs_1N is a paired Jobson-Korkie/Memmel test of equal Sharpe against 1/N;\n"
+        f"  {n_significant} of {summary['p_vs_1N'].notna().sum()} strategies differ from 1/N "
+        "at the 5% level."
     )
     results["walk_forward"] = summary.to_dict(orient="records")
+    results["walk_forward_sample"] = {
+        "first_month": str(oos_index[0].date()),
+        "last_month": str(oos_index[-1].date()),
+        "n_months": len(oos_index),
+        "cost_bps_one_way": args.cost_bps,
+        "borrow_bps_annual": args.borrow_bps,
+    }
 
     _banner("5. The leverage experiment: what actually breaks Markowitz")
     sweep_rows = []
@@ -228,8 +308,9 @@ def main() -> int:
             lookback=args.lookback,
             cost_bps=args.cost_bps,
             periods_per_year=PERIODS,
+            borrow_bps=args.borrow_bps,
         )
-        metrics = mx.evaluate(run)
+        metrics = mx.evaluate(run, rf)
         sweep_rows.append({"leverage_cap": cap, "label": label, **metrics.as_dict()})
     sweep = pd.DataFrame(sweep_rows)
     _show(
@@ -241,6 +322,7 @@ def main() -> int:
                 "sharpe",
                 "max_drawdown",
                 "annual_turnover",
+                "annual_borrow_drag",
                 "mean_leverage",
                 "max_leverage",
                 "worst_period",
@@ -268,8 +350,9 @@ def main() -> int:
                 lookback=lookback,
                 cost_bps=args.cost_bps,
                 periods_per_year=PERIODS,
+                borrow_bps=args.borrow_bps,
             )
-            metrics = mx.evaluate(run)
+            metrics = mx.evaluate(run, rf.reindex(run.returns.index))
             lookback_rows.append(
                 {
                     "lookback_months": lookback,
@@ -295,7 +378,7 @@ def main() -> int:
         )
         for name, run in runs.items():
             cost_rows.append(
-                {"cost_bps": cost, "strategy": name, "sharpe": mx.evaluate(run).sharpe}
+                {"cost_bps": cost, "strategy": name, "sharpe": mx.evaluate(run, rf).sharpe}
             )
     cost_frame = pd.DataFrame(cost_rows).pivot(
         index="strategy", columns="cost_bps", values="sharpe"
@@ -378,7 +461,7 @@ def main() -> int:
         ),
     }
     for path in plotting.save_all(figures, args.out):
-        print(f"  wrote {path.relative_to(REPO_ROOT)}")
+        print(f"  wrote {_shown(path)}")
 
     args.results.mkdir(parents=True, exist_ok=True)
     (args.results / "results.json").write_text(json.dumps(results, indent=2, default=str))
@@ -390,6 +473,7 @@ def main() -> int:
                     "label",
                     "sharpe",
                     "annual_turnover",
+                    "annual_borrow_drag",
                     "max_drawdown",
                     "mean_leverage",
                     "max_leverage",
@@ -398,7 +482,7 @@ def main() -> int:
             ]
         )
     )
-    print(f"  wrote {(args.results / 'results.json').relative_to(REPO_ROOT)}")
+    print(f"  wrote {_shown(args.results / 'results.json')}")
     return 0
 
 

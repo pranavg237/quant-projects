@@ -41,6 +41,12 @@ from optpricing import (  # noqa: E402
 from optpricing.types import ExerciseStyle, OptionType  # noqa: E402
 
 
+def _shown(path: Path) -> str:
+    """``path`` relative to the project when it is inside it, else absolute."""
+    resolved = path.resolve()
+    return str(resolved.relative_to(REPO_ROOT)) if resolved.is_relative_to(REPO_ROOT) else str(path)
+
+
 def _to_markdown(df: pd.DataFrame, floatfmt: str = "{:.2f}") -> str:
     """Render a DataFrame as a GitHub Markdown table without pulling in ``tabulate``."""
 
@@ -168,11 +174,12 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
     print("=" * 78)
     print(f"2. Market data: {args.ticker}")
     print("=" * 78)
-    rate_curve = data.load_rate_curve(force_refresh=args.refresh)
-    print(f"  {rate_curve}")
     snapshot = data.load_chain(
         args.ticker, force_refresh=args.refresh, max_expiries=args.max_expiries
     )
+    # Price the chain with the rate curve from the same day, not today's.
+    rate_curve = data.load_rate_curve(force_refresh=args.refresh, asof=snapshot.asof.date())
+    print(f"  {rate_curve}")
     print(
         f"  as of {snapshot.asof:%Y-%m-%d %H:%M %Z}   spot {snapshot.spot:.2f}   "
         f"{len(snapshot.quotes)} raw quotes   {len(snapshot.expiries())} expiries"
@@ -338,7 +345,7 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
         "heston_errors": plotting.plot_heston_fit_errors(fit.errors, fit.params),
     }
     for path in plotting.save_all(figures, args.out):
-        print(f"  wrote {path.relative_to(REPO_ROOT)}")
+        print(f"  wrote {_shown(path)}")
 
     args.results.mkdir(parents=True, exist_ok=True)
     results["meta"] = {
@@ -350,7 +357,7 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
     (args.results / "model_comparison.md").write_text(_to_markdown(comparison_df))
     (args.results / "holdout.md").write_text(_to_markdown(holdout_df))
     surf.to_csv(args.results / "surface.csv", index=False)
-    print(f"  wrote {(args.results / 'results.json').relative_to(REPO_ROOT)}")
+    print(f"  wrote {_shown(args.results / 'results.json')}")
     return 0
 
 

@@ -44,6 +44,7 @@ def expand_grid(
 
 
 def sharpe_objective(result: BacktestResult) -> float:
+    """Default objective for parameter search: excess-return Sharpe, -inf if undefined."""
     value = metrics.sharpe(result.returns, rf=result.rf)
     return float(value) if np.isfinite(value) else -np.inf
 
@@ -118,6 +119,8 @@ def grid_search(
 
 @dataclass(frozen=True)
 class Fold:
+    """One walk-forward window: training and test dates, chosen parameters and scores."""
+
     train_start: pd.Timestamp
     train_end: pd.Timestamp
     test_start: pd.Timestamp
@@ -130,6 +133,8 @@ class Fold:
 
 @dataclass(frozen=True)
 class WalkForwardResult:
+    """All folds plus the stitched out-of-sample return series."""
+
     folds: list[Fold]
     oos_returns: pd.Series  # stitched out-of-sample returns
     oos_weights: pd.DataFrame

@@ -38,7 +38,11 @@ __all__ = [
     "MARKET_WEIGHTS",
     "PriceHistory",
     "download_prices",
+    "drop_partial_last_month",
+    "load_benchmark",
     "load_prices",
+    "load_risk_free",
+    "tbill_yield_to_monthly_rf",
     "to_returns",
 ]
 
@@ -295,3 +299,119 @@ def periods_per_year(frequency: str) -> float:
     if frequency not in table:
         raise ValueError(f"unknown frequency {frequency!r}")
     return table[frequency]
+
+
+def drop_partial_last_month(prices: pd.DataFrame, tolerance_days: int = 4) -> pd.DataFrame:
+    """Drop the final calendar month if the data stops well before it ends.
+
+    Monthly resampling takes the last observation in each month. If the data ends on the
+    18th, that "month" is really 18 days, and treating it as a full monthly return
+    misstates its volatility and its weight in every average. A month is treated as
+    complete if its last observation is within ``tolerance_days`` of the calendar month
+    end, which allows for weekends and a month-end holiday.
+
+    Args:
+        prices: Daily prices with a sorted ``DatetimeIndex``.
+        tolerance_days: How close to the month end the last observation must be.
+
+    Returns:
+        ``prices`` without the trailing partial month, or unchanged if it is complete.
+    """
+    if prices.empty:
+        return prices
+    last = pd.Timestamp(prices.index[-1])
+    month_end = last + pd.offsets.MonthEnd(0)
+    if (month_end - last).days <= tolerance_days:
+        return prices
+    previous_month_end = last.to_period("M").start_time - pd.Timedelta(days=1)
+    return prices.loc[:previous_month_end]
+
+
+def tbill_yield_to_monthly_rf(daily_yield_pct: pd.Series) -> pd.Series:
+    r"""Convert a daily 13-week T-bill yield (in percent) to a monthly risk-free return.
+
+    The return earned on cash during month :math:`m` is set by the yield observed at the
+    **end of month** :math:`m-1`, so the rate is known before the month starts and this
+    introduces no lookahead. The quoted yield is annualised, so the monthly return is
+    approximated as ``yield / 12``. That ignores the difference between the discount-basis
+    quote and a compounded return, which is a few basis points a year.
+
+    Args:
+        daily_yield_pct: Daily ``^IRX`` closes, e.g. ``5.2`` for 5.2%.
+
+    Returns:
+        Per-month simple risk-free returns, indexed by calendar month end.
+    """
+    month_end_yield = daily_yield_pct.dropna().resample("ME").last()
+    monthly = (month_end_yield / 100.0 / 12.0).shift(1)
+    return monthly.dropna().rename("rf")
+
+
+def _latest_snapshot(cache_dir: Path, prefix: str) -> Path | None:
+    snapshots = sorted((cache_dir / "snapshots").glob(f"{prefix}_*.csv"))
+    return snapshots[-1] if snapshots else None
+
+
+def _download_close(ticker: str, start: str) -> pd.Series:
+    import yfinance as yf  # noqa: PLC0415  (local: keeps the network dep off the import path)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        raw = yf.download(ticker, start=start, auto_adjust=True, progress=False)
+    if raw is None or raw.empty:
+        raise RuntimeError(f"no data returned for {ticker}")
+    close = raw["Close"]
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+    return pd.Series(close, name=ticker, dtype=float)
+
+
+def _load_cached_series(
+    prefix: str, ticker: str, start: str, cache_dir: Path | None, force_refresh: bool
+) -> pd.Series:
+    """Read the latest committed snapshot of one series, or download and snapshot it."""
+    cache_dir = cache_dir or DEFAULT_CACHE_DIR
+    path = _latest_snapshot(cache_dir, prefix)
+    if path is not None and not force_refresh:
+        frame = pd.read_csv(path, index_col=0, parse_dates=True)
+        return pd.Series(frame.iloc[:, 0], name=ticker)
+    series = _download_close(ticker, start)
+    out = cache_dir / "snapshots" / f"{prefix}_{dt.date.today().isoformat()}.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    series.to_csv(out)
+    return series
+
+
+def load_benchmark(
+    ticker: str = "SPY",
+    cache_dir: Path | None = None,
+    force_refresh: bool = False,
+) -> pd.Series:
+    """Daily adjusted closes for the buy-and-hold benchmark, cached as a snapshot.
+
+    Args:
+        ticker: Benchmark symbol.
+        cache_dir: Root of the data cache.
+        force_refresh: Download even if a snapshot exists.
+
+    Returns:
+        Adjusted closes (dividends reinvested), so buy-and-hold returns are total returns.
+    """
+    return _load_cached_series(
+        f"benchmark_{ticker}", ticker, "1993-01-01", cache_dir, force_refresh
+    )
+
+
+def load_risk_free(cache_dir: Path | None = None, force_refresh: bool = False) -> pd.Series:
+    """Monthly risk-free returns from the 13-week T-bill yield (``^IRX``).
+
+    Args:
+        cache_dir: Root of the data cache.
+        force_refresh: Download even if a snapshot exists.
+
+    Returns:
+        Per-month simple returns indexed by month end. See
+        :func:`tbill_yield_to_monthly_rf` for the timing convention.
+    """
+    daily = _load_cached_series("tbill_13w", "^IRX", "1993-01-01", cache_dir, force_refresh)
+    return tbill_yield_to_monthly_rf(daily)

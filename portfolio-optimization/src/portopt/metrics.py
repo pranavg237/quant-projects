@@ -33,12 +33,38 @@ from .types import as_float, as_timestamp
 
 __all__ = [
     "PerformanceMetrics",
+    "SharpeDifference",
     "drawdown_series",
     "evaluate",
     "max_drawdown",
     "sharpe_confidence_interval",
+    "sharpe_difference_test",
     "summarise",
 ]
+
+#: An annual rate applied every period, or a per-period series aligned to the returns.
+RiskFree = float | pd.Series
+
+
+def per_period_risk_free(risk_free: RiskFree, index: pd.Index, periods: float) -> pd.Series:
+    """Per-period risk-free returns aligned to ``index``.
+
+    Args:
+        risk_free: An annual rate (converted geometrically to a per-period rate), or a
+            series of per-period returns that must cover every date in ``index``.
+        index: Dates of the strategy returns.
+        periods: Periods per year.
+
+    Raises:
+        ValueError: if a series does not cover every date.
+    """
+    if isinstance(risk_free, pd.Series):
+        aligned = risk_free.reindex(index)
+        if aligned.isna().any():
+            missing = aligned[aligned.isna()].index
+            raise ValueError(f"risk-free series is missing {len(missing)} dates, e.g. {missing[0]}")
+        return aligned.astype(float)
+    return pd.Series((1.0 + risk_free) ** (1.0 / periods) - 1.0, index=index)
 
 
 def drawdown_series(returns: pd.Series) -> pd.Series:
@@ -104,6 +130,7 @@ class PerformanceMetrics:
         calmar: Annual return over the absolute maximum drawdown.
         annual_turnover: One-way turnover per year.
         annual_cost_drag: Return given up to transaction costs each year.
+        annual_borrow_drag: Return given up to stock-loan fees on shorts each year.
         gross_sharpe: Sharpe before costs, so the cost impact is visible.
         skew / excess_kurtosis: Shape of the return distribution. Portfolio returns are
             reliably left-skewed and fat-tailed, which is what makes Sharpe an incomplete
@@ -128,6 +155,7 @@ class PerformanceMetrics:
     calmar: float
     annual_turnover: float
     annual_cost_drag: float
+    annual_borrow_drag: float
     gross_sharpe: float
     skew: float
     excess_kurtosis: float
@@ -145,13 +173,16 @@ class PerformanceMetrics:
 
 
 def evaluate(
-    result: BacktestResult, risk_free: float = 0.0, level: float = 0.95
+    result: BacktestResult, risk_free: RiskFree = 0.0, level: float = 0.95
 ) -> PerformanceMetrics:
     """Compute :class:`PerformanceMetrics` for a backtest result.
 
     Args:
         result: A completed walk-forward run.
-        risk_free: Annualised risk-free rate used for the Sharpe and Sortino ratios.
+        risk_free: Risk-free rate for the Sharpe and Sortino ratios: an annual rate, or a
+            per-period series (e.g. from :func:`portopt.data.load_risk_free`). The default
+            of zero turns Sharpe into return over volatility, which overstates it whenever
+            rates are positive; the analysis script always passes the T-bill series.
         level: Confidence level for the Sharpe interval.
     """
     returns = result.returns.dropna()
@@ -166,7 +197,7 @@ def evaluate(
     annual_return = float(total_growth ** (periods / n) - 1.0) if total_growth > 0 else -1.0
     annual_volatility = float(returns.std(ddof=1) * np.sqrt(periods))
 
-    per_period_rf = (1.0 + risk_free) ** (1.0 / periods) - 1.0
+    per_period_rf = per_period_risk_free(risk_free, returns.index, periods)
     excess = returns - per_period_rf
     sharpe = (
         float(excess.mean() / excess.std(ddof=1) * np.sqrt(periods))
@@ -191,8 +222,10 @@ def evaluate(
     years = n / periods
     annual_turnover = float(result.turnover.sum() / years) if years > 0 else 0.0
     annual_cost_drag = float(result.costs.sum() / years) if years > 0 else 0.0
+    annual_borrow_drag = float(result.borrow_costs.sum() / years) if years > 0 else 0.0
 
-    gross = result.gross_returns.dropna() - per_period_rf
+    gross_returns = result.gross_returns.dropna()
+    gross = gross_returns - per_period_rf.reindex(gross_returns.index)
     gross_sharpe = (
         float(gross.mean() / gross.std(ddof=1) * np.sqrt(periods))
         if gross.std(ddof=1) > 0
@@ -211,6 +244,7 @@ def evaluate(
         calmar=calmar,
         annual_turnover=annual_turnover,
         annual_cost_drag=annual_cost_drag,
+        annual_borrow_drag=annual_borrow_drag,
         gross_sharpe=gross_sharpe,
         skew=float(stats.skew(returns.to_numpy(dtype=np.float64))),
         excess_kurtosis=float(stats.kurtosis(returns.to_numpy(dtype=np.float64))),
@@ -224,8 +258,91 @@ def evaluate(
     )
 
 
-def summarise(results: dict[str, BacktestResult], risk_free: float = 0.0) -> pd.DataFrame:
+def summarise(results: dict[str, BacktestResult], risk_free: RiskFree = 0.0) -> pd.DataFrame:
     """Evaluate several strategies and return one row each, sorted by Sharpe."""
     rows = [evaluate(result, risk_free).as_dict() for result in results.values()]
     frame = pd.DataFrame(rows)
     return frame.sort_values("sharpe", ascending=False).reset_index(drop=True)
+
+
+@dataclass(frozen=True)
+class SharpeDifference:
+    """Result of a paired test that two strategies have the same Sharpe ratio.
+
+    Attributes:
+        sharpe_a / sharpe_b: Annualised Sharpe ratios of the two strategies.
+        difference: ``sharpe_a - sharpe_b``, annualised.
+        z: Test statistic.
+        p_value: Two-sided p-value for "the true Sharpe ratios are equal".
+        correlation: Correlation of the two excess-return series.
+        n_periods: Number of paired observations.
+    """
+
+    sharpe_a: float
+    sharpe_b: float
+    difference: float
+    z: float
+    p_value: float
+    correlation: float
+    n_periods: int
+
+
+def sharpe_difference_test(
+    returns_a: pd.Series,
+    returns_b: pd.Series,
+    risk_free: RiskFree = 0.0,
+    periods_per_year: float = 12.0,
+) -> SharpeDifference:
+    r"""Jobson-Korkie test of equal Sharpe ratios, with Memmel's (2003) correction.
+
+    Two confidence intervals that overlap do not tell you whether two strategies differ,
+    because strategies run on the same assets are correlated: their estimation errors
+    partly cancel. This test uses that correlation :math:`\rho`. With per-period Sharpe
+    ratios :math:`\hat S_a, \hat S_b` over :math:`T` paired periods,
+
+    .. math::
+        \operatorname{Var}(\hat S_a - \hat S_b) \approx \frac{1}{T}\Big[2(1-\rho)
+        + \tfrac12\big(\hat S_a^2 + \hat S_b^2 - 2\hat S_a\hat S_b\rho^2\big)\Big].
+
+    It assumes IID, jointly normal returns. Monthly portfolio returns are fat-tailed, so
+    treat the p-value as approximate.
+
+    Args:
+        returns_a / returns_b: Simple returns of the two strategies.
+        risk_free: Annual rate or per-period series, as in :func:`evaluate`.
+        periods_per_year: For annualisation.
+
+    Returns:
+        A :class:`SharpeDifference`.
+
+    Raises:
+        ValueError: with fewer than three paired observations.
+    """
+    paired = pd.concat([returns_a, returns_b], axis=1, join="inner").dropna()
+    if len(paired) < 3:
+        raise ValueError("need at least three paired observations")
+    rf = per_period_risk_free(risk_free, paired.index, periods_per_year)
+    excess = paired.sub(rf, axis=0)
+    a = excess.iloc[:, 0]
+    b = excess.iloc[:, 1]
+    n = len(excess)
+    sa = float(a.mean() / a.std(ddof=1))
+    sb = float(b.mean() / b.std(ddof=1))
+    rho = float(np.corrcoef(a, b)[0, 1])
+    variance = (2.0 * (1.0 - rho) + 0.5 * (sa**2 + sb**2 - 2.0 * sa * sb * rho**2)) / n
+    if variance > 0:
+        z = float((sa - sb) / np.sqrt(variance))
+    else:
+        # Perfectly correlated series with equal Sharpe ratios: no evidence of a difference.
+        z = 0.0 if np.isclose(sa, sb) else float(np.sign(sa - sb) * np.inf)
+    p_value = float(2.0 * stats.norm.sf(abs(z)))
+    scale = np.sqrt(periods_per_year)
+    return SharpeDifference(
+        sharpe_a=sa * scale,
+        sharpe_b=sb * scale,
+        difference=(sa - sb) * scale,
+        z=float(z),
+        p_value=p_value,
+        correlation=rho,
+        n_periods=n,
+    )
