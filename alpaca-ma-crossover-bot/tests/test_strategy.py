@@ -19,6 +19,7 @@ from strategy import (  # noqa: E402
     compute_signal,
     decide_order,
     position_size,
+    validate_bars,
 )
 
 
@@ -88,6 +89,15 @@ class TestDecideOrder(unittest.TestCase):
         order = decide_order(current_qty=0, signal=Signal.FLAT, target_qty=100)
         self.assertIsNone(order)
 
+    def test_partial_fill_below_half_target_tops_up(self):
+        # A 143-share buy filled only 50 before being cancelled: buy the other 93.
+        self.assertEqual(decide_order(current_qty=50, signal=Signal.LONG, target_qty=143),
+                         ("buy", 93))
+
+    def test_normal_drift_above_half_target_does_not_trade(self):
+        # Price moved so the target is now 160 shares; holding 143 is close enough.
+        self.assertIsNone(decide_order(current_qty=143, signal=Signal.LONG, target_qty=160))
+
     def test_zero_target_qty_blocks_entry(self):
         # not enough buying power for even 1 share - must not submit a 0-qty order
         order = decide_order(current_qty=0, signal=Signal.LONG, target_qty=0)
@@ -115,6 +125,40 @@ class TestCompletedBars(unittest.TestCase):
     def test_requires_a_timezone(self):
         with self.assertRaises(ValueError):
             completed_bars(self.BARS, dt.datetime(2026, 9, 25, 12, 0))
+
+
+class TestValidateBars(unittest.TestCase):
+    FRI_AFTER_CLOSE = dt.datetime(2026, 9, 25, 20, 15, tzinfo=dt.timezone.utc)
+
+    def bars(self, n=25, last="2026-09-25"):
+        end = pd.Timestamp(last)
+        return [{"t": f"{(end - pd.offsets.BDay(n - 1 - i)).date()}T04:00:00Z", "c": 100.0 + i}
+                for i in range(n)]
+
+    def test_good_bars_pass(self):
+        self.assertIsNone(validate_bars(self.bars(), self.FRI_AFTER_CLOSE, long_window=20))
+
+    def test_too_few_bars(self):
+        self.assertIn("only 10", validate_bars(self.bars(10), self.FRI_AFTER_CLOSE, 20))
+
+    def test_invalid_closes(self):
+        for bad in (None, "101.5", float("nan"), 0.0, -3.0):
+            bars = self.bars()
+            bars[5]["c"] = bad
+            self.assertIn("invalid close", validate_bars(bars, self.FRI_AFTER_CLOSE, 20))
+
+    def test_missing_timestamp(self):
+        bars = self.bars()
+        del bars[3]["t"]
+        self.assertIn("no timestamp", validate_bars(bars, self.FRI_AFTER_CLOSE, 20))
+
+    def test_thursday_bar_on_monday_after_a_holiday_is_not_stale(self):
+        monday = dt.datetime(2026, 9, 28, 20, 15, tzinfo=dt.timezone.utc)
+        self.assertIsNone(validate_bars(self.bars(last="2026-09-24"), monday, 20))
+
+    def test_week_old_bar_is_stale(self):
+        later = self.FRI_AFTER_CLOSE + dt.timedelta(days=6)
+        self.assertIn("stale", validate_bars(self.bars(), later, 20))
 
 
 if __name__ == "__main__":
