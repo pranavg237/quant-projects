@@ -1,0 +1,60 @@
+name: CI
+
+# Every project is tested on every push. Each project installs from its own
+# requirements.txt, exactly as its README says to, so a broken install fails here
+# before it fails for a reader.
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: options-pricing-engine
+            typed: true
+          - project: market-making-simulator
+            typed: true
+          - project: portfolio-optimization
+            typed: true
+          - project: ma-crossover-backtest
+            typed: true
+          - project: fama-french-factor-model
+            typed: false
+          - project: alpaca-ma-crossover-bot
+            typed: false
+          - project: options-pricing-toolkit
+            typed: false
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    env:
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ${{ matrix.project }}/requirements.txt
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Lint
+        if: matrix.typed
+        run: |
+          pip install ruff
+          ruff check .
+          ruff format --check .
+      - name: Type check
+        if: matrix.typed
+        run: |
+          pip install mypy pandas-stubs types-requests
+          if [ -f quantbt/__init__.py ]; then mypy; else mypy src scripts; fi
+      - name: Test
+        # All suites are offline: no market data is downloaded.
+        run: python -m pytest
