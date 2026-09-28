@@ -10,6 +10,8 @@ Rebuild everything with:
 ```bash
 python scripts/run_strategies.py      # ~25 minutes, writes reports/strategies/
 python scripts/build_tearsheets.py    # writes reports/tearsheets/
+python scripts/multiple_testing.py    # ~3 seconds, reads reports/strategies/, writes reports/multiple_testing/
+python scripts/ma_sensitivity.py      # ~15 seconds, writes reports/sensitivity/
 ```
 
 ## How these numbers were produced
@@ -57,6 +59,77 @@ is a coin flip out of sample.
 Fama-French five-factor intercept is below 2 in absolute value. The largest (the MA
 crossover, t = 1.22) is exactly what you would expect to see by chance from five tries.
 
+## Correcting for the search: the deflated Sharpe ratio
+
+The PSR column above asks whether one Sharpe ratio is distinguishable from zero. That is
+the wrong question for a project that tried many things and is writing up the best one.
+The deflated Sharpe ratio (Bailey & Lopez de Prado 2014) asks instead whether the Sharpe
+beats what **the best of N tries would show if every try were pure noise**. That hurdle,
+`SR0`, grows with the number of trials `N` and with how widely their Sharpe ratios are
+spread (`V`). The DSR is the probability that the true Sharpe is above `SR0`.
+
+**The trial count is every configuration of every strategy: N = 63** (17 `ma_crossover` +
+12 `tsmom` + 8 `xsmom` + 18 `mean_reversion` + 8 `pairs`, read from each strategy's
+`grid.csv`). Earlier versions of this pipeline deflated each strategy only by its own
+grid, which for the MA crossover meant N = 17. The 63 Sharpe ratios have a standard
+deviation of 0.38 (`V` = 0.145), so the expected best of 63 noise strategies is an
+annualised Sharpe of **0.90**.
+
+| Series | Sharpe | PSR | DSR, N = 63 |
+|---|---|---|---|
+| ma_crossover walk-forward OOS | 0.58 | 0.995 | 0.076 |
+| mean_reversion walk-forward OOS | 0.42 | 0.950 | 0.031 |
+| xsmom walk-forward OOS | 0.18 | 0.757 | 0.002 |
+| tsmom walk-forward OOS | -0.06 | 0.407 | 0.000 |
+| pairs walk-forward OOS | -0.17 | 0.257 | 0.000 |
+| ma_crossover 10/200, in-sample best of all 63 | 0.68 | 0.999 | 0.159 |
+
+The last row is the textbook use of the DSR: the single best configuration found, over the
+2005-2025 span on which it was best. Its PSR of 0.999 says "almost certainly not zero".
+Its DSR of 0.16 says the observed 0.68 is well inside what the luckiest of 63 noise
+strategies would produce, far from the 0.95 a significant result needs. The same pipeline used to report 0.99 for this configuration (N = 17 and
+the 17 MA Sharpes' own variance), which is the number REVIEW.md warned should not be
+believed.
+
+**How much does this depend on the assumptions?** A lot, and the direction matters, so
+here is the whole grid for the in-sample best (walk-forward OOS in brackets). Rows are
+trial counts, columns are the cross-trial variance `V`:
+
+| N | V = 0.006 (17 MA configs only) | V = 0.050 (noise in one Sharpe) | V = 0.145 (all 63 configs) |
+|---|---|---|---|
+| 1 (no correction, = PSR) | 0.999 (0.995) | 0.999 (0.995) | 0.999 (0.995) |
+| 5 (one per strategy) | 0.996 (0.986) | 0.965 (0.920) | 0.838 (0.715) |
+| 17 (MA grid only) | 0.992 (0.977) | 0.881 (0.777) | 0.464 (0.302) |
+| **63 (all five grids)** | 0.987 (0.965) | 0.741 (0.588) | **0.159 (0.076)** |
+| 162 (+ every heatmap cell below) | 0.983 (0.955) | 0.623 (0.456) | 0.059 (0.023) |
+
+How to read it:
+
+* **The left column is not a credible assumption.** The 17 MA configurations have a
+  small Sharpe spread (0.43 to 0.68) because they are near-copies of one another: they
+  are all long SPY most of the time. Near-copies should be handled by counting fewer
+  *effective* trials, not by plugging in their tiny spread as if it were the noise in a
+  Sharpe estimate. The noise in one 20-year Sharpe estimate is a standard error of 0.22
+  (`V` = 0.050, middle column).
+* **The right column is the paper's recipe and is on the harsh side here.** Part of the
+  0.38 spread across all 63 configurations is real: `pairs` really is a different, worse
+  strategy (Sharpe down to -1.06 in-sample), not a noisy draw of the same one.
+* **63 is a floor on the true count, not a ceiling.** It counts coded grid points. It does
+  not count strategies considered and never coded, or earlier versions of the code.
+
+The conclusion does not hinge on which cell you pick. The MA crossover's Sharpe clears
+the conventional 0.95 bar only if the whole project is treated as about five independent
+tries with noise-sized variance (0.965 in-sample, 0.920 out of sample), or with the
+left-column variance that the previous paragraph explains away. Under the paper's own
+recipe and an honest trial count it is 0.16 in-sample and 0.08 out of sample. **The
+evidence that the MA crossover has any skill beyond selection luck is weak.** That agrees
+with its PBO of 0.54 and its insignificant factor alpha, which were computed a different
+way.
+
+Caveats: the trial Sharpes come from slightly different windows (`ma_crossover` from
+2005, the others from 2010), and the DSR's expected-maximum formula assumes the trials are
+independent, which none of these grids are.
+
 ## Strategy by strategy
 
 ### ma_crossover: the least bad, and still not good
@@ -73,6 +146,44 @@ positive out-of-sample Sharpe, but the chosen parameters covered 10 distinct set
 of a 17-point grid and touched every value of both windows, which is what a flat, noisy
 objective surface looks like. PBO of 0.54 confirms it: pick the in-sample best and you are
 below the median out of sample about half the time.
+
+#### Plateau or spike? The parameter surface
+
+The heatmap scores 116 fast/slow pairs (fast 5 to 150 days, slow 50 to 300) on SPY over the
+same 2005-01-03 to 2025-08-29 window, net of the same costs, as excess Sharpe. **It is
+in-sample by construction**: every cell has seen the whole period. It is a robustness
+diagnostic and nothing is picked from it. Choosing the brightest cell here would be
+exactly the overfitting the walk-forward exists to prevent.
+
+![MA crossover Sharpe by fast and slow window](reports/sensitivity/ma_sharpe_heatmap.png)
+
+Numbers behind it: [`reports/sensitivity/ma_sharpe_grid.csv`](reports/sensitivity/ma_sharpe_grid.csv)
+and [`ma_sharpe_points.csv`](reports/sensitivity/ma_sharpe_points.csv).
+
+| Point | Sharpe | Mean of its 8 neighbours | Worst neighbour | Reading |
+|---|---|---|---|---|
+| 10/75, the best cell on the surface | 0.73 | 0.52 | 0.41 | a spike |
+| 10/200, in-sample best of the 17-point grid | 0.68 | 0.62 | 0.59 | a modest ridge |
+| 50/200, the textbook rule | 0.54 | 0.57 | 0.54 | the level of buy-and-hold |
+| Buy-and-hold SPY, same dates | 0.53 | | | |
+
+What the surface says:
+
+* **It is a broad, low plateau at roughly buy-and-hold's Sharpe, with noise on top.** The
+  median cell is 0.55 against buy-and-hold's 0.53, and the middle half of all cells sits
+  between 0.52 and 0.59. 80 of 116 cells beat buy-and-hold in-sample, by a median of
+  0.05.
+* **The best cell is a spike and would be the wrong thing to report.** 10/75 has a Sharpe
+  of 0.73, but its neighbours average 0.52 and one is 0.41. Moving one step in any
+  direction loses most of the edge, which is what a lucky fit looks like.
+* **10/200 sits on a ridge, not a spike, but the ridge is not much higher than the
+  plain.** A band of fast 10-20 and slow 175-225 scores 0.58-0.68. That is the most
+  robust-looking region, and it is still only about 0.1 above buy-and-hold.
+* **None of these differences are statistically meaningful.** The whole range across the
+  surface, 0.39 to 0.73, is 1.5 standard errors of a single cell's Sharpe (0.22). The
+  surface cannot tell these parameter choices apart. This is why the walk-forward picked
+  10 different settings in 21 folds (outlined in the figure), and why 3 of those settings
+  sit below buy-and-hold on the full sample.
 
 ### mean_reversion: buys dips, and buys them all the way down
 
@@ -180,3 +291,13 @@ because the original raw download was not kept (`data/cache/` is gitignored).
 
 The lesson is the one in `data/README.md`: a result tied to a data vendor's current
 adjustment is only reproducible against a stored snapshot.
+
+**A second fresh download on the same day contradicts that explanation.** The pipeline was
+run again from another fresh Yahoo download (also 2026-09-28) while adding the
+deflated-Sharpe and heatmap work. `ma_crossover`, `tsmom`, `xsmom` and `pairs` matched the
+tables above to within about 1e-5 in Sharpe. `mean_reversion` came back at the
+*original* numbers instead: Sharpe 0.44, longest drawdown 1,102 days, turnover 10.4. Both
+downloads postdate the December 2025 splits, so the splits alone cannot explain the
+difference. `mean_reversion` moves between two states depending on the download, and the
+cause is not isolated. The tables above keep the committed run. The fix is a committed
+price snapshot, which this repository still lacks.

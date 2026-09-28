@@ -182,3 +182,45 @@ def test_results_md_documents_the_borrow_rate_actually_charged() -> None:
             assert float(row["borrow_rate"]) > 0, f"{name} shorts but pays no borrow"
             bps = round(float(row["borrow_rate"]) * 1e4)
             assert f"{bps} bp" in text, f"RESULTS.md does not state {name}'s {bps} bp borrow"
+
+
+DSR_CSV = Path("reports/multiple_testing/dsr.csv")
+POINTS_CSV = Path("reports/sensitivity/ma_sharpe_points.csv")
+
+
+@pytest.mark.skipif(not DSR_CSV.exists(), reason="run scripts/multiple_testing.py first")
+def test_results_md_dsr_table_matches_the_generated_table() -> None:
+    """The deflated Sharpe table, and its trial count, are the ones the script produced."""
+    table = {r["series"]: r for r in pd.read_csv(DSR_CSV).to_dict("records")}
+    rows = _markdown_rows(Path("RESULTS.md").read_text(), "| DSR, N = 63 |")
+    assert len(rows) == 6
+    for name, (sharpe, psr, dsr) in rows.items():
+        key = (
+            "ma_crossover 10/200 in-sample best of all trials" if "in-sample best" in name else name
+        )
+        row = table[key]
+        assert float(row["n_trials"]) == 63
+        assert abs(_number(sharpe) - float(row["sharpe"])) <= 0.005, name
+        assert abs(_number(psr) - float(row["psr"])) <= 0.0005, name
+        assert abs(_number(dsr) - float(row["dsr"])) <= 0.0005, name
+
+
+@pytest.mark.skipif(not POINTS_CSV.exists(), reason="run scripts/ma_sensitivity.py first")
+def test_results_md_plateau_table_matches_the_generated_table() -> None:
+    """The plateau-or-spike numbers are the ones the sensitivity script produced."""
+    points = {
+        (int(r["fast"]), int(r["slow"])): r for r in pd.read_csv(POINTS_CSV).to_dict("records")
+    }
+    rows = _markdown_rows(Path("RESULTS.md").read_text(), "| Mean of its 8 neighbours |")
+    checked = 0
+    for name, (sharpe, mean, worst, _reading) in rows.items():
+        label = name.split(",")[0]
+        if "/" not in label:
+            continue  # the buy-and-hold reference row
+        fast, slow = (int(x) for x in label.split("/"))
+        row = points[(fast, slow)]
+        assert abs(_number(sharpe) - float(row["sharpe"])) <= 0.005, name
+        assert abs(_number(mean) - float(row["neighbour_mean"])) <= 0.005, name
+        assert abs(_number(worst) - float(row["neighbour_min"])) <= 0.005, name
+        checked += 1
+    assert checked == 3
