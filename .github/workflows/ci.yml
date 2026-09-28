@@ -33,6 +33,8 @@ jobs:
         working-directory: ${{ matrix.project }}
     env:
       MPLBACKEND: Agg
+      # Oversubscribed BLAS threads slowed the options suite ~15x on a shared runner.
+      OPENBLAS_NUM_THREADS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
