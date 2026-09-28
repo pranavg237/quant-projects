@@ -30,7 +30,7 @@ import pandas as pd
 
 from .avellaneda_stoikov import AvellanedaStoikovParams
 from .book import LimitOrderBook
-from .flow import FlowConfig, OrderFlowGenerator
+from .flow import INFORMED_OWNER, FlowConfig, OrderFlowGenerator
 from .strategies import MakerState, QuotePolicy
 from .types import FloatArray, MarketConfig, Side
 
@@ -427,6 +427,12 @@ def simulate_book(  # noqa: PLR0915  (one loop; splitting it would hide the orde
                     # first markout horizon blind to informed impact.
                     "mid": mid_before,
                     "size": trade.size,
+                    # Who took the maker's liquidity. Known only because this is a
+                    # simulation -- a real desk has to infer it -- but it is what lets the
+                    # markout be split into the informed and uninformed components.
+                    "counterparty": (
+                        "informed" if trade.taker_owner == INFORMED_OWNER else "uninformed"
+                    ),
                 }
             )
 

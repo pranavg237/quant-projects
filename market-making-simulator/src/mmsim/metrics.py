@@ -31,8 +31,12 @@ from .types import FloatArray
 
 __all__ = [
     "MakerMetrics",
+    "fill_markouts",
+    "informed_markout_theory",
     "markout_curve",
+    "markout_decomposition",
     "pnl_decomposition",
+    "session_standard_errors",
     "summarise_runs",
 ]
 
@@ -231,3 +235,266 @@ def markout_curve(
             }
         )
     return pd.DataFrame(rows)
+
+
+def session_standard_errors(
+    pnl: FloatArray,
+    final_inventory: FloatArray,
+    n_bootstrap: int = 1_000,
+    seed: int = 0,
+) -> dict[str, float]:
+    r"""Standard errors, across independent sessions, of the headline session statistics.
+
+    Each session (one seed) is one independent observation, so the sampling error of every
+    cross-session statistic comes from resampling sessions:
+
+    * ``mean_pnl_se`` is the textbook :math:`s/\sqrt{n}`;
+    * ``std_pnl_se``, ``sharpe_se`` and ``std_final_inventory_se`` are **bootstrap**
+      standard errors (sessions resampled with replacement, ``n_bootstrap`` times). The
+      normal-theory formulas for these assume Gaussian PnL, and market-making PnL is
+      skewed, so the bootstrap is the more honest choice. The Sharpe is per session and
+      not annualised, like every Sharpe in this project.
+
+    The bootstrap generator is seeded, so the reported errors are reproducible.
+
+    Args:
+        pnl: Terminal PnL of each session.
+        final_inventory: Terminal inventory of each session, aligned with ``pnl``.
+        n_bootstrap: Bootstrap resamples.
+        seed: Seed for the resampling.
+
+    Returns:
+        ``{"mean_pnl_se", "std_pnl_se", "sharpe_se", "std_final_inventory_se"}``; all
+        ``nan`` when there are fewer than two sessions.
+
+    Raises:
+        ValueError: if the two arrays are not the same length.
+    """
+    x = np.asarray(pnl, dtype=np.float64)
+    q = np.asarray(final_inventory, dtype=np.float64)
+    if x.shape != q.shape:
+        raise ValueError("pnl and final_inventory must be aligned by session")
+    n = x.size
+    if n < 2:
+        nan = float("nan")
+        return {
+            "mean_pnl_se": nan,
+            "std_pnl_se": nan,
+            "sharpe_se": nan,
+            "std_final_inventory_se": nan,
+        }
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, n, size=(n_bootstrap, n))
+    boot_x = x[idx]
+    boot_std = boot_x.std(axis=1, ddof=1)
+    positive = boot_std > 0
+    boot_sharpe = boot_x.mean(axis=1)[positive] / boot_std[positive]
+    return {
+        "mean_pnl_se": float(x.std(ddof=1) / np.sqrt(n)),
+        "std_pnl_se": float(boot_std.std(ddof=1)),
+        "sharpe_se": float(boot_sharpe.std(ddof=1)) if boot_sharpe.size > 1 else float("nan"),
+        "std_final_inventory_se": float(q[idx].std(axis=1, ddof=1).std(ddof=1)),
+    }
+
+
+def fill_markouts(
+    result: SimulationResult,
+    horizons: tuple[int, ...] = (1, 5, 20, 100),
+    tick_size: float = 0.01,
+) -> pd.DataFrame:
+    r"""One row per maker fill: the edge earned at the fill and the markout after it.
+
+    For a fill of signed size :math:`\Delta q` at price :math:`p`, with :math:`S_i` the
+    efficient mid the maker quoted against and :math:`S_{i+h}` the mid :math:`h` steps
+    later, the per-unit quantities are
+
+    .. math::
+        \text{edge} = \operatorname{sign}(\Delta q)\,(S_i - p), \qquad
+        m_h = \operatorname{sign}(\Delta q)\,(S_{i+h} - S_i), \qquad
+        \text{realised}_h = \text{edge} + m_h.
+
+    The edge is what the maker earned at the moment of the fill, measured against the mid;
+    the markout is what the market then took back; the realised spread is what was left.
+    The adverse-selection cost is :math:`-m_h`. This is the standard
+    effective spread = realised spread + price impact decomposition, seen from the
+    maker's side.
+
+    A markout whose horizon runs past the end of the session is ``nan`` rather than being
+    truncated at the last step: truncating would mix horizons and quietly shrink the
+    long-horizon markouts of late fills.
+
+    Args:
+        result: A run from :func:`~mmsim.engine.simulate_book`.
+        horizons: Markout horizons, in steps.
+        tick_size: Used to express edge and markouts in ticks.
+
+    Returns:
+        Columns ``step``, ``side``, ``counterparty``, ``size``, ``edge_ticks`` and one
+        ``markout_{h}_ticks`` per horizon. Empty if the run had no fills.
+
+    Raises:
+        ValueError: if the run's fills are not step-indexed (i.e. from the reference
+            engine).
+    """
+    fills = result.fill_prices
+    columns = ["step", "side", "counterparty", "size", "edge_ticks"] + [
+        f"markout_{h}_ticks" for h in horizons
+    ]
+    if fills.empty:
+        return pd.DataFrame(columns=columns)
+    if "step" not in fills.columns:
+        raise ValueError(
+            "markout needs step-indexed fills; use simulate_book, not simulate_reference"
+        )
+    steps = fills["step"].to_numpy(dtype=np.int64)
+    sign = np.where(fills["side"].to_numpy() == "buy", 1.0, -1.0)
+    price = fills["price"].to_numpy(dtype=np.float64)
+    mid = result.mid
+    last = mid.size - 1
+
+    out = pd.DataFrame(
+        {
+            "step": steps,
+            "side": fills["side"].to_numpy(),
+            "counterparty": (
+                fills["counterparty"].to_numpy()
+                if "counterparty" in fills.columns
+                else np.full(steps.size, "unknown")
+            ),
+            "size": (
+                fills["size"].to_numpy(dtype=np.float64)
+                if "size" in fills.columns
+                else np.ones(steps.size)
+            ),
+            "edge_ticks": sign * (mid[steps] - price) / tick_size,
+        }
+    )
+    for h in horizons:
+        future = steps + h
+        valid = future <= last
+        values = np.full(steps.size, np.nan)
+        values[valid] = sign[valid] * (mid[future[valid]] - mid[steps[valid]]) / tick_size
+        out[f"markout_{h}_ticks"] = values
+    return out
+
+
+def _ratio_with_se(numer: FloatArray, denom: FloatArray) -> tuple[float, float]:
+    r"""Ratio of sums :math:`\sum_j x_j / \sum_j w_j` and its session-clustered standard error.
+
+    Fills inside one session are not independent -- they share a price path and an
+    inventory history -- so the standard error treats each *session* :math:`j` as the unit
+    of observation. The delta-method (linearised) variance of a ratio estimator
+    :math:`R` over :math:`n` sessions is
+    :math:`\frac{1}{n(n-1)\bar w^2}\sum_j (x_j - R w_j)^2`.
+    """
+    n = numer.size
+    total_w = float(denom.sum())
+    if total_w <= 0.0:
+        return float("nan"), float("nan")
+    ratio = float(numer.sum()) / total_w
+    if n < 2:
+        return ratio, float("nan")
+    resid = numer - ratio * denom
+    se = float(np.sqrt(np.sum(resid**2) / (n * (n - 1))) / (total_w / n))
+    return ratio, se
+
+
+def markout_decomposition(
+    runs: dict[str, list[SimulationResult]],
+    horizons: tuple[int, ...] = (1, 5, 20, 100),
+    tick_size: float = 0.01,
+) -> pd.DataFrame:
+    r"""Realised spread and adverse-selection cost, by policy, counterparty and horizon.
+
+    For every policy, every counterparty type (``informed``, ``uninformed`` and ``all``)
+    and every horizon :math:`h`, reports size-weighted **per-unit** averages over fills
+    (see :func:`fill_markouts`):
+
+    * ``edge_ticks``: spread earned at the fill, against the mid quoted against;
+    * ``markout_ticks``: signed mid move :math:`h` steps later;
+    * ``adverse_selection_ticks`` :math:`= -` ``markout_ticks``;
+    * ``realised_spread_ticks`` :math:`=` ``edge_ticks`` :math:`+` ``markout_ticks``,
+
+    each with a standard error clustered by session (see :func:`_ratio_with_se`). The same
+    quantities are also reported as **PnL per session**, in price units
+    (``*_pnl_per_session``): per-unit value times size, summed over a session's fills and
+    averaged over sessions. Summed over the two counterparty types, ``edge_pnl_per_session``
+    is the ``spread_capture`` leg of :func:`pnl_decomposition`, minus the few fills too
+    close to the end of the session to have a markout at that horizon.
+
+    Args:
+        runs: Book-engine runs keyed by policy name, e.g. ``ComparisonResult.runs``.
+        horizons: Markout horizons, in steps.
+        tick_size: Price units per tick.
+
+    Returns:
+        One row per ``(policy, counterparty, horizon)``.
+    """
+    rows: list[dict[str, float | str]] = []
+    for policy, results in runs.items():
+        per_run = [fill_markouts(r, horizons, tick_size) for r in results]
+        n_sessions = max(len(per_run), 1)
+        for counterparty in ("informed", "uninformed", "all"):
+            for h in horizons:
+                col = f"markout_{h}_ticks"
+                size_sum = np.zeros(len(per_run))
+                edge_sum = np.zeros(len(per_run))
+                mark_sum = np.zeros(len(per_run))
+                n_fills = 0
+                for j, frame in enumerate(per_run):
+                    if frame.empty:
+                        continue
+                    keep = frame[col].notna().to_numpy()
+                    if counterparty != "all":
+                        keep = keep & (frame["counterparty"] == counterparty).to_numpy()
+                    size = frame["size"].to_numpy(dtype=np.float64)[keep]
+                    size_sum[j] = size.sum()
+                    edge_sum[j] = float(np.sum(size * frame["edge_ticks"].to_numpy()[keep]))
+                    mark_sum[j] = float(np.sum(size * frame[col].to_numpy(dtype=np.float64)[keep]))
+                    n_fills += int(keep.sum())
+                edge, edge_se = _ratio_with_se(edge_sum, size_sum)
+                mark, mark_se = _ratio_with_se(mark_sum, size_sum)
+                real, real_se = _ratio_with_se(edge_sum + mark_sum, size_sum)
+                to_pnl = tick_size / n_sessions
+                rows.append(
+                    {
+                        "policy": policy,
+                        "counterparty": counterparty,
+                        "horizon": float(h),
+                        "n_sessions": float(len(per_run)),
+                        "n_fills": float(n_fills),
+                        "volume_per_session": float(size_sum.sum()) / n_sessions,
+                        "edge_ticks": edge,
+                        "edge_ticks_se": edge_se,
+                        "markout_ticks": mark,
+                        "markout_ticks_se": mark_se,
+                        "adverse_selection_ticks": -mark,
+                        "realised_spread_ticks": real,
+                        "realised_spread_ticks_se": real_se,
+                        "edge_pnl_per_session": float(edge_sum.sum()) * to_pnl,
+                        "adverse_selection_pnl_per_session": -float(mark_sum.sum()) * to_pnl,
+                        "realised_pnl_per_session": float((edge_sum + mark_sum).sum()) * to_pnl,
+                    }
+                )
+    return pd.DataFrame(rows)
+
+
+def informed_markout_theory(
+    horizons: FloatArray | tuple[int, ...], impact_ticks: float, impact_speed: float
+) -> FloatArray:
+    r"""Expected markout, in ticks, of a fill against an informed order, from the model alone.
+
+    An informed order adds :math:`J` ticks of pending impact, of which a fraction
+    :math:`v` (``impact_speed``) is released into the efficient price in the same step and
+    in every step after. After :math:`h` steps the released amount is
+    :math:`J(1-(1-v)^h)`, and the maker, on the other side of the trade, is marked down by
+    exactly that:
+
+    .. math:: \mathbb{E}[m_h \mid \text{informed}] = -J\,\bigl(1 - (1-v)^h\bigr).
+
+    This is a first-principles benchmark for the measured informed markout. It ignores
+    everything *else* that moves the price after the fill, which averages to zero only if
+    being hit is independent of the other informed impact still pending at the time.
+    """
+    h = np.asarray(horizons, dtype=np.float64)
+    return np.asarray(-impact_ticks * (1.0 - (1.0 - impact_speed) ** h), dtype=np.float64)
