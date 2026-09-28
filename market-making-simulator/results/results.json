@@ -2074,6 +2074,38 @@
       "realised_pnl_per_session": 9.646100780546767
     }
   ],
+  "informed_sweep_fits": [
+    {
+      "informed_fraction": 0.0,
+      "sigma": 0.07145292784634857,
+      "skew_ticks_per_unit_inventory": 0.025527604489077475,
+      "inventory_for_one_tick_skew": 39.173280063465064
+    },
+    {
+      "informed_fraction": 0.1,
+      "sigma": 0.19220668436130273,
+      "skew_ticks_per_unit_inventory": 0.18471704756582727,
+      "inventory_for_one_tick_skew": 5.413685489118874
+    },
+    {
+      "informed_fraction": 0.2,
+      "sigma": 0.35545760930560055,
+      "skew_ticks_per_unit_inventory": 0.631750560066265,
+      "inventory_for_one_tick_skew": 1.5829032267024963
+    },
+    {
+      "informed_fraction": 0.3,
+      "sigma": 0.4780225616468018,
+      "skew_ticks_per_unit_inventory": 1.142527847216852,
+      "inventory_for_one_tick_skew": 0.8752521896389277
+    },
+    {
+      "informed_fraction": 0.4,
+      "sigma": 0.617286251708271,
+      "skew_ticks_per_unit_inventory": 1.905211582740235,
+      "inventory_for_one_tick_skew": 0.5248760867607766
+    }
+  ],
   "sensitivity": [
     {
       "parameter": "gamma",
