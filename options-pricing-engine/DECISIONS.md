@@ -36,10 +36,14 @@ area for sign errors and means the put path is exercised by the same tests as th
 `N(-inf) = 0` reproduce exactly the intrinsic-value limit, so the main price formula needs
 no special-casing beyond the final `maximum(., 0)`.
 
-**Second-order Greeks included (vanna, volga, charm, dual delta).** Vanna and volga are
-what a vol trader actually risk-manages; dual delta is `dV/dK`, whose negative is the
-risk-neutral CDF of `S_T` and therefore the quantity a surface must keep monotone for the
-implied density to stay non-negative. It is used in the surface sanity checks.
+**Second-order Greeks included (vanna, volga, charm), plus dual delta.** Nine Greeks in
+all (an earlier README said ten; it counted the price). Vanna and volga are what a vol
+trader actually risk-manages. Dual delta is `dV/dK`: undiscounted, the put's is the
+risk-neutral CDF `Q(S_T < K)` and minus the call's is `Q(S_T > K)`, which is why call
+prices must fall and be convex in strike. (An earlier version of this entry said the
+negative was the CDF and that it was used in the surface checks; the first is only true
+for the call's survival function, and the surface's butterfly check tests convexity of
+prices directly rather than calling `dual_delta`.)
 
 ---
 
@@ -136,6 +140,51 @@ model-free, so this is exact and halves the quadrature cost.
 
 ---
 
+## Put-call parity
+
+**Say what is being tested, because the forward comes from the same quotes.** The pipeline
+infers each expiry's forward as the median of `K + (C - P)/D` over strikes within 10% of
+spot, so the median parity residual inside that window is zero by construction. Checking
+parity against that forward tests the *shape*, not the level: one number per expiry must
+explain 30-230 strikes, the residuals must be flat in strike and inside each pair's
+bid-ask range, and strikes outside the window are out of sample. The *level* -- whether
+the implied carry matches SPY's dividends and funding -- needs a dividend forecast and a
+funding rate the data does not contain, and is not claimed.
+
+**Pairs come from the raw chain, not the cleaned one.** Cleaning drops mids under 5 cents
+and spreads over 40%, which removes exactly the deep-ITM legs where parity is most
+informative (and most often stale). Whether both legs survived cleaning is recorded.
+
+**A violation is "beyond the spread", not "non-zero".** A pair violates parity only if the
+theoretical synthetic forward lies outside `[C_bid - P_ask, C_ask - P_bid]`, i.e. you could
+actually trade against it at the quoted prices. Mid-price residuals are reported as well.
+
+**American exercise is priced, not waved away.** The residuals on SPY fall with strike in a
+way noise does not: at 4% rates a deep-ITM American put is worth about intrinsic while a
+European one is worth about `r K tau` less. `early_exercise_premia` prices American minus
+European on the *same* CRR lattice, so the lattice's own error cancels, at the surface vol
+for each strike. The adjusted forward then solves parity with that premium removed. Two
+things keep this honest: the adjustment has no parameter fitted to the residuals (the vol
+comes from the OTM surface), and a test applies it to a chain that really is European and
+requires it to make the fit *worse*.
+
+**Not wired into the surface (yet).** The adjusted forward moves long-dated forwards by up to
+~85bp and closes the call/put vol gap at the forward, so the surface and Heston numbers
+that use the European-parity forward carry a known bias at long maturities. Switching the
+pipeline over properly means de-Americanising the OTM quotes too (inverting each price
+minus its early-exercise premium), re-running the calibration and re-deriving every
+downstream number; that is a separate change with its own review, and until then the
+bias is measured and stated rather than silently fixed in one place. The tree also uses
+a continuous dividend yield, so it misses the pre-ex-date exercise premium of deep-ITM
+calls that discrete SPY dividends create.
+
+**Stale quotes are identified by arbitrage, not by timestamps.** The snapshot has last-trade
+times but no quote times. A quote offered below intrinsic (on an American option) or a call
+bid above a lower strike's call ask cannot survive in a live market, so those two
+model-free checks are what "stale" means here.
+
+---
+
 ## Tooling
 
 **`mypy` runs without a `python_version` pin.** numpy >= 2.3 ships stubs using PEP 695
@@ -158,7 +207,27 @@ would not catch a sign error in how they compose.
 
 **Greeks are tested against central finite differences of the price function**, not against
 a second copy of the analytic formula. The two derivations share only the normal CDF, so an
-algebra slip cannot hide in both.
+algebra slip cannot hide in both. The first version checked one parameter point per Greek,
+checked charm for calls only, and took vanna, volga and charm as differences of the
+*analytic* delta and vega (so an error in delta would have been inherited). `greeks_check`
+now differences only the price, including the mixed partials, over a grid built for where
+Greeks go wrong:
+
+* *Moneyness in standard deviations* (`z = ln(K/F)/(sigma sqrt(tau))` from -3 to +3), not a
+  fixed percentage of spot. A one-day option 20% out of the money is dozens of standard
+  deviations out and every Greek underflows to zero, so "agreement" there is vacuous.
+* *Down to one day to expiry*, both option types, 10% and 40% vol, non-zero `r` and `q`.
+* *Steps scaled twice.* Each input is bumped by a multiple of the distance over which the
+  price actually bends (`S sigma sqrt(tau)` for spot, `sigma` for vol, `tau` for time).
+  And the multiple comes from balancing truncation against the price formula's own
+  round-off, which is about `eps * S` (the price is a difference of two terms of size S),
+  i.e. `eps / (sigma sqrt(tau))` relative to the natural price scale. The textbook
+  `eps^(1/3)`, `eps^(1/4)` under-steps short-dated options and loses about an order of
+  magnitude on one-day gamma and volga; `results/greeks_fd.md` shows both.
+* *Relative error with a floor* of 1e-3 of the Greek's largest value across the smile, so a
+  Greek that crosses zero (volga near the money) is not reported as a huge relative error.
+* *The check is checked.* Tests plant the classic unit bugs (vega per vol point, theta per
+  day), a sign flip, and a put-only slip in charm, and require each to be caught.
 
 **Heston is validated three independent ways** -- Black-Scholes limit, a second quadrature
 (Lewis), and a Monte Carlo scheme. A Fourier pricer checked only against itself is not
@@ -189,6 +258,6 @@ vega-weighted means, so the nesting guarantee holds for the vega-weighted square
 for plain unweighted RMSE -- on a synthetic Heston surface the unweighted ordering inverts
 by a hair (2.811% vs 2.799%). The test asserts the guarantee that exists.
 
-**Coverage is 99% of statements with branch coverage on.** `plotting.py` is excluded from
+**Coverage is 98% of statements with branch coverage on.** `plotting.py` is excluded from
 the target (asserting on pixels is brittle) but still has smoke tests, because its figures
 are in the README and a silent breakage would ship.

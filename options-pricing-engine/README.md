@@ -10,19 +10,20 @@ Every pricer is cross-checked against an independently derived one, every chart 
 
 | | Result |
 |---|---|
-| **Analytic** | Black-Scholes price + 10 Greeks, fully vectorised. Greeks verified against central finite differences of the price function. |
+| **Analytic** | Black-Scholes price + 9 Greeks, fully vectorised. Every Greek, calls and puts, checked against central differences of the *price* on a 168-point grid down to **1 day** to expiry: worst relative error **6e-8** first-order, **7e-4** second-order ([table](results/greeks_fd.md)). |
 | **Lattice** | CRR / Jarrow-Rudd / Leisen-Reimer, European + American. LR at **101 steps** beats CRR at **2,001 steps** (3.4e-5 vs 8.8e-4 error). |
 | **Monte Carlo** | Antithetic + control variates: **57x variance reduction** on a European call, **576x** on an arithmetic Asian (geometric-Asian control, ρ = 0.9991). Error bars verified calibrated over 40 replications. |
 | **Implied vol** | Safeguarded Newton (`rtsafe`). Converges in ≤16 iterations to **1e-11** of vol even where vega is 1e-6. |
 | **Heston** | Characteristic function ("little trap" branch), two independent quadratures agreeing to 1e-8, cross-checked against a full-truncation Euler Monte Carlo. |
 | **Real data** | 4,469 SPY quotes → 2,012-point surface across 12 expiries. Forward from put-call parity, 0 calendar-arbitrage violations. |
+| **Put-call parity** | **44.5%** of the pairs the forward is fitted to break *European* parity by more than the bid-ask spread. Pricing the American early-exercise premium cuts that to **10.6%** and the scatter of the per-strike forwards 2.4–5.6x beyond six months — so SPY's parity "violations" are mostly American exercise, and the pipeline's forward is biased low by up to **85bp** at 21 months ([report](results/parity.md)). Not yet fixed in the surface. |
 | **Calibration** | Heston fits the SPY surface to **2.51 vol points** RMSE with 5 parameters, against **10.61** for a Black-Scholes model with one free volatility *per expiry* (12 parameters). Out-of-sample on held-out strikes: **2.38**. |
 | **Honest limitation** | That 2.51 is **1.09 vol points in the body** and **5.92 in the short-dated put wing**. Heston cannot generate enough short-dated skew. You need jumps. |
 
 ```bash
 pip install -r requirements.txt
 python scripts/run_analysis.py     # ~4 min, offline from the committed SPY snapshot; writes figures/ and results/
-python -m pytest                   # 339 tests, 99% branch coverage, offline
+python -m pytest                   # 375 tests, 98% branch coverage, offline
 ```
 
 **Data behind every market number below:** one SPY option chain captured from Yahoo
@@ -60,7 +61,18 @@ $$d_1 = \frac{\ln(S/K) + (r - q + \tfrac{1}{2}\sigma^2)\tau}{\sigma\sqrt{\tau}},
 
 $$C = S e^{-q\tau} N(d_1) - K e^{-r\tau} N(d_2), \qquad P = K e^{-r\tau} N(-d_2) - S e^{-q\tau} N(-d_1).$$
 
-Ten Greeks are implemented analytically: Δ, Γ, vega, Θ, ρ, vanna $\partial^2V/\partial S\partial\sigma$, volga $\partial^2V/\partial\sigma^2$, charm $\partial\Delta/\partial t$, and dual delta $\partial V/\partial K$ — whose negative is the risk-neutral CDF of $S_T$, and therefore the thing a surface must keep monotone for the implied density to stay non-negative.
+Nine Greeks are implemented analytically: Δ, Γ, vega, Θ, ρ, vanna $\partial^2V/\partial S\partial\sigma$, volga $\partial^2V/\partial\sigma^2$, charm $\partial\Delta/\partial t$, and dual delta $\partial V/\partial K$. (An earlier version said ten, counting the price.) Undiscounted, the put's dual delta is the risk-neutral CDF of $S_T$ and minus the call's is $\mathbb{Q}(S_T > K)$ — which is why call prices must fall, and be convex, in strike.
+
+**How the Greeks are checked.** Each one is compared with a central finite difference of the *price* alone — second-order Greeks, including the mixed partials vanna and charm, are second differences of the price, not differences of the analytic delta or vega. The grid is built for where Greeks break: calls and puts, **1 day** to 3 years, strikes $\pm3$ standard deviations from the forward, 10% and 40% vol, non-zero $r$ and $q$ (168 points per option type). Steps are scaled to each input's natural scale ($S\sigma\sqrt\tau$ for spot, $\sigma$ for vol, $\tau$ for time) and to the price formula's round-off, which is about $\epsilon S$ because the price is a difference of two terms of size $S$; the textbook $\epsilon^{1/3}$, $\epsilon^{1/4}$ steps lose about 10x on one-day gamma and volga. Worst relative error ([full table](results/greeks_fd.md)):
+
+| | Δ | vega | Θ | ρ | dual Δ | Γ | vanna | volga | charm |
+|---|---|---|---|---|---|---|---|---|---|
+| call | 8.6e-9 | 2.7e-8 | 3.1e-8 | 3.2e-9 | 5.1e-9 | 8.0e-5 | 4.9e-6 | 4.0e-4 | 5.5e-6 |
+| put | 2.8e-9 | 5.0e-8 | 6.3e-8 | 7.9e-9 | 8.7e-9 | 4.0e-5 | 1.1e-5 | 6.9e-4 | 6.2e-6 |
+
+17 of the 18 worst cases are at one or seven days to expiry; the volga worst case is the one-day at-the-money option, where volga itself is nearly zero. Tests also plant the classic bugs — vega per vol point, theta per day, a sign flip, a put-only slip in charm — and require each to be caught.
+
+![Greeks finite-difference check](figures/greeks_fd.png)
 
 ![Black-Scholes Greeks](figures/greeks.png)
 
@@ -190,6 +202,12 @@ The blank cells are real: short expiries simply do not quote wide strikes, and t
 
 Textbook equity behaviour: a steep put skew that flattens with maturity, and a call wing that turns back up past roughly $k = +0.07$. At-the-money volatility rises monotonically from **11.2% at 5 days to 18.0% at 1.7 years**.
 
+The overlay shows how the smile changes with expiry; it does not show how well each smile is *known*. Every expiry on its own axes, with the band between the vol implied by the bid and the vol implied by the ask:
+
+![Smiles by expiry with bid-ask band](figures/smiles_by_expiry.png)
+
+At this scale the band is thinner than the line almost everywhere, which is itself the finding: the smile's *shape* is pinned down by the quotes far more tightly than any model below fits it. The band is widest where vega is smallest: a median **0.6–0.75 vol points** beyond $k = -0.3$ at 12–21 days, against **0.05–0.11** within 5% of the forward at every expiry, and at most 0.13 anywhere past six months (medians by expiry and moneyness bucket). Two consequences. The Heston misses in the short-dated put wing (5–10 vol points, below) are far outside the quotes, so they are model failure, not noise. And the step at $k = 0$ on the longest expiries, where the surface switches from puts to calls — **−1.15 vol points at 637 days**, ten times the band there — is not noise either: it is the forward bias from American exercise measured in the parity section below.
+
 ![Term structure](figures/term_structure.png)
 
 Arbitrage checks on the fitted surface:
@@ -199,6 +217,85 @@ Calendar-spread violations : 0/228 (0.0%)
 Butterfly, zero tolerance  : 517/1988 (26.0%)   <- dominated by the $0.01 quote tick
 Butterfly, net of spread   :  57/1988 ( 2.9%)
 ```
+
+### Put-call parity on the snapshot
+
+Full tables in [`results/parity.md`](results/parity.md); every pair in
+[`results/parity_pairs.csv`](results/parity_pairs.csv). 1,734 (expiry, strike) pairs have
+a two-sided quote on both the call and the put.
+
+**What this can and cannot test.** The pipeline does not know the forward — it infers it
+from parity, as the median of $K + (C-P)/D$ over strikes within 10% of spot. So checking
+parity against that forward cannot test the *level*: inside the window the median residual
+is zero by construction. What it does test is the *shape*. One number per expiry has to
+explain 30–230 strikes, so the residuals must be flat in strike and inside each pair's
+bid-ask range, and strikes outside the window were not used at all. The level (does the
+implied carry match SPY's dividends and funding?) needs data the snapshot does not have.
+
+A pair violates parity **beyond the spread** when $D(F-K)$ lies outside the range the
+synthetic can actually be traded at, $[C_{bid} - P_{ask},\ C_{ask} - P_{bid}]$:
+
+| Theory | Strikes | Pairs | Beyond spread | Median excess | 90th pct | Median \|mid residual\| |
+|---|---|---|---|---|---|---|
+| European, pipeline forward | fitted (±10%) | 897 | **399 (44.5%)** | \$0.14 | \$2.37 | \$0.36 |
+| American-adjusted | fitted (±10%) | 897 | **95 (10.6%)** | \$0.05 | \$0.32 | \$0.12 |
+| European, pipeline forward | out of sample | 837 | 277 (33.1%) | \$6.81 | \$44.09 | \$0.83 |
+| American-adjusted | out of sample | 837 | 281 (33.6%) | \$3.32 | \$28.84 | \$0.70 |
+
+![Put-call parity residuals](figures/parity_residuals.png)
+
+**Why European parity fails: American exercise.** SPY options are American. With rates
+near 4%, a deep in-the-money American put is worth about its intrinsic value $K - S$,
+while the European put is worth about $Ke^{-r\tau} - Se^{-q\tau}$ — roughly $rK\tau$ less,
+\$1.70 on a 10%-ITM put at three weeks. So $C - P$ falls faster in $K$ than $D(F-K)$ once
+the put is in the money, and the charts above bend down on the right, more the longer the expiry. That is not
+noise: pricing the early-exercise premium of each leg on a binomial tree (American minus
+European on the same lattice, at the surface vol, no parameter fitted to the residuals)
+predicts the bend, and removing it collapses the scatter of the per-strike forward
+estimates:
+
+| Expiry | 21d | 28d | 42d | 73d | 104d | 182d | 272d | 455d | 637d |
+|---|---|---|---|---|---|---|---|---|---|
+| forward scatter (IQR), European \$ | 1.25 | 1.00 | 0.77 | 1.56 | 0.92 | 2.83 | 2.65 | 3.54 | 4.18 |
+| forward scatter (IQR), American \$ | 0.25 | 0.22 | 0.23 | 0.73 | 0.88 | 0.51 | 0.74 | 1.38 | 1.76 |
+| forward shift (bp) | +1.8 | +2.1 | +2.5 | +5.2 | +10.5 | +19.0 | +34.1 | +59.2 | +85.3 |
+
+The one expiry where it barely helps is 104 days (0.92 → 0.88). A plausible reason, not
+tested: it is the first expiry past SPY's December ex-dividend date, and the tree's
+continuous dividend yield cannot price the early exercise of deep-ITM calls just before a
+discrete dividend.
+
+A test applies the same adjustment to a synthetic chain that really is European and
+requires it to make the fit *worse*, so the improvement on SPY is evidence, not a free
+fit. Two things follow for the rest of this README:
+
+* **The pipeline's forward is biased low** — by 2bp at a month and 85bp at 21 months —
+  because the ITM puts in the ±10% window drag the median down. That is what the call/put
+  step at the forward in the smile plots is: the call-minus-put vol at strikes within 1%
+  of the forward is **−1.08 vol points at 637 days** with the pipeline's forward and
+  **+0.18** after de-Americanising both legs and using the adjusted forward (−0.51 → +0.10
+  at 455 days). The fix is measured here but **not wired into the surface**, so the Heston
+  numbers below still carry it; see [DECISIONS.md](DECISIONS.md).
+* **What is left in-sample is small** — median 5 cents beyond the spread, mostly in the 5- to
+  12-day expiries, where a few cents is what a slightly stale spot print or unsynchronised
+  quotes would produce.
+
+**Out of sample, the failures are stale quotes.** Outside the window the violation rate
+does not improve, because the violators are not model failures. They are deep-ITM quotes
+that are arbitrageable *on their own*, with no model and no forward:
+
+* **72 quotes are offered below intrinsic** — mostly deep-ITM long-dated calls. SPY options
+  are American, so you could buy one and exercise it immediately at a profit. The spot that
+  would make them fair goes as low as \$675, against \$760 at the snapshot.
+* **100 adjacent-strike pairs are not monotone** — a call bid above the next-lower strike's
+  call ask (or the put mirror image), a free vertical spread.
+* **128 pairs breach the American bound $C - P \le S - Ke^{-r\tau}$**, which needs neither a
+  forward nor a dividend forecast (only spot and the Treasury rate); 82% of them are at
+  strikes more than 5% below spot, i.e. deep in-the-money calls.
+
+None of these can exist in a live market. The snapshot carries last-trade times but no quote
+times, so this is the closest the data gets to measuring staleness directly — and it is
+why the surface is built from out-of-the-money quotes only.
 
 ### Heston calibration
 
@@ -254,17 +351,17 @@ This is not a calibration failure, it is the model. Heston generates skew throug
 
 ![Heston errors](figures/heston_errors.png)
 
-**The implied dividend yield comes out too low.** Backing $q$ out of the parity forward with Treasury discounting gives ~0.3% at long maturities, against SPY's actual ~1.1%. Options are funded at OIS/repo, not at Treasury yields, and the ~75bp gap is that basis rather than a bug. The surface itself is unaffected: it is built from the forward directly (i.e. Black-76), so the $r$/$q$ split never enters a price.
+**The implied dividend yield comes out too low, and fixing American exercise makes it lower.** Backing $q$ out of the parity forward with Treasury discounting gives ~0.3% at long maturities, against SPY's actual ~1.1%. The American-adjusted forward is *higher*, so its implied $q$ is about −0.1% to −0.2% beyond six months (table in [`results/parity.md`](results/parity.md)). Parity cannot say why: the forward is inferred from the same quotes, so only the carry $r - q$ is identified, and splitting it needs a dividend forecast and the dealers' funding rate, neither of which is in the data. The most likely culprit is funding — options are financed at OIS/repo-type rates, not Treasury yields — but that is a hypothesis, not a measurement. The surface itself is unaffected by the split: it is built from the forward directly (i.e. Black-76), so the $r$/$q$ split never enters a price.
 
-**There is a hard floor on surface accuracy from free data.** Call and put implied vols meet at the forward with a ~0.5 vol point gap. That is exactly what a **9 basis point** error in the implied forward produces, and 9bp is inside the interquartile dispersion of the per-strike forward estimates. No amount of better solving fixes it; it needs better quotes.
+**The call/put mismatch at the forward was mostly American exercise, not quote noise.** An earlier version of this README said call and put vols meet at the forward with a ~0.5 vol point gap that "needs better quotes". Measured properly (median over strikes within 1% of the forward), the gap is under 0.25 vol points out to nine months and then widens to **−0.51 at 455 days and −1.08 at 637 days**, and it closes to about **0.2 or less** at every expiry once both legs are de-Americanised and the adjusted forward is used — see the parity section above. The bias is not yet removed from the surface.
 
 ---
 
 ## 5. Limitations
 
-- **Quotes are not simultaneous.** Yahoo mids come from different moments across the chain. This is the dominant error source and it caps how much of the remaining butterfly violation rate is real.
+- **Quotes are not simultaneous, and some are stale.** Yahoo mids come from different moments across the chain; 72 quotes in the snapshot are offered below intrinsic and 100 adjacent-strike pairs are not monotone, which no live quote could be. This is the dominant error source in the deep ITM legs and it caps how much of the remaining butterfly violation rate is real.
 - **Mid prices, not a fitted fair value.** For wide-spread contracts the mid is a convention, not a price.
-- **American exercise is ignored in the surface.** SPY options are American, but for an index ETF with a small dividend the early-exercise premium on OTM options is tiny. It is *not* negligible for single stocks around dividends, so this pipeline should not be pointed at them unchanged.
+- **American exercise is ignored in the surface.** For the OTM quotes the surface is built from, the early-exercise premium is small. But the *forward* is fitted to ITM legs too, and there it is not small: the forward is biased low by up to 85bp at 21 months, which puts a ~1 vol point call/put step at the forward of the longest expiry. The parity module measures and removes it; the surface and Heston fit do not yet use it. The binomial adjustment also assumes a continuous dividend yield, so it misses the pre-ex-date exercise of deep ITM calls that SPY's discrete dividends create. It is *not* negligible for single stocks around dividends, so this pipeline should not be pointed at them unchanged.
 - **Heston has no jumps**, hence the wing failure above. Bates or a Lévy model is the next step.
 - **One snapshot.** Calibration stability *across days* (how much the parameters move when the surface barely does) is the standard practitioner complaint about Heston and is not measured here.
 - **The Treasury curve is a proxy for OIS.** A few basis points at these maturities — far less than the bid-ask.
@@ -277,18 +374,20 @@ This is not a calibration failure, it is the model. Heston generates skew throug
 ```
 src/optpricing/
   types.py         Shared enums and array types
-  blackscholes.py  Analytic price + 10 Greeks, vectorised
+  blackscholes.py  Analytic price + 9 Greeks, vectorised
+  greeks_check.py  Every Greek vs finite differences of the price, over a stress grid
   binomial.py      CRR / Jarrow-Rudd / Leisen-Reimer, European + American, exercise boundary
   montecarlo.py    Exact GBM draws, antithetic + control variates, Asian options
   implied_vol.py   Vectorised safeguarded Newton (rtsafe)
   heston.py        Characteristic function, two quadratures, Euler MC cross-check
   calibration.py   Multi-start least squares + Black-Scholes benchmarks
   data.py          Cached yfinance chains, rate curve, parity forward extraction
-  surface.py       Surface construction, arbitrage checks, thinning
+  surface.py       Surface construction (mid, bid and ask vols), arbitrage checks, thinning
+  parity.py        Put-call parity residuals, American adjustment, stale-quote checks
   style.py         One validated chart palette
   plotting.py      Every figure in this README
 scripts/run_analysis.py   Full pipeline
-tests/                    339 tests, 99% statement + branch coverage
+tests/                    375 tests, 98% statement + branch coverage
 data/snapshots/           Committed SPY chain so results reproduce offline
 ```
 

@@ -84,7 +84,7 @@ def build_surface(
     Returns:
         Tidy frame with one row per surviving contract and columns
         ``expiry, tau, strike, option_type, mid, forward, discount, rate,
-        dividend_yield, log_moneyness, implied_vol, total_variance, vega,
+        dividend_yield, log_moneyness, implied_vol, iv_bid, iv_ask, total_variance, vega,
         moneyness_bucket``.
 
     Raises:
@@ -116,22 +116,29 @@ def build_surface(
     # Price with the parity-implied rate and *carry-adjusted spot* so that calls and puts
     # on the same strike must imply the same vol by construction.
     effective_q = df["rate"] - np.log(df["forward"] / snapshot.spot) / df["tau"]
-    vols = np.empty(len(df), dtype=np.float64)
-    for side in ("call", "put"):
-        mask = (df["option_type"] == side).to_numpy()
-        if not mask.any():
+    # Invert the mid, and the bid and ask where present: the bid/ask vols are how far the
+    # smile is actually pinned down by the quotes (``nan`` where a bid is below the
+    # no-arbitrage floor, which happens for wide deep-wing quotes).
+    price_columns = {"implied_vol": "mid", "iv_bid": "bid", "iv_ask": "ask"}
+    for out_col, price_col in price_columns.items():
+        if price_col not in df.columns:
             continue
-        result = iv.implied_vol(
-            df.loc[mask, "mid"].to_numpy(dtype=np.float64),
-            snapshot.spot,
-            df.loc[mask, "strike"].to_numpy(dtype=np.float64),
-            df.loc[mask, "tau"].to_numpy(dtype=np.float64),
-            df.loc[mask, "rate"].to_numpy(dtype=np.float64),
-            OptionType(side),
-            effective_q.to_numpy(dtype=np.float64)[mask],
-        )
-        vols[mask] = np.asarray(result)
-    df["implied_vol"] = vols
+        vols = np.empty(len(df), dtype=np.float64)
+        for side in ("call", "put"):
+            mask = (df["option_type"] == side).to_numpy()
+            if not mask.any():
+                continue
+            result = iv.implied_vol(
+                df.loc[mask, price_col].to_numpy(dtype=np.float64),
+                snapshot.spot,
+                df.loc[mask, "strike"].to_numpy(dtype=np.float64),
+                df.loc[mask, "tau"].to_numpy(dtype=np.float64),
+                df.loc[mask, "rate"].to_numpy(dtype=np.float64),
+                OptionType(side),
+                effective_q.to_numpy(dtype=np.float64)[mask],
+            )
+            vols[mask] = np.asarray(result)
+        df[out_col] = vols
     df["dividend_yield"] = effective_q
 
     df = df.loc[df["implied_vol"].between(min_vol, max_vol)].copy()
@@ -166,6 +173,8 @@ def build_surface(
         "dividend_yield",
         "log_moneyness",
         "implied_vol",
+        "iv_bid",
+        "iv_ask",
         "total_variance",
         "vega",
         "moneyness_bucket",
