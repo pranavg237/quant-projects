@@ -22,6 +22,11 @@ one-way proportional rate in basis points. This is the honest minimum: it captur
 spread and commission but not market impact, which is negligible at ETF scale and
 sub-$100m size and is *not* negligible for anything larger.
 
+**Shorts are not free.** A long-short portfolio pays a stock-loan fee on the value it has
+borrowed. ``borrow_bps`` charges that annual rate, pro rata each period, on the short
+exposure actually held (the drifted weights), so a strategy's Sharpe cannot be flattered by
+free leverage on the short side.
+
 **Return convention.** Portfolio return in a period is the weighted average of simple asset
 returns, then costs are subtracted. Equity compounds. Annualised return is geometric, not
 arithmetic -- the two differ by about half the variance, which for a 15% vol portfolio is
@@ -40,6 +45,7 @@ from .types import Weights
 __all__ = [
     "BacktestResult",
     "PortfolioBuilder",
+    "buy_and_hold",
     "compare_strategies",
     "equal_weight_builder",
     "rebalance_dates",
@@ -89,6 +95,8 @@ class BacktestResult:
             it is the single best predictor of whether a mean-variance portfolio will
             survive out of sample.
         periods_per_year: For annualisation.
+        borrow_costs: Stock-loan fee charged each period on short exposure, in return
+            units. All zeros for a long-only strategy.
     """
 
     name: str
@@ -100,6 +108,7 @@ class BacktestResult:
     leverage: pd.Series
     periods_per_year: float = 12.0
     meta: dict[str, float] = field(default_factory=dict)
+    borrow_costs: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))
 
     @property
     def equity_curve(self) -> pd.Series:
@@ -135,6 +144,17 @@ def _drift_weights(weights: Weights, period_returns: pd.Series) -> Weights:
     return grown / total
 
 
+def _check_no_lookahead(
+    window: pd.DataFrame, decision_date: pd.Timestamp, realisation_date: pd.Timestamp
+) -> None:
+    """Raise if the estimation window reaches past the decision date."""
+    if window.index[-1] != decision_date or window.index[-1] >= realisation_date:
+        raise RuntimeError(
+            f"lookahead detected: window ends {window.index[-1]}, decision "
+            f"{decision_date}, realisation {realisation_date}"
+        )
+
+
 def walk_forward(
     returns: pd.DataFrame,
     builder: PortfolioBuilder,
@@ -144,6 +164,7 @@ def walk_forward(
     cost_bps: float = 10.0,
     periods_per_year: float = 12.0,
     min_lookback: int | None = None,
+    borrow_bps: float = 0.0,
 ) -> BacktestResult:
     """Run a walk-forward backtest of one portfolio construction method.
 
@@ -157,6 +178,7 @@ def walk_forward(
         cost_bps: One-way proportional cost in basis points of turnover.
         periods_per_year: For annualisation.
         min_lookback: Minimum history before the first trade. Defaults to ``lookback``.
+        borrow_bps: Annual stock-loan fee on short exposure, in basis points.
 
     Returns:
         A :class:`BacktestResult`.
@@ -175,7 +197,9 @@ def walk_forward(
         )
 
     cost_rate = cost_bps / 10_000.0
+    borrow_per_period = borrow_bps / 10_000.0 / periods_per_year
     net: list[float] = []
+    borrows: list[float] = []
     gross: list[float] = []
     dates: list[pd.Timestamp] = []
     weight_rows: dict[pd.Timestamp, Weights] = {}
@@ -197,11 +221,7 @@ def walk_forward(
         # to run it for real.
         start = max(0, i - 1 - lookback + 1) if lookback > 0 else 0
         window = returns.iloc[start:i]
-        if window.index[-1] != decision_date or window.index[-1] >= realisation_date:
-            raise RuntimeError(  # pragma: no cover - guards against a future refactor
-                f"lookahead detected: window ends {window.index[-1]}, decision "
-                f"{decision_date}, realisation {realisation_date}"
-            )
+        _check_no_lookahead(window, decision_date, realisation_date)
 
         trade_now = current is None or periods_since_trade >= rebalance_every
         if trade_now:
@@ -223,8 +243,10 @@ def walk_forward(
 
         period_returns = returns.iloc[i]
         gross_return = float((current * period_returns.reindex(current.index)).sum())
+        borrow = borrow_per_period * float(-current.clip(upper=0.0).sum())  # short exposure
         gross.append(gross_return)
-        net.append(gross_return - charge)
+        borrows.append(borrow)
+        net.append(gross_return - charge - borrow)
         dates.append(pd.Timestamp(realisation_date))
         current = _drift_weights(current, period_returns)
 
@@ -238,6 +260,27 @@ def walk_forward(
         costs=pd.Series(charges, name="cost"),
         leverage=pd.Series(leverages, name="leverage"),
         periods_per_year=periods_per_year,
+        borrow_costs=pd.Series(borrows, index=index, name="borrow"),
+    )
+
+
+def buy_and_hold(returns: pd.Series, name: str) -> BacktestResult:
+    """Wrap a single asset's returns as a buy-and-hold result, for benchmarking.
+
+    Bought once and never traded, so there is no turnover and no cost after entry. Pass
+    returns already restricted to the same dates as the strategies being compared.
+    """
+    clean = returns.dropna().astype(float).rename(name)
+    first = pd.Timestamp(clean.index[0])
+    return BacktestResult(
+        name=name,
+        returns=clean,
+        gross_returns=clean.copy(),
+        weights=pd.DataFrame({name: [1.0]}, index=[first]),
+        turnover=pd.Series({first: 0.0}, name="turnover"),
+        costs=pd.Series({first: 0.0}, name="cost"),
+        leverage=pd.Series({first: 1.0}, name="leverage"),
+        borrow_costs=pd.Series(0.0, index=clean.index, name="borrow"),
     )
 
 
@@ -248,6 +291,7 @@ def compare_strategies(
     rebalance_every: int = 1,
     cost_bps: float = 10.0,
     periods_per_year: float = 12.0,
+    borrow_bps: float = 0.0,
 ) -> dict[str, BacktestResult]:
     """Run the same walk-forward on several strategies over an identical sample.
 
@@ -264,6 +308,7 @@ def compare_strategies(
             rebalance_every=rebalance_every,
             cost_bps=cost_bps,
             periods_per_year=periods_per_year,
+            borrow_bps=borrow_bps,
         )
         for name, builder in builders.items()
     }
