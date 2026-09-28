@@ -8,8 +8,7 @@ market close, using daily bars) - it is NOT a continuously-running intraday
 loop. Re-running it when nothing has changed is a safe no-op.
 
 Usage:
-  cp .env.example .env        # fill in your paper keys
-  set -a; source .env; set +a
+  cp .env.example .env        # fill in your paper keys; bot.py loads it automatically
   python3 bot.py --symbol SPY --short 50 --long 200 --risk-fraction 0.20 --dry-run
   python3 bot.py --symbol SPY --short 50 --long 200 --risk-fraction 0.20   # actually submits orders
 """
@@ -18,8 +17,10 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import logging
+from pathlib import Path
 
 import pandas as pd
+from dotenv import load_dotenv
 
 from alpaca_client import AlpacaClient
 from strategy import compute_signal, position_size, decide_order, Signal
@@ -81,6 +82,9 @@ def main():
     p.add_argument("--dry-run", action="store_true", help="Compute the decision but don't submit any order")
     args = p.parse_args()
 
+    # Credentials live in .env (gitignored), never in code. Variables already set in the
+    # shell take precedence over the file.
+    load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
     client = AlpacaClient()
     run_once(client, args.symbol, args.short_window, args.long_window,
               args.risk_fraction, args.max_position_fraction, args.dry_run)
