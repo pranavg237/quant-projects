@@ -11,18 +11,24 @@ Five strategies run on it. Four lose to buying and holding the index, and
 
 ```bash
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m pytest              # 135 tests, 98% coverage, offline
+.venv/bin/python -m pytest              # 140 tests, 98% coverage, offline
 .venv/bin/ruff check . && .venv/bin/mypy    # both clean, mypy in strict mode
 .venv/bin/python scripts/run_ma_crossover.py
 .venv/bin/python scripts/ma_sensitivity.py     # parameter heatmap, ~15 s
 .venv/bin/python scripts/multiple_testing.py   # deflated Sharpe over all 63 trials, ~3 s
+.venv/bin/python scripts/run_strategies.py     # all five strategies, ~26 min
 ```
+
+Every script reads the committed data snapshot and runs offline; add `--live-data` to
+re-download instead.
 
 ## Results
 
 Out-of-sample walk-forward results, net of 5 bp slippage, 1 bp commission and short
 borrow fees. Parameters are re-chosen each year on the previous 5 years only. Data: Yahoo
-Finance daily bars through 2025-08-29, downloaded 2026-09-28. The benchmark is buy-and-hold
+Finance daily bars through 2025-08-29, downloaded 2026-09-28 and committed as a hash-checked
+snapshot in [data/snapshot-2026-09-28/](data/README.md), so every number here reproduces
+offline. The benchmark is buy-and-hold
 SPY over the same dates. `ma_crossover` starts in 2005, and the others start in 2010 after
 their first training window.
 
@@ -30,7 +36,7 @@ their first training window.
 |---|---|---|---|---|---|---|---|---|
 | SPY buy & hold (2010-2025) | 13.8% | 17.3% | **0.76** | 1.07 | -33.7% | 709 | 0.0 | 100% |
 | ma_crossover | 8.2% | 12.0% | **0.58** | 0.79 | -22.4% | 808 | 2.0 | 78% |
-| mean_reversion | 6.3% | 13.8% | **0.42** | 0.60 | -39.6% | 636 | 10.6 | 32% |
+| mean_reversion | 6.6% | 13.9% | **0.44** | 0.62 | -39.6% | 1,102 | 10.4 | 32% |
 | xsmom | 2.5% | 8.5% | **0.18** | 0.24 | -16.1% | 799 | 5.9 | 100% |
 | tsmom | 0.7% | 6.4% | **-0.06** | -0.08 | -19.9% | 2,051 | 3.8 | 91% |
 | pairs | 1.0% | 1.5% | **-0.17** | -0.24 | -3.8% | 2,291 | 4.7 | 14% |
@@ -41,8 +47,9 @@ Turnover is one-way, as a multiple of capital per year.
 a statistically significant Fama-French five-factor alpha** (every |t| < 2). The MA
 crossover's real contribution is a smaller drawdown than SPY over its own 2005-2025 window
 (-22% vs -55%), not extra return. [RESULTS.md](RESULTS.md) has the bootstrap intervals,
-probability of backtest overfitting and factor loadings, plus a reproducibility check
-that found one strategy moved after a data vendor re-adjustment.
+probability of backtest overfitting and factor loadings, plus a reproducibility check:
+`mean_reversion` flipped between two results on two same-day downloads, traced to a single
+exit decision whose z-score sat 4e-6 from its threshold.
 
 **The MA crossover's edge does not survive a correction for how much was tried.** Five
 strategies and 63 parameter configurations were tested in total. Its out-of-sample
@@ -211,7 +218,7 @@ quantbt/
   research/        the pipeline that produces RESULTS.md, the parameter-sensitivity
                    surface and the family-wide deflated Sharpe ratio
 scripts/           runnable entry points
-tests/             135 tests, including one per bias
+tests/             140 tests, including one per bias
 ```
 
 The vectorised implementation exists to check the engine: `scripts/verify_port.py` runs
@@ -233,5 +240,6 @@ borrow is a single flat rate per strategy, not a per-name, time-varying one, and
 no hard-to-borrow or recall model. The universes are built from instruments that exist
 today, so the
 cross-sectional stock results are an upper bound. Yahoo Finance is the only data source
-and it silently revises history; results are tied to the snapshot recorded in
-`data/cache/MANIFEST.json`.
+and it silently revises history. Every reported number is computed from the committed
+snapshot in `data/snapshot-2026-09-28/`; `--live-data` re-downloads, and the results will
+then drift.

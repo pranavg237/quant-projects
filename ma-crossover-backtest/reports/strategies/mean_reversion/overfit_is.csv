@@ -1,12 +1,12 @@
 ,0
-sharpe,0.5107763592993158
-sharpe_se_annual,0.2576862984942396
-psr,0.976269524335166
-dsr,0.8600713708079113
+sharpe,0.5067945445657781
+sharpe_se_annual,0.2576349296668414
+psr,0.9754143539676181
+dsr,0.8578380816809608
 n_trials,18
-min_track_record_periods,2712.7603304834956
-bootstrap_ci_lo,0.06108839688459504
-bootstrap_ci_hi,1.0891864019707198
+min_track_record_periods,2754.441475437403
+bootstrap_ci_lo,0.0574887028893245
+bootstrap_ci_hi,1.0851534876447835
 bootstrap_p_sharpe_le_0,0.012
-pbo,0.7084693084693084
+pbo,0.7121989121989122
 flags,DSR 0.86 < 0.95 after 18 trials: likely selection effect; PBO 0.71 > 0.5: in-sample best is usually below median OOS

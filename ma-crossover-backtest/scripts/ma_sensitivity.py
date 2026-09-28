@@ -32,7 +32,7 @@ from matplotlib.colors import TwoSlopeNorm
 from matplotlib.patches import Rectangle
 
 from quantbt import metrics
-from quantbt.data import load_yahoo
+from quantbt.data import add_live_data_flag, load_yahoo, use_live_data
 from quantbt.research.runner import load_rf
 from quantbt.research.sensitivity import ma_sharpe_grid, surface_summary
 from quantbt.validation import sharpe_std_error
@@ -48,7 +48,9 @@ def main() -> None:
     parser.add_argument("--start", default="2005-01-01")
     parser.add_argument("--end", default="2025-08-29")
     parser.add_argument("--out", default="reports/sensitivity")
+    add_live_data_flag(parser)
     args = parser.parse_args()
+    use_live_data(args.live_data)
     t0 = time.time()
 
     data_start = "1998-01-01"  # enough warm-up for a 300-day MA before 2005
@@ -61,15 +63,13 @@ def main() -> None:
     bench_sharpe = metrics.sharpe(bench, rf=rf.reindex(bench.index).fillna(0.0))
 
     # Cross-check against the event-driven engine's full-sample grid for the 17 points
-    # the walk-forward searches (reports/strategies/ma_crossover/grid.csv). On identical
-    # data the two implementations agree to ~1e-15; the committed grid.csv was built from
-    # an earlier download of the same dates, and Yahoo's re-adjustments move Sharpe in
-    # the 6th decimal, hence the tolerance.
+    # the walk-forward searches (reports/strategies/ma_crossover/grid.csv). Both read the
+    # same snapshot, so the two implementations must agree to floating-point precision.
     engine = pd.read_csv(WF_DIR / "grid.csv").rename(columns={"short": "fast", "long": "slow"})
     merged = engine.merge(table, on=["fast", "slow"], suffixes=("_engine", "_vec"))
     diff = float((merged["sharpe_engine"] - merged["sharpe_vec"]).abs().max())
     print(f"engine vs vectorised Sharpe on the {len(merged)} shared points: max |diff| {diff:.1e}")
-    if len(merged) != len(engine) or diff > 1e-5:
+    if len(merged) != len(engine) or diff > 1e-9:
         raise SystemExit("vectorised grid does not reproduce the engine's grid.csv")
 
     folds = pd.read_csv(WF_DIR / "folds.csv")

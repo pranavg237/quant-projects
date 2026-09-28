@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from quantbt import metrics
-from quantbt.data import load_yahoo
+from quantbt.data import add_live_data_flag, load_yahoo, use_live_data
 from quantbt.research.multiple_testing import collect_trials, dsr_row, dsr_sensitivity
 from quantbt.research.runner import load_rf
 from quantbt.validation import sharpe_std_error
@@ -44,7 +44,9 @@ def main() -> None:
     parser.add_argument("--root", default="reports/strategies")
     parser.add_argument("--end", default="2025-08-29")
     parser.add_argument("--out", default="reports/multiple_testing")
+    add_live_data_flag(parser)
     args = parser.parse_args()
+    use_live_data(args.live_data)
     t0 = time.time()
     root = Path(args.root)
 

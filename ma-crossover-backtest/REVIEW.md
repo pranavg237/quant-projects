@@ -199,7 +199,7 @@ will get a silently wrong answer.
 accumulate. `mean_reversion` and `pairs` only trade when the target *set* changes, so an
 open position drifts away from its nominal weight between signals. Both are defensible and
 both are documented, but they are not the same policy, and comparing turnover across the two
-groups compares slightly different things. `mean_reversion`'s 10.3x turnover would be higher
+groups compares slightly different things. `mean_reversion`'s 10.4x turnover would be higher
 still under the drift-correcting policy, which makes it the strategy most sensitive to the
 choice.
 
@@ -214,10 +214,19 @@ but it is a reproducibility trap.
 ### J. One data vendor, and it revises history
 
 Everything comes from Yahoo Finance, which restates splits, dividends and adjusted closes
-without notice, and which withdrew a symbol's entire history mid-project. `data/cache/MANIFEST.json`
-records the snapshot dates, which makes the results reproducible from the cache but not
+without notice, and which withdrew a symbol's entire history mid-project. The inputs are
+now frozen: `data/snapshot-2026-09-28/` holds every price and factor file the pipeline reads,
+with a sha256 per file, and the loaders read it by default and refuse to download. That makes
+every number reproducible offline, bit for bit across two full reruns. It does not make them
 independently verifiable. A second source (Stooq, Tiingo, a vendor file) reconciled against
 the first is the standard defence and is not implemented.
+
+The snapshot also exposed how fragile one result is. `mean_reversion` gave Sharpe 0.42 on
+one download and 0.44 on another, from a single exit decision whose z-score was +3.9e-6
+against a threshold of 0 (XLE, 2021-04-27). Noise at Yahoo's float32 precision (about 6e-8)
+is enough to flip it. A strategy whose reported Sharpe moves by 0.02 on a
+seventh-significant-digit change in one price is reporting its own noise floor, and the
+0.02 is a floor on how uncertain its number really is.
 
 ### K. Annualisation is not identical in every metric
 

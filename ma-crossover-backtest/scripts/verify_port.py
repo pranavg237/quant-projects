@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import argparse
+
 import numpy as np
 import pandas as pd
 
-from quantbt.data import load_yahoo
+from quantbt.data import add_live_data_flag, load_yahoo, use_live_data
 from quantbt.engine import run_backtest
 from quantbt.execution import ExecutionSimulator, FixedBpsSlippage, PercentageCommission
 from quantbt.strategies import MACrossover
@@ -13,6 +15,9 @@ from quantbt.vectorized import backtest_ma_crossover
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_live_data_flag(parser)
+    use_live_data(parser.parse_args().live_data)
     start, end, short, long = "2018-01-01", "2023-12-31", 50, 200
     data = load_yahoo("SPY", start=pd.Timestamp(start) - pd.offsets.BDay(long + 10), end=end)
     vec = backtest_ma_crossover(
