@@ -21,9 +21,17 @@ Every pricer is cross-checked against an independently derived one, every chart 
 
 ```bash
 pip install -r requirements.txt
-python scripts/run_analysis.py --ticker SPY     # ~3 min; caches to data/, writes figures/ and results/
-pytest --cov=src/optpricing                     # 373 tests, 99% coverage
+python scripts/run_analysis.py     # ~4 min, offline from the committed SPY snapshot; writes figures/ and results/
+python -m pytest                   # 339 tests, 99% branch coverage, offline
 ```
+
+**Data behind every market number below:** one SPY option chain captured from Yahoo
+Finance at 11:09 ET on 2026-09-18 (spot 759.87, 4,469 quotes, 12 expiries from 5 days to
+21 months), and that day's Treasury curve. Both are committed in `data/snapshots/`.
+
+**This is a pricing and calibration project, not a trading strategy**, so there is no
+Sharpe ratio, drawdown, turnover or buy-and-hold comparison to report. The results are
+pricing errors and model-fit errors, in vol points.
 
 ---
 
@@ -166,7 +174,7 @@ Variance reduction at matched effective sample counts:
 | **both** | **0.00434** | **57.4×** |
 | arithmetic Asian, geometric control | 0.00055 vs 0.01326 | **576×** (ρ = 0.9991) |
 
-The American put on the same parameters is worth **6.0900**, a **0.5173** early-exercise premium over the European. With no dividends, the American *call* matches the European to 1e-10 — as it must, since early exercise is never optimal.
+The American put on the same parameters is worth **6.0909** (3,001-step CRR tree), a **0.5173** early-exercise premium over the Black-Scholes European put. With no dividends, the American *call* matches the European call on the same tree to 1e-10 — as it must, since early exercise is never optimal.
 
 Heston is validated three ways: the Black-Scholes limit ($\xi \to 0$) to **1e-9**, Gil-Pelaez against Lewis' single-integral form to **1e-8**, and against a full-truncation Euler Monte Carlo to within one standard error across strikes.
 
@@ -280,7 +288,7 @@ src/optpricing/
   style.py         One validated chart palette
   plotting.py      Every figure in this README
 scripts/run_analysis.py   Full pipeline
-tests/                    373 tests, 99% statement + branch coverage
+tests/                    339 tests, 99% statement + branch coverage
 data/snapshots/           Committed SPY chain so results reproduce offline
 ```
 
@@ -290,12 +298,15 @@ data/snapshots/           Committed SPY chain so results reproduce offline
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-python scripts/run_analysis.py --ticker SPY          # uses the cache; --refresh to re-download
-python scripts/run_analysis.py --ticker QQQ --refresh
+python scripts/run_analysis.py --ticker SPY          # uses the most recent cached chain
+python scripts/run_analysis.py --ticker QQQ --refresh  # downloads a live chain (use during market hours)
 
-pytest -q                                            # full suite
-pytest -q --cov=src/optpricing --cov-report=term-missing
+python -m pytest                                     # full suite
+python -m pytest --cov=optpricing --cov-branch --cov-report=term-missing
 ruff check src tests scripts && mypy src scripts
 ```
 
-The first run downloads and caches an option chain under `data/raw/`. Every later run reads the cache, so results are reproducible after the market has moved. A committed snapshot in `data/snapshots/` means the tests and the analysis run with no network at all.
+Without `--refresh` the analysis always uses the most recent cached chain, and the rate
+curve from the same day, so results do not change with the date you run it. With
+`--refresh` it downloads a live chain into `data/raw/`. On a weekend or overnight most live
+quotes are one-sided and get cleaned out, so refresh during market hours.
