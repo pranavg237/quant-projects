@@ -334,7 +334,9 @@ def plot_sensitivity(sweep: pd.DataFrame, labels: dict[str, str] | None = None) 
                 ax.set_xscale("log")
                 # Label every other swept value in plain numbers, not 2x10^0 notation.
                 ax.set_xticks(grid[::2])
-                ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:.2g}"))
+                ax.xaxis.set_major_formatter(
+                    FuncFormatter(lambda v, _: f"{v:.0f}" if v >= 10 else f"{v:.2g}")
+                )
                 ax.xaxis.set_minor_formatter(NullFormatter())
             for policy in policies:
                 sub = block[block["policy"] == policy].sort_values("value")

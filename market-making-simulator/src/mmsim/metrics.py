@@ -323,21 +323,27 @@ def fill_markouts(
     truncated at the last step: truncating would mix horizons and quietly shrink the
     long-horizon markouts of late fills.
 
+    ``inventory_effect`` says whether the fill moved the position towards zero
+    (``"reduces"``) or away from it (``"adds"``, including a fill from a flat position),
+    judged against the inventory at the start of the step. Two fills in the same step are
+    both judged against that same starting inventory.
+
     Args:
         result: A run from :func:`~mmsim.engine.simulate_book`.
         horizons: Markout horizons, in steps.
         tick_size: Used to express edge and markouts in ticks.
 
     Returns:
-        Columns ``step``, ``side``, ``counterparty``, ``size``, ``edge_ticks`` and one
-        ``markout_{h}_ticks`` per horizon. Empty if the run had no fills.
+        Columns ``step``, ``side``, ``counterparty``, ``inventory_effect``, ``size``,
+        ``edge_ticks`` and one ``markout_{h}_ticks`` per horizon. Empty if the run had no
+        fills.
 
     Raises:
         ValueError: if the run's fills are not step-indexed (i.e. from the reference
             engine).
     """
     fills = result.fill_prices
-    columns = ["step", "side", "counterparty", "size", "edge_ticks"] + [
+    columns = ["step", "side", "counterparty", "inventory_effect", "size", "edge_ticks"] + [
         f"markout_{h}_ticks" for h in horizons
     ]
     if fills.empty:
@@ -361,6 +367,7 @@ def fill_markouts(
                 if "counterparty" in fills.columns
                 else np.full(steps.size, "unknown")
             ),
+            "inventory_effect": np.where(sign * result.inventory[steps] < 0, "reduces", "adds"),
             "size": (
                 fills["size"].to_numpy(dtype=np.float64)
                 if "size" in fills.columns
@@ -403,12 +410,14 @@ def markout_decomposition(
     runs: dict[str, list[SimulationResult]],
     horizons: tuple[int, ...] = (1, 5, 20, 100),
     tick_size: float = 0.01,
+    by: str = "counterparty",
+    where: dict[str, str] | None = None,
 ) -> pd.DataFrame:
-    r"""Realised spread and adverse-selection cost, by policy, counterparty and horizon.
+    r"""Realised spread and adverse-selection cost, by policy, fill group and horizon.
 
-    For every policy, every counterparty type (``informed``, ``uninformed`` and ``all``)
-    and every horizon :math:`h`, reports size-weighted **per-unit** averages over fills
-    (see :func:`fill_markouts`):
+    For every policy, every group of fills (by default the counterparty type:
+    ``informed``, ``uninformed``, and ``all``) and every horizon :math:`h`, reports
+    size-weighted **per-unit** averages over fills (see :func:`fill_markouts`):
 
     * ``edge_ticks``: spread earned at the fill, against the mid quoted against;
     * ``markout_ticks``: signed mid move :math:`h` steps later;
@@ -426,15 +435,24 @@ def markout_decomposition(
         runs: Book-engine runs keyed by policy name, e.g. ``ComparisonResult.runs``.
         horizons: Markout horizons, in steps.
         tick_size: Price units per tick.
+        by: The :func:`fill_markouts` column to group fills by, e.g. ``"counterparty"`` or
+            ``"inventory_effect"``. An ``"all"`` group is always added.
+        where: Optional ``{column: value}`` filter applied before grouping, e.g.
+            ``{"counterparty": "uninformed"}``.
 
     Returns:
-        One row per ``(policy, counterparty, horizon)``.
+        One row per ``(policy, group, horizon)``; the group is in a column named ``by``.
     """
     rows: list[dict[str, float | str]] = []
     for policy, results in runs.items():
         per_run = [fill_markouts(r, horizons, tick_size) for r in results]
+        if where:
+            for column, value in where.items():
+                per_run = [f[f[column] == value] for f in per_run]
         n_sessions = max(len(per_run), 1)
-        for counterparty in ("informed", "uninformed", "all"):
+        found = sorted({str(v) for f in per_run for v in f[by].unique()})
+        groups = ["informed", "uninformed"] if by == "counterparty" else found
+        for group in [*groups, "all"]:
             for h in horizons:
                 col = f"markout_{h}_ticks"
                 size_sum = np.zeros(len(per_run))
@@ -445,8 +463,8 @@ def markout_decomposition(
                     if frame.empty:
                         continue
                     keep = frame[col].notna().to_numpy()
-                    if counterparty != "all":
-                        keep = keep & (frame["counterparty"] == counterparty).to_numpy()
+                    if group != "all":
+                        keep = keep & (frame[by] == group).to_numpy()
                     size = frame["size"].to_numpy(dtype=np.float64)[keep]
                     size_sum[j] = size.sum()
                     edge_sum[j] = float(np.sum(size * frame["edge_ticks"].to_numpy()[keep]))
@@ -459,7 +477,7 @@ def markout_decomposition(
                 rows.append(
                     {
                         "policy": policy,
-                        "counterparty": counterparty,
+                        by: group,
                         "horizon": float(h),
                         "n_sessions": float(len(per_run)),
                         "n_fills": float(n_fills),

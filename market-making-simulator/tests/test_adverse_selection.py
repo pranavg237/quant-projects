@@ -96,6 +96,30 @@ def test_markout_decomposition_by_hand() -> None:
     assert row.loc["all", "markout_ticks_se"] == pytest.approx(0.0, abs=1e-12)
 
 
+def test_split_by_inventory_effect_by_hand() -> None:
+    """The buy from flat adds to the position; the sell while long 1.0 reduces it."""
+    run = _hand_built_run()
+    frame = fill_markouts(run, horizons=(1,), tick_size=0.01)
+    assert list(frame["inventory_effect"]) == ["adds", "reduces"]
+
+    table = markout_decomposition(
+        {"hand": [run, run]}, horizons=(1,), tick_size=0.01, by="inventory_effect"
+    ).set_index("inventory_effect")
+    assert list(table.index) == ["adds", "reduces", "all"]
+    assert table.loc["reduces", "markout_ticks"] == pytest.approx(1.0)
+    assert table.loc["adds", "markout_ticks"] == pytest.approx(-2.0)
+
+    only_uninformed = markout_decomposition(
+        {"hand": [run]},
+        horizons=(1,),
+        tick_size=0.01,
+        by="inventory_effect",
+        where={"counterparty": "uninformed"},
+    ).set_index("inventory_effect")
+    assert list(only_uninformed.index) == ["reduces", "all"]
+    assert only_uninformed.loc["all", "volume_per_session"] == pytest.approx(0.5)
+
+
 def test_counterparty_is_recorded_on_every_book_fill(
     quiet_flow: FlowConfig, informed_flow: FlowConfig, market: MarketConfig
 ) -> None:

@@ -391,6 +391,34 @@ def main() -> int:
     )
     results["markout_decomposition"] = decomposition.to_dict(orient="records")
 
+    # Where does the policy difference in adverse selection come from? Split the
+    # *uninformed* fills by whether they unwound the position or added to it.
+    unwind = markout_decomposition(
+        book_comparison.runs,
+        (20, 100),
+        tick_size=market.tick_size,
+        by="inventory_effect",
+        where={"counterparty": "uninformed"},
+    )
+    print("\n  Uninformed fills only, split by whether the fill reduced |inventory|:")
+    print(
+        "  "
+        + unwind[
+            [
+                "policy",
+                "inventory_effect",
+                "horizon",
+                "volume_per_session",
+                "markout_ticks",
+                "markout_ticks_se",
+                "adverse_selection_pnl_per_session",
+            ]
+        ]
+        .to_string(index=False, float_format=lambda x: f"{x:8.3f}")
+        .replace("\n", "\n  ")
+    )
+    results["markout_uninformed_by_inventory_effect"] = unwind.to_dict(orient="records")
+
     _banner("6. Parameter sensitivity, three policies, with standard errors")
 
     def reference_policies(model: AvellanedaStoikovParams) -> list[Any]:
@@ -431,7 +459,7 @@ def main() -> int:
     def build_informed(value: float) -> tuple[list[Any], SessionRunner]:
         # Informed flow only exists in the book world. sigma, A and kappa are re-estimated
         # from the book at each informed fraction, as a desk would re-fit them.
-        cfg = FlowConfig(informed_fraction=value, info_impact_ticks=2.0)
+        cfg = FlowConfig(informed_fraction=value, info_impact_ticks=flow.info_impact_ticks)
         local, _, _ = fit_as_params_to_book(
             cfg, market, gamma=0.5, risk_horizon=0.1, n_steps=2500, seed=2
         )
@@ -512,7 +540,7 @@ def main() -> int:
     adverse_frame = pd.DataFrame(
         {
             "informed_fraction": informed["value"],
-            "expected_cost_ticks": informed["value"] * 2.0,
+            "expected_cost_ticks": informed["value"] * flow.info_impact_ticks,
             "policy": informed["policy"],
             "mean_pnl": informed["mean_pnl"],
             "mean_pnl_se": informed["mean_pnl_se"],
@@ -531,7 +559,16 @@ def main() -> int:
     decomposition.to_csv(
         args.results / "markout_decomposition.csv", index=False, float_format="%.6g"
     )
-    for name in ("sensitivity.csv", "markout_decomposition.csv"):
+    unwind.to_csv(
+        args.results / "markout_uninformed_by_inventory_effect.csv",
+        index=False,
+        float_format="%.6g",
+    )
+    for name in (
+        "sensitivity.csv",
+        "markout_decomposition.csv",
+        "markout_uninformed_by_inventory_effect.csv",
+    ):
         print(f"  wrote {_shown(args.results / name)}")
     print(f"  wrote {_shown(args.results / 'results.json')}")
     return 0
