@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "portopt"
+version = "1.0.0"
+description = "Portfolio construction: Markowitz, Ledoit-Wolf, risk parity, HRP and Black-Litterman, walk-forward tested."
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pandas>=2.1",
+    "matplotlib>=3.8",
+    "yfinance>=0.2.40",
+    "scikit-learn>=1.4",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "ARG", "PL", "RUF", "ANN"]
+ignore = [
+    "PLR0913",  # optimiser signatures legitimately take many arguments
+    "PLR0917",
+    "PLR2004",  # magic numbers are common in numerical code
+    "ANN401",   # Any is occasionally needed for **kwargs passthrough
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests set the Matplotlib backend before importing pyplot (E402), import inside
+# functions to keep fixtures lazy (PLC0415), use bare lambdas in parametrize (PLW0108),
+# and define stub doubles whose signatures must mirror the real API even where an
+# argument is ignored (ARG002/ARG005, RUF012).
+"tests/*" = [
+    "PLR2004", "ANN201", "ANN001", "ANN202", "ARG001", "ARG002", "ARG005",
+    "E402", "PLC0415", "PLW0108", "RUF012",
+]
+"scripts/*" = ["T201", "PLR0915"]
+
+[tool.mypy]
+# No `python_version` pin: numpy>=2.3 ships stubs that use PEP 695 `type` statements,
+# which mypy refuses to parse when targeting < 3.12. The package itself is 3.11-compatible.
+strict = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+plugins = []
+mypy_path = "src"
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["yfinance.*", "scipy.*", "matplotlib.*", "pandas.*", "sklearn.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "network: tests that require live network access (deselected by default)",
+    "slow: long-running convergence tests",
+]
+
+[tool.coverage.run]
+source = ["src/portopt"]
+branch = true
+omit = ["*/plotting.py"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]
