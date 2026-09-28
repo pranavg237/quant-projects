@@ -1,8 +1,17 @@
 # Changes
 
-What changed in this round, and why, in plain language. Each item says what was wrong,
-what I did about it, and what it changed. The audit that led to these is in
-[PLAN.md](PLAN.md). The git log has one commit per item.
+What changed, and why, in plain language. Each item says what was wrong, what I did about
+it, and what it changed. The plans behind both rounds are in [PLAN.md](PLAN.md).
+
+- [Round 2](#round-2-from-correct-and-tested-to-shows-quant-judgment): deepen every project.
+- [Round 1](#round-1-make-everything-run-test-and-report-honestly): make everything run,
+  test and report honestly.
+
+ROUND2_PLACEHOLDER
+
+---
+
+# Round 1: make everything run, test and report honestly
 
 ## The short version
 
@@ -128,6 +137,11 @@ point estimates, and the answer was that nothing beats equal weight with confide
 **Result.** Four of the five strategies reproduced to at least five significant figures.
 `mean_reversion` moved: Sharpe 0.44 → 0.42, and its longest drawdown went from 1,102 to
 636 days.
+
+> **Corrected in round 2:** the explanation below was wrong. The move comes from a single
+> exit decision sitting on a knife-edge (XLE's z-score was 0.0000039 above zero on
+> 2021-04-27), so seventh-digit noise between downloads flips it. See the round 2
+> ma-crossover-backtest section.
 
 **Why, as far as I could tell.** Five of the ETFs it trades split 2-for-1 on 2025-12-05,
 after the original download, so Yahoo re-adjusted their whole price history. The strategy's
