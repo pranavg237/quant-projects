@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantbt"
+version = "0.2.0"
+description = "Event-driven backtesting framework with bias safeguards, walk-forward validation, bootstrap tests and Fama-French factor attribution"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "scipy>=1.11",
+    "statsmodels>=0.14",
+    "matplotlib>=3.8",
+    "requests>=2.31",
+    "yfinance>=0.2.40",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "mypy>=1.10",
+    "ruff>=0.5",
+    "pandas-stubs",
+    "types-requests",
+]
+
+[tool.setuptools]
+packages = ["quantbt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --cov=quantbt --cov-report=term-missing --cov-fail-under=80"
+filterwarnings = [
+    "error::FutureWarning:quantbt",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["quantbt"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "if __name__ == .__main__.:"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "N", "SIM", "RUF", "ANN"]
+ignore = ["ANN401", "RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]
+"scripts/*" = ["ANN"]
+# The tearsheet embeds a CSS stylesheet and a hover script as string literals; wrapping
+# those to 100 columns would hurt them more than it helps.
+"quantbt/report/tearsheet.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+plugins = []
+files = ["quantbt", "scripts", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["yfinance", "yfinance.*", "statsmodels", "statsmodels.*", "scipy", "scipy.*", "matplotlib", "matplotlib.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+check_untyped_defs = true

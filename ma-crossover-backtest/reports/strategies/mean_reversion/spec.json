@@ -1,0 +1,43 @@
+{
+  "name": "mean_reversion",
+  "description": "Buy sector/index ETFs more than entry_z standard deviations below their window-day mean, exit at the mean; long only.",
+  "symbols": [
+    "XLB",
+    "XLE",
+    "XLF",
+    "XLI",
+    "XLK",
+    "XLP",
+    "XLU",
+    "XLV",
+    "XLY",
+    "SPY",
+    "QQQ",
+    "IWM"
+  ],
+  "grid": {
+    "window": [
+      10,
+      20,
+      40
+    ],
+    "entry_z": [
+      1.5,
+      2.0,
+      2.5
+    ],
+    "max_positions": [
+      3,
+      5
+    ]
+  },
+  "start": "2005-01-01",
+  "end": "2025-08-29",
+  "benchmark": "SPY",
+  "borrow_rate": 0.0,
+  "train_years": 5.0,
+  "test_years": 1.0,
+  "caveats": [
+    "ETF list chosen today (selection bias)."
+  ]
+}

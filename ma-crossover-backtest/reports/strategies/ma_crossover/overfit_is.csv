@@ -1,0 +1,12 @@
+,0
+sharpe,0.6756256162832117
+sharpe_se_annual,0.2244373479115474
+psr,0.9986950869237432
+dsr,0.9918502448722578
+n_trials,17
+min_track_record_periods,1552.6196532663166
+bootstrap_ci_lo,0.2767473599749537
+bootstrap_ci_hi,1.1075905960650765
+bootstrap_p_sharpe_le_0,0.002
+pbo,0.5425796425796425
+flags,PBO 0.54 > 0.5: in-sample best is usually below median OOS
