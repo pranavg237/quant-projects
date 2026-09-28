@@ -47,6 +47,36 @@ def test_a_lookahead_strategy_cannot_profit() -> None:
     assert abs(result.returns.mean()) < 0.02
 
 
+@pytest.mark.parametrize("cut", [30, 41])
+def test_future_data_cannot_change_past_weights(returns: pd.DataFrame, cut: int) -> None:
+    # The strongest form of the no-lookahead check, run on every strategy in the comparison
+    # set: overwrite every return *after* a decision date with garbage (large, random, and
+    # with a different mean and scale per asset) and re-run the whole walk-forward. Every
+    # weight chosen on or before that date must be bit-for-bit unchanged, and so must every
+    # net return realised on or before it. Any estimator that touched a future row --
+    # a full-sample mean, a centred rolling window, a global normalisation -- would move.
+    rng = np.random.default_rng(cut)
+    returns = returns.iloc[: cut + 6]  # a few periods past the cut is all the check needs
+    poisoned = returns.copy()
+    poisoned.iloc[cut + 1 :] = rng.normal(0.5, 3.0, size=poisoned.iloc[cut + 1 :].shape)
+    decision_date = returns.index[cut]
+    for name, builder in st.default_strategies(12.0).items():
+        clean = bt.walk_forward(returns, builder, name, lookback=24)
+        dirty = bt.walk_forward(poisoned, builder, name, lookback=24)
+        pd.testing.assert_frame_equal(
+            clean.weights.loc[:decision_date], dirty.weights.loc[:decision_date], obj=name
+        )
+        pd.testing.assert_series_equal(
+            clean.returns.loc[:decision_date], dirty.returns.loc[:decision_date], obj=name
+        )
+        # ...and the poison does reach later decisions, so the check is not vacuous. 1/N
+        # and no-view Black-Litterman (which reproduces fixed market weights) ignore the
+        # data by construction, so their weights never move.
+        if clean.weights.std().max() > 1e-4:
+            later = returns.index[cut + 2]
+            assert not np.allclose(clean.weights.loc[later], dirty.weights.loc[later]), name
+
+
 def test_weights_drift_and_turnover_is_measured_against_drifted_weights() -> None:
     returns = _panel([[0.0, 0.0], [0.0, 0.0], [0.10, -0.10], [0.0, 0.0]])
     result = bt.walk_forward(returns, bt.equal_weight_builder, "1/N", lookback=2, cost_bps=100.0)
