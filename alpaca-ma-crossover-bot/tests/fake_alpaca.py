@@ -65,7 +65,7 @@ class FakeAlpacaServer:
         dates = pd.bdate_range(end=pd.Timestamp(last_bar), periods=len(closes))
         # Alpaca stamps daily bars at midnight New York time (04:00 UTC in summer).
         self.bars: list[dict] = [{"t": f"{d.date()}T04:00:00Z", "c": float(c)}
-                                 for d, c in zip(dates, closes)]
+                                 for d, c in zip(dates, closes, strict=True)]
         self.account: dict[str, Any] = {
             "status": status, "trading_blocked": False, "equity": str(equity),
             "last_equity": str(equity if last_equity is None else last_equity),
@@ -161,7 +161,9 @@ class FakeAlpacaServer:
             return FakeResponse(404, {"code": 40410000, "message": "order not found"})
         if method == "GET" and path.startswith("/v2/orders/"):
             order = self.orders.get(path.rsplit("/", 1)[1])
-            return FakeResponse(200, order) if order else FakeResponse(404, {"code": 40410000, "message": "order not found"})
+            if order is None:
+                return FakeResponse(404, {"code": 40410000, "message": "order not found"})
+            return FakeResponse(200, order)
         if method == "POST" and path == "/v2/orders":
             return self._submit(body or {})
         return FakeResponse(404, {"message": f"no route {method} {path}"})
