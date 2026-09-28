@@ -23,7 +23,9 @@ CSV input is expected to follow the same convention (see ``PriceData.from_frames
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import time
 import warnings
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -35,6 +37,9 @@ import numpy as np
 import pandas as pd
 
 DEFAULT_CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "cache"
+# The committed, frozen inputs every reported number is produced from (see data/README.md).
+SNAPSHOT_DIR = Path(__file__).resolve().parent.parent / "data" / "snapshot-2026-09-28"
+LIVE_DATA_ENV = "QUANTBT_LIVE_DATA"
 PRICE_FIELDS: tuple[str, ...] = ("open", "high", "low", "close", "volume")
 ALL_FIELDS: tuple[str, ...] = (
     *PRICE_FIELDS,
@@ -162,7 +167,8 @@ class PriceData:
     def from_frames(cls, frames: Mapping[str, pd.DataFrame]) -> PriceData:
         """Build from ``{symbol: DataFrame}`` where each frame has Yahoo-style columns.
 
-        Required: ``Open High Low Close Volume``. Optional: ``Adj Close`` (used directly if
+        Required: ``Open Close Volume``; ``High``/``Low`` load as NaN if absent. Optional:
+        ``Adj Close`` (used directly if
         present), ``Dividends`` and ``Stock Splits`` (used to derive the adjustment when
         ``Adj Close`` is absent, and to reconstruct as-traded prices). ``Close`` is assumed
         split-adjusted, as Yahoo publishes it. Dates are outer-joined across symbols.
@@ -207,9 +213,14 @@ def _adjust_one(raw: pd.DataFrame) -> dict[str, pd.Series]:
     if isinstance(frame.columns, pd.MultiIndex):
         frame.columns = frame.columns.get_level_values(0)
     frame.columns = [str(c) for c in frame.columns]
-    missing = [c for c in ("Open", "High", "Low", "Close", "Volume") if c not in frame.columns]
+    missing = [c for c in ("Open", "Close", "Volume") if c not in frame.columns]
     if missing:
         raise DataError(f"missing columns {missing}; have {list(frame.columns)}")
+    for column in ("High", "Low"):
+        if column not in frame.columns:
+            # The committed snapshot omits High/Low because no code reads them; they load
+            # as NaN, and Context.history refuses to serve an all-NaN field.
+            frame[column] = np.nan
     frame.index = normalize_index(frame.index)
     frame = frame.dropna(subset=["Close"])
     close = frame["Close"].astype(float)
@@ -351,6 +362,12 @@ def load_yahoo(
 ) -> PriceData:
     """Load daily bars for ``symbols`` from Yahoo Finance, caching the raw download.
 
+    **By default this reads the committed snapshot** (:data:`SNAPSHOT_DIR`) and never
+    touches the network, so every reported number reproduces offline. Live downloads
+    happen only when :func:`use_live_data` was called (the scripts' ``--live-data`` flag),
+    the ``QUANTBT_LIVE_DATA=1`` environment variable is set, or a ``cache_dir``,
+    ``downloader`` or ``refresh`` is passed explicitly.
+
     The cache holds each symbol's full history, so changing ``start``/``end`` never
     triggers a download. ``end`` is inclusive. Pass a ``downloader`` to substitute
     another source (tests use a synthetic one).
@@ -358,10 +375,114 @@ def load_yahoo(
     symbol_list = [symbols] if isinstance(symbols, str) else list(symbols)
     if not symbol_list:
         raise DataError("no symbols requested")
+    if cache_dir is None and downloader is None and not refresh and not live_data_enabled():
+        return load_snapshot(symbol_list, start, end)
     cache = Path(cache_dir) if cache_dir is not None else DEFAULT_CACHE_DIR
     fetch = downloader or yahoo_downloader
     needed_end = pd.Timestamp(end) if end is not None else None
     frames = {s: _cached_frame(s, cache, refresh, fetch, needed_end) for s in symbol_list}
+    return PriceData.from_frames(frames).slice(start, end)
+
+
+# ---------------------------------------------------------------------------------
+# The committed snapshot
+# ---------------------------------------------------------------------------------
+
+_LIVE: dict[str, bool] = {"enabled": False}
+
+
+def use_live_data(enabled: bool = True) -> None:
+    """Switch :func:`load_yahoo` and the French loader between the snapshot and live data."""
+    _LIVE["enabled"] = enabled
+
+
+def add_live_data_flag(parser: Any) -> None:
+    """Add the scripts' shared ``--live-data`` switch to an ``argparse`` parser."""
+    parser.add_argument(
+        "--live-data",
+        action="store_true",
+        help="download from Yahoo and Ken French (into data/cache/) instead of reading the "
+        "committed snapshot; results will then differ from the committed ones",
+    )
+
+
+def live_data_enabled() -> bool:
+    return _LIVE["enabled"] or os.environ.get(LIVE_DATA_ENV, "") == "1"
+
+
+def snapshot_manifest(snapshot_dir: str | Path | None = None) -> dict[str, Any]:
+    """The snapshot's MANIFEST.json (source, dates, and a sha256 for every file)."""
+    root = Path(snapshot_dir) if snapshot_dir is not None else SNAPSHOT_DIR
+    path = root / "MANIFEST.json"
+    if not path.exists():
+        raise DataError(
+            f"no snapshot manifest at {path}; restore data/ from git or pass --live-data"
+        )
+    loaded: dict[str, Any] = json.loads(path.read_text())
+    return loaded
+
+
+def sha256_file(path: str | Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def snapshot_file(relative: str, snapshot_dir: str | Path | None = None) -> Path:
+    """Path of a file inside the snapshot, checked against the manifest's sha256.
+
+    Raises :class:`DataError` if the file is not in the manifest, is missing on disk or
+    does not match its recorded hash, so a silently edited input cannot produce a number.
+    """
+    root = Path(snapshot_dir) if snapshot_dir is not None else SNAPSHOT_DIR
+    files: dict[str, Any] = snapshot_manifest(root)["files"]
+    if relative not in files:
+        raise DataError(
+            f"{relative} is not in the snapshot at {root}; the snapshot only holds what the "
+            "committed scripts read. Pass --live-data (or set QUANTBT_LIVE_DATA=1) to download."
+        )
+    path = root / relative
+    if not path.exists():
+        raise DataError(f"snapshot file missing: {path}")
+    digest = sha256_file(path)
+    if digest != files[relative]["sha256"]:
+        raise DataError(f"snapshot file {path} does not match its manifest sha256")
+    return path
+
+
+def load_snapshot(
+    symbols: Sequence[str],
+    start: str | pd.Timestamp | None = None,
+    end: str | pd.Timestamp | None = None,
+    *,
+    snapshot_dir: str | Path | None = None,
+) -> PriceData:
+    """Load ``symbols`` from the committed snapshot. Never downloads; fails loudly instead.
+
+    Each symbol's history in the snapshot starts at the earliest date any committed script
+    reads. Asking for an earlier ``start`` (where the source has data) or a later ``end``
+    than the snapshot holds raises rather than returning a silently shorter series.
+    """
+    frames: dict[str, pd.DataFrame] = {}
+    files = snapshot_manifest(snapshot_dir)["files"]
+    for symbol in symbols:
+        rel = f"prices/{symbol.replace('/', '_')}.csv.gz"
+        path = snapshot_file(rel, snapshot_dir)
+        meta = files[rel]
+        first, last = pd.Timestamp(meta["first_date"]), pd.Timestamp(meta["last_date"])
+        truncated = pd.Timestamp(meta["source_first_date"]) < first
+        if start is not None and pd.Timestamp(start) < first and truncated:
+            raise DataError(
+                f"{symbol}: snapshot starts {first.date()} but {pd.Timestamp(start).date()} "
+                "was requested; pass --live-data to use the full download"
+            )
+        if end is not None and pd.Timestamp(end) > last:
+            raise DataError(
+                f"{symbol}: snapshot ends {last.date()} but {pd.Timestamp(end).date()} was "
+                "requested; pass --live-data to download newer data"
+            )
+        # round_trip parsing reads back exactly the float64 values that were written
+        frames[symbol] = pd.read_csv(
+            path, index_col=0, parse_dates=True, float_precision="round_trip"
+        )
     return PriceData.from_frames(frames).slice(start, end)
 
 

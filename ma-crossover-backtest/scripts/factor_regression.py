@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from quantbt.data import add_live_data_flag, use_live_data
 from quantbt.factors import compare_models, factor_regression, load_factors
 
 
@@ -19,7 +20,9 @@ def main() -> None:
     parser.add_argument("csv")
     parser.add_argument("--name", default=None)
     parser.add_argument("--out", default=None, help="CSV path for the comparison table")
+    add_live_data_flag(parser)
     args = parser.parse_args()
+    use_live_data(args.live_data)
 
     frame = pd.read_csv(args.csv, index_col=0, parse_dates=True)
     returns = frame.iloc[:, 0].rename(args.name or Path(args.csv).stem)

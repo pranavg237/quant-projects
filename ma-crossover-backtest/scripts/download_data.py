@@ -1,14 +1,18 @@
-"""Populate the data cache for every symbol used by the research scripts."""
+"""Download every symbol the research scripts use into data/cache/ (always live).
+
+Then run scripts/build_snapshot.py to freeze the cache into a new committed snapshot.
+"""
 
 from __future__ import annotations
 
 import sys
 
-from quantbt.data import load_yahoo
+from quantbt.data import load_yahoo, use_live_data
 from quantbt.research.universes import ALL_SYMBOLS
 
 
 def main() -> None:
+    use_live_data(True)
     failed: list[str] = []
     for symbol in ALL_SYMBOLS:
         try:

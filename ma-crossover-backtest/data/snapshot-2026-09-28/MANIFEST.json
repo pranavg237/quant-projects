@@ -1,0 +1,930 @@
+{
+  "analysis_end": "2025-08-29",
+  "columns": [
+    "Open",
+    "Close",
+    "Adj Close",
+    "Volume",
+    "Dividends",
+    "Stock Splits"
+  ],
+  "download_date": "2026-09-28",
+  "dropped": "High and Low (no code reads them; they load as NaN)",
+  "files": {
+    "french/F-F_Momentum_Factor_daily_CSV.zip": {
+      "sha256": "ecf82b116e6ec56d2b79a2f27bd1d1598c217b5c6c25caa55b945bdd8a2c0b78"
+    },
+    "french/F-F_Research_Data_5_Factors_2x3_daily_CSV.zip": {
+      "sha256": "7881223b51929ee0d6d23b8a28524aaec478a2c3d4eeca47224955cc845c5186"
+    },
+    "french/F-F_Research_Data_Factors_daily_CSV.zip": {
+      "sha256": "2f29e22546069914890a712680a6f81f3680ebc3543b52864484d209ca13a7db"
+    },
+    "prices/AAPL.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:37",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "e11407a4734b7bdf4482b3cb4adcac056e94551935cc078d1e3ebbeda69cf949",
+      "source_first_date": "1980-12-12"
+    },
+    "prices/ABT.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:59",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "337753deb8774f8e7a5a2085fa08666a91c0a58af9a261d7a4d93247e60c427e",
+      "source_first_date": "1980-03-17"
+    },
+    "prices/ADBE.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:26",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "b6cc1103d83c34876ceca1a29555ed9ec294bb78c93cfc7eed6af9bc787e2b7e",
+      "source_first_date": "1986-08-13"
+    },
+    "prices/AMGN.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:19",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "628128ef16ee4e35eb7fc6e2f1a2e1f30d4df36d6faa27ff06cd0926b825240b",
+      "source_first_date": "1983-06-17"
+    },
+    "prices/AMT.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:38",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "f460cc658df68e926eaa2f26c8ce25247bca3925cf63ab2d29a09d82302a9f20",
+      "source_first_date": "1998-02-27"
+    },
+    "prices/AMZN.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:38",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "8220c62af4e4106327d8c7a8fd562dbf3ebe1614d985aa7eb20087a34f0a2e70",
+      "source_first_date": "1997-05-15"
+    },
+    "prices/AXP.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:15",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "59ac8a01ee6dddbf4ac2072e0c817982264cbb815410e1a290496c4a00b811f9",
+      "source_first_date": "1972-06-01"
+    },
+    "prices/BA.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:09",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "088b8ae38b817ff03045b8ca0a750d43a6538a65ade2fe9f01d69f8d83b8112c",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/BAC.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:49",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "8917eebfe93129abd627b1c6cad34d3d00a3b2e7d02fdb581714ae3bdac54fa8",
+      "source_first_date": "1973-02-21"
+    },
+    "prices/BMY.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:23",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "bc2bafbd2cf11c6e34ce98cc9b3dbe02bff48de609a1e3e5e922816f50bbefa0",
+      "source_first_date": "1972-06-01"
+    },
+    "prices/BRK-B.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:41",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "843c2ca20ec9aacd5cc8531924a70e9c1653fb8e4dd16025167d5b8eebf5c91e",
+      "source_first_date": "1996-05-09"
+    },
+    "prices/C.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:13",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "bf346ddbd8bb2ccd84bb4ba07a52c55654115c6d9372fcf68ccef77364676733",
+      "source_first_date": "1977-01-03"
+    },
+    "prices/CAT.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:08",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "c7d9f058cd11a2cdef9fd143b5173dbecb326812f0a898803e1079940ad29c16",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/COST.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:18",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "3611d77e8da6b24fab49b78ca738def75327fb39cc9815ba96ca7b32a3f86ac3",
+      "source_first_date": "1986-07-09"
+    },
+    "prices/CRM.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:26",
+      "first_date": "2004-06-23",
+      "last_date": "2026-09-28",
+      "rows": 5602,
+      "sha256": "d501f050f24db11e3ca363adce46d8533e7b1f142deb5185119fcb8f432876d9",
+      "source_first_date": "2004-06-23"
+    },
+    "prices/CSCO.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:56",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "87142c3cd4efb45ac2bfce4ee521bd76c1ced509208fc4f56eb35392515f3c50",
+      "source_first_date": "1990-02-16"
+    },
+    "prices/CVS.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:33",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "4cbb167f3660b11dda7db3bf5d2655ad8e3eb5e15098d55cd6c6c8c283df069a",
+      "source_first_date": "1973-02-21"
+    },
+    "prices/CVX.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:51",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "917650e9ec6ae8feb5fa4698935c206ff682bad02cafad223376167842d77a6e",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/DBC.csv.gz": {
+      "downloaded_at": "2026-09-28T21:26:49",
+      "first_date": "2006-02-06",
+      "last_date": "2026-09-28",
+      "rows": 5193,
+      "sha256": "b47059edc90c2a19b783c7bca2729417f6b01cdcebd3e7155571d8816b0d1363",
+      "source_first_date": "2006-02-06"
+    },
+    "prices/DE.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:32",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "265a258932648ae32f3495bcbc0b3bf1b51de8cf7576062c6dd0e10ef17b21de",
+      "source_first_date": "1972-06-01"
+    },
+    "prices/DIS.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:48",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "16c3c4fca06d04b91414a280049a4bbdfcd68136897d0c51ea84888d90c78867",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/DUK.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:36",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "350a94148700ffe9ad6e334742171880a40258b65ff46e3c5eb6ab8e4fdd0ea1",
+      "source_first_date": "1980-03-17"
+    },
+    "prices/EEM.csv.gz": {
+      "downloaded_at": "2026-09-28T21:26:45",
+      "first_date": "2003-04-14",
+      "last_date": "2026-09-28",
+      "rows": 5902,
+      "sha256": "edbfdeb3036b54af6eedde6d4a6fd05b9978d962aefea96401505bb9c3398245",
+      "source_first_date": "2003-04-14"
+    },
+    "prices/EFA.csv.gz": {
+      "downloaded_at": "2026-09-28T21:26:44",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "8b82798d8be28b6e2783829738fcfa21f30cbd3ef18051392ad67ee3627f6411",
+      "source_first_date": "2001-08-27"
+    },
+    "prices/EWA.csv.gz": {
+      "downloaded_at": "2026-09-28T21:43:54",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "0721cfcc957939048eb4a4b500734e0061a6fde87dab48d364251d2e3630266f",
+      "source_first_date": "1996-03-18"
+    },
+    "prices/EWC.csv.gz": {
+      "downloaded_at": "2026-09-28T21:43:54",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "41c21248b9ff730eeab2af50f1e1649e12e195952627972b7d091bd9e925b4d9",
+      "source_first_date": "1996-03-18"
+    },
+    "prices/FDX.csv.gz": {
+      "downloaded_at": "2026-09-28T21:43:55",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "57ea17ced5810b2cb9e345e38637e34cb37d12fcb959c35f6e00464545c96ea7",
+      "source_first_date": "1978-04-12"
+    },
+    "prices/GDX.csv.gz": {
+      "downloaded_at": "2026-09-28T21:43:56",
+      "first_date": "2006-05-22",
+      "last_date": "2026-09-28",
+      "rows": 5120,
+      "sha256": "a49efb71d8d32b644360ed262e45d78041fd456d71e9c39b942b2fbc3aac9096",
+      "source_first_date": "2006-05-22"
+    },
+    "prices/GDXJ.csv.gz": {
+      "downloaded_at": "2026-09-28T21:43:56",
+      "first_date": "2009-11-11",
+      "last_date": "2026-09-28",
+      "rows": 4244,
+      "sha256": "5dd3194561268364552172d0526b03154ce3ada790f9d814f270c42172cf3612",
+      "source_first_date": "2009-11-11"
+    },
+    "prices/GE.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:10",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "a2110555e02767ef5586fb7b3fca750917aee880507f856a4cdf5006c58c9479",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/GILD.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:20",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "9c295b0b5911e16f68d4485a23c948f36d3900f50e7aae16b6ec2b8694891046",
+      "source_first_date": "1992-01-22"
+    },
+    "prices/GLD.csv.gz": {
+      "downloaded_at": "2026-09-28T21:26:48",
+      "first_date": "2004-11-18",
+      "last_date": "2026-09-28",
+      "rows": 5498,
+      "sha256": "44abf229cbbf1548173edb9e9e10fe1f8d66d2d944ac4db689b3aa8b9bb4b6bf",
+      "source_first_date": "2004-11-18"
+    },
+    "prices/GOOGL.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:39",
+      "first_date": "2004-08-19",
+      "last_date": "2026-09-28",
+      "rows": 5562,
+      "sha256": "02050c8a8f661434d44e06780fd57e8cfadc272f349188e5b434747f8065e7fe",
+      "source_first_date": "2004-08-19"
+    },
+    "prices/GS.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:11",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "20b8db3b102b8fdf59cafe66ba401d2e6b5d8df9888338bd518b3df71d869785",
+      "source_first_date": "1999-05-04"
+    },
+    "prices/HD.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:47",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "659e8bc965a2a122ef6534fcb32e19fdfa1e9890db70023720b71f8bc80669c0",
+      "source_first_date": "1981-09-22"
+    },
+    "prices/HON.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:06",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "3c4f1adc0d0c3d43d04dd1062015e685c54239951a867adff7de102bc3b4701a",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/HYG.csv.gz": {
+      "downloaded_at": "2026-09-28T21:26:48",
+      "first_date": "2007-04-11",
+      "last_date": "2026-09-28",
+      "rows": 4898,
+      "sha256": "95b8fb55c4cff19c6cda0a1ce4a3ec19688a763554b09ca83f10688f6a33d07e",
+      "source_first_date": "2007-04-11"
+    },
+    "prices/IBM.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:03",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "eda49f372f1c4d86da1dc401dfe78c8202f36a8907f998a53e54f7aecb2b20e6",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/IEF.csv.gz": {
+      "downloaded_at": "2026-09-28T21:26:47",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "f9d69762aeba9f93b2c313ba6b5c99f81db6a93d281024567a66824d5bd8af22",
+      "source_first_date": "2002-07-30"
+    },
+    "prices/INTC.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:57",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "b0c717cb3e7dde6918609869ff8991740b5f84ad4047e8c667d01542b28c413c",
+      "source_first_date": "1980-03-17"
+    },
+    "prices/IWM.csv.gz": {
+      "downloaded_at": "2026-09-28T21:26:44",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "fb93622c390d3210f850a012a19a73eea0ea74893304783b9f78acdc97d0f670",
+      "source_first_date": "2000-05-26"
+    },
+    "prices/JNJ.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:44",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "e0901f9d9443ff72181127092ac66b7bd71679b315727e3d40fc6657fcb399fb",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/JPM.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:42",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "779772259ebf62af5bdb63af66f5cf3080c6d84d5252307efc752630f7983f98",
+      "source_first_date": "1980-03-17"
+    },
+    "prices/KBE.csv.gz": {
+      "downloaded_at": "2026-09-28T21:43:57",
+      "first_date": "2005-11-15",
+      "last_date": "2026-09-28",
+      "rows": 5248,
+      "sha256": "c244262113f1a6e15cc24a86a700ea3858a68cdf16fad0e92a2f218146f067ec",
+      "source_first_date": "2005-11-15"
+    },
+    "prices/KO.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:53",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "577e9649a5f53110b2417124d1b4a38ecd057ab65e2e6ba3ffef3e6ba241c294",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/LLY.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:22",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "2e8c57bb969909473e05a043ececd669c68b8efaa187e0707b357b9a301a990b",
+      "source_first_date": "1972-06-01"
+    },
+    "prices/LMT.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:30",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "53901e89fdcc2ca5413886044cb94188baf9b7d8a8d86491c69598bc678cd9aa",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/LOW.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:16",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "5ca039e5f5e3d87b06ab644c9b5a24a3d2568f9118090adf7a3515ba042bd17c",
+      "source_first_date": "1980-03-17"
+    },
+    "prices/LQD.csv.gz": {
+      "downloaded_at": "2026-09-28T21:26:48",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "e7d467a314726412c074711f22c136aa5e2c95da8229e8bcaa1f4007ff159284",
+      "source_first_date": "2002-07-30"
+    },
+    "prices/MA.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:47",
+      "first_date": "2006-05-25",
+      "last_date": "2026-09-28",
+      "rows": 5117,
+      "sha256": "f75c8a9a3fd5beb87991ef265d62de12d977a6f5d398b6e767f566464e7ae205",
+      "source_first_date": "2006-05-25"
+    },
+    "prices/MCD.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:04",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "761281280c524d6afa07c5f68856046c0780b6a65c93369da4d6087230444270",
+      "source_first_date": "1966-07-05"
+    },
+    "prices/MDT.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:21",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "026a54e727b4f7aed045c0042af5f56c1a068a001c134f70808b0f2efbfa6d7e",
+      "source_first_date": "1973-05-02"
+    },
+    "prices/META.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:39",
+      "first_date": "2012-05-18",
+      "last_date": "2026-09-28",
+      "rows": 3610,
+      "sha256": "86be0d24a4062ca155cfa49d20b05905e85de89b42db3002a9424dd5bf29fd0e",
+      "source_first_date": "2012-05-18"
+    },
+    "prices/MMM.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:07",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "75b391dc1cbd9f8b4dcf9c0a01bfb92312f585d058abafdafa42952dbe7ee859",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/MO.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:34",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "e0fccbd5871747ab8484f12f547ef7f0217420c9e9c81603ea41a1b5379d2676",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/MRK.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:58",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "27a289a4b4bf23cf19b61b1f2c8e34aa52dd6cc166c27c4667fa31de9427d85d",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/MS.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:12",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "ae1b3a0bc14576566eabcfc34cd7ccd8658e92c971e09863202ae2fd60708bc6",
+      "source_first_date": "1993-02-23"
+    },
+    "prices/MSFT.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:38",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "10895a44381587de211b9f248b0a66bc5fb0ce97b1d693d30db71a4305e0248e",
+      "source_first_date": "1986-03-13"
+    },
+    "prices/NEE.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:38",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "4eb7532739f732f0ec62e4d4b233f94bd4ed26fc516f16beb3162f0d78e051c9",
+      "source_first_date": "1973-02-21"
+    },
+    "prices/NFLX.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:27",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "a10dff57bf987c73e4361aef4f47351558d393e06ac3aba1f190e87e00bca961",
+      "source_first_date": "2002-05-23"
+    },
+    "prices/NKE.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:05",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "7bb21d5c5c7bfb0f425450d579cc3ccdccd3e0bd5129386a3c0dfe309a134026",
+      "source_first_date": "1980-12-02"
+    },
+    "prices/NVDA.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:40",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "5afb775cc7b3872b33ce2b29cbbca403af48a3721c68ede8ea5b30dc2f311405",
+      "source_first_date": "1999-01-22"
+    },
+    "prices/ORCL.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:01",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "36145e083cdfffbdc05c32096e7657317c2614f6652842305faf5b34039d2138",
+      "source_first_date": "1986-03-12"
+    },
+    "prices/PEP.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:54",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "03c434975bf932f25bdb655bae59be0006231ab0adaad7888cef076a256c4621",
+      "source_first_date": "1972-06-01"
+    },
+    "prices/PFE.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:52",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "35267174bf87dee7cbd037e11ae12b77a3a273ab740baef2f258d48557fb6acb",
+      "source_first_date": "1972-06-01"
+    },
+    "prices/PG.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:45",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "8a48d76abcac9d9e16a3e92f6463c484cdc61b15b12a3bd5d2d0a7e186d0fcb3",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/PM.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:35",
+      "first_date": "2008-03-17",
+      "last_date": "2026-09-28",
+      "rows": 4663,
+      "sha256": "488e37b02e7bc66c321ca37a6444650bab28acb4e4ff48e784b3a2c063d45e91",
+      "source_first_date": "2008-03-17"
+    },
+    "prices/QCOM.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:24",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "0b75d3d9d31cc87f1ce7acfb8f8cc0983134b29e6a06af63e87d0d82d6d8e17b",
+      "source_first_date": "1991-12-13"
+    },
+    "prices/QQQ.csv.gz": {
+      "downloaded_at": "2026-09-28T21:26:43",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "2cfdaf512c5dc853121362fb661fd47909e297f9179aed1dfcb665b9ebb019ca",
+      "source_first_date": "1999-03-10"
+    },
+    "prices/RTX.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:31",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "a142104476361449b8b9c47d36dc882dd948dcd94b4b35e21a089b70efa6fe70",
+      "source_first_date": "1962-04-02"
+    },
+    "prices/SBUX.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:27",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "0bd88789a7f770fe1c23bb0ba8beac9f7bbd5b67d549cbc9a9d211f804978371",
+      "source_first_date": "1992-06-26"
+    },
+    "prices/SLV.csv.gz": {
+      "downloaded_at": "2026-09-28T21:26:49",
+      "first_date": "2006-04-28",
+      "last_date": "2026-09-28",
+      "rows": 5136,
+      "sha256": "ea4ce35739874882433aa5d6c605003409f0429e1e4cc4d17265f8235468cb1b",
+      "source_first_date": "2006-04-28"
+    },
+    "prices/SO.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:37",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "933b1638d83bee024db708cd006d2ec49cb99cf505e5820d12ce2ad06ff89518",
+      "source_first_date": "1981-12-31"
+    },
+    "prices/SPG.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:39",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "1adf96974080f29b6795df35c0b40c37c901fe495aafce7ca3d9efa9c096d412",
+      "source_first_date": "1993-12-14"
+    },
+    "prices/SPY.csv.gz": {
+      "downloaded_at": "2026-09-28T21:20:39",
+      "first_date": "1998-01-02",
+      "last_date": "2026-09-28",
+      "rows": 7228,
+      "sha256": "2b2f03365b304e433dc49d237f5e2d3ed937c0ff6f418c7ea6447b6c8dd3236d",
+      "source_first_date": "1993-01-29"
+    },
+    "prices/T.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:00",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "26c58a4cc8902d730e9a731f7efab959c2b9dda2e2a508b4be8d49a122788c25",
+      "source_first_date": "1983-11-21"
+    },
+    "prices/TGT.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:17",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "95c487e1df12674429a9fc588d12731b6836193121fb4a10a8c4b111eb806f83",
+      "source_first_date": "1973-02-21"
+    },
+    "prices/TLT.csv.gz": {
+      "downloaded_at": "2026-09-28T21:26:46",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "11b4f22df10f1d77bf1fd2bb2711791d4541a58a77667a7b872d5ff83bcd934f",
+      "source_first_date": "2002-07-30"
+    },
+    "prices/TSLA.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:41",
+      "first_date": "2010-06-29",
+      "last_date": "2026-09-28",
+      "rows": 4087,
+      "sha256": "72cf01cbaf629c82d6fbb735bf3952ab9f5f471855d24fd71cc1f6e649cebec4",
+      "source_first_date": "2010-06-29"
+    },
+    "prices/TXN.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:25",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "e5f5a950b7b5dac2262670040e27de499b2beee84adb05aa305885b073b4ff5b",
+      "source_first_date": "1972-06-01"
+    },
+    "prices/UNH.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:46",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "33be0ba1c979f672b0c265caec7f63972ee46dd4281181863b3f5fe79ee0c5f4",
+      "source_first_date": "1984-10-17"
+    },
+    "prices/UNP.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:29",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "b7f4efdb4c0e60f9fa4ec58e650b1376add56d91521b7d129a72680a9c7bc591",
+      "source_first_date": "1980-01-02"
+    },
+    "prices/UPS.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:28",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "0c70daa36cdfab29bbaaa754242a6ee93f0ffeacaced070ba1e38dd3a4a6c54c",
+      "source_first_date": "1999-11-10"
+    },
+    "prices/V.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:44",
+      "first_date": "2008-03-19",
+      "last_date": "2026-09-28",
+      "rows": 4661,
+      "sha256": "f4a0e87332e8c71f3e00775b3effd41567c89ecd65fc7f6f84874a26bd205b1b",
+      "source_first_date": "2008-03-19"
+    },
+    "prices/VNQ.csv.gz": {
+      "downloaded_at": "2026-09-28T21:26:46",
+      "first_date": "2004-09-29",
+      "last_date": "2026-09-28",
+      "rows": 5534,
+      "sha256": "ad8d592d1b93941e5818a37245d3626bd43b328b3485c09d4cec0f60559fc10f",
+      "source_first_date": "2004-09-29"
+    },
+    "prices/VPU.csv.gz": {
+      "downloaded_at": "2026-09-28T21:43:58",
+      "first_date": "2004-01-30",
+      "last_date": "2026-09-28",
+      "rows": 5701,
+      "sha256": "4c5cbc1845efaead46100b2a03bd475979fc12fbf67766ee36c950bdfedf26f1",
+      "source_first_date": "2004-01-30"
+    },
+    "prices/VZ.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:01",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "340b345cf3a98ce380880a13d19f310b443a24c647414c224522af40b6065bdc",
+      "source_first_date": "1983-11-21"
+    },
+    "prices/WFC.csv.gz": {
+      "downloaded_at": "2026-09-28T21:29:14",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "a496b49236a1e8ec58ed3558e7822952738b9d9a16d8a629bc658082a58365d5",
+      "source_first_date": "1972-06-01"
+    },
+    "prices/WMT.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:55",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "529319c28415e78a966a3c9dd545733cbfaf7f5258194a62c5f2668f7314a661",
+      "source_first_date": "1972-08-25"
+    },
+    "prices/XLB.csv.gz": {
+      "downloaded_at": "2026-09-28T21:32:42",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "8eb9dcafe652f062d8c6c6a7199771bdd42127f1938a5c64fb61fe0555e9ac4a",
+      "source_first_date": "1998-12-22"
+    },
+    "prices/XLE.csv.gz": {
+      "downloaded_at": "2026-09-28T21:32:43",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "d7e2bf316563c0a260a52d9d194abe4141e32806486dacd8f606c233b69a9965",
+      "source_first_date": "1998-12-22"
+    },
+    "prices/XLF.csv.gz": {
+      "downloaded_at": "2026-09-28T21:32:43",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "b53e0c76f65fbff78426fc0a25e7724ce77f86993c646e5daebf31de9c13b8ef",
+      "source_first_date": "1998-12-22"
+    },
+    "prices/XLI.csv.gz": {
+      "downloaded_at": "2026-09-28T21:32:44",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "8b791bbbb6fe34860fe6f88ce9d6ad59aab3619d7399dba81cd73e4381b75e71",
+      "source_first_date": "1998-12-22"
+    },
+    "prices/XLK.csv.gz": {
+      "downloaded_at": "2026-09-28T21:32:45",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "cafc3f80bca496359d93f9589496f8ea84ab149dc375317f1640198a8005d649",
+      "source_first_date": "1998-12-22"
+    },
+    "prices/XLP.csv.gz": {
+      "downloaded_at": "2026-09-28T21:32:46",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "e988ae5b5846c3de9e9038332e3fe7e6a050d615bb347623770df91f40aa0c3f",
+      "source_first_date": "1998-12-22"
+    },
+    "prices/XLU.csv.gz": {
+      "downloaded_at": "2026-09-28T21:32:46",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "7c1f06259140ccf52d43c439b466ad024e0794ea25c42dfaf7b289d35a929cf8",
+      "source_first_date": "1998-12-22"
+    },
+    "prices/XLV.csv.gz": {
+      "downloaded_at": "2026-09-28T21:32:47",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "52f0af6627347365094821746c152be47ec8b63e8be9c0556ec96ab5d3671711",
+      "source_first_date": "1998-12-22"
+    },
+    "prices/XLY.csv.gz": {
+      "downloaded_at": "2026-09-28T21:32:48",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "046508aac96ef14b2ef8192bfd9b05fbef0ef4a921fee8c1e08800f6e11c07ab",
+      "source_first_date": "1998-12-22"
+    },
+    "prices/XOM.csv.gz": {
+      "downloaded_at": "2026-09-28T21:28:50",
+      "first_date": "2003-01-02",
+      "last_date": "2026-09-28",
+      "rows": 5972,
+      "sha256": "8448d15b712c35bd63755d3132627810472363178310078532e746539bc0d768",
+      "source_first_date": "1962-01-02"
+    },
+    "prices/XOP.csv.gz": {
+      "downloaded_at": "2026-09-28T21:43:58",
+      "first_date": "2006-06-22",
+      "last_date": "2026-09-28",
+      "rows": 5098,
+      "sha256": "24f3f882ba8a67eeafbea4af8e18fa7cc425165a47a99cf28c33037c1adb2688",
+      "source_first_date": "2006-06-22"
+    }
+  },
+  "source": {
+    "factors": "Kenneth French data library, daily files",
+    "prices": "Yahoo Finance daily bars via yfinance (auto_adjust=False, actions=True)"
+  },
+  "symbols": [
+    "AAPL",
+    "ABT",
+    "ADBE",
+    "AMGN",
+    "AMT",
+    "AMZN",
+    "AXP",
+    "BA",
+    "BAC",
+    "BMY",
+    "BRK-B",
+    "C",
+    "CAT",
+    "COST",
+    "CRM",
+    "CSCO",
+    "CVS",
+    "CVX",
+    "DBC",
+    "DE",
+    "DIS",
+    "DUK",
+    "EEM",
+    "EFA",
+    "EWA",
+    "EWC",
+    "FDX",
+    "GDX",
+    "GDXJ",
+    "GE",
+    "GILD",
+    "GLD",
+    "GOOGL",
+    "GS",
+    "HD",
+    "HON",
+    "HYG",
+    "IBM",
+    "IEF",
+    "INTC",
+    "IWM",
+    "JNJ",
+    "JPM",
+    "KBE",
+    "KO",
+    "LLY",
+    "LMT",
+    "LOW",
+    "LQD",
+    "MA",
+    "MCD",
+    "MDT",
+    "META",
+    "MMM",
+    "MO",
+    "MRK",
+    "MS",
+    "MSFT",
+    "NEE",
+    "NFLX",
+    "NKE",
+    "NVDA",
+    "ORCL",
+    "PEP",
+    "PFE",
+    "PG",
+    "PM",
+    "QCOM",
+    "QQQ",
+    "RTX",
+    "SBUX",
+    "SLV",
+    "SO",
+    "SPG",
+    "SPY",
+    "T",
+    "TGT",
+    "TLT",
+    "TSLA",
+    "TXN",
+    "UNH",
+    "UNP",
+    "UPS",
+    "V",
+    "VNQ",
+    "VPU",
+    "VZ",
+    "WFC",
+    "WMT",
+    "XLB",
+    "XLE",
+    "XLF",
+    "XLI",
+    "XLK",
+    "XLP",
+    "XLU",
+    "XLV",
+    "XLY",
+    "XOM",
+    "XOP"
+  ]
+}

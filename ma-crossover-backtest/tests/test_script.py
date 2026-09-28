@@ -6,18 +6,19 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import yahoo_like_frame
-
 
 def test_run_ma_crossover_script(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """By default the script reads the committed snapshot and never touches the network."""
     import quantbt.data as qd
 
-    monkeypatch.setattr(
-        qd, "yahoo_downloader", lambda symbol: yahoo_like_frame(n=800, start="2018-01-01")
-    )
+    def no_network(symbol: str) -> None:
+        raise AssertionError("the script tried to download")
+
+    monkeypatch.setattr(qd, "yahoo_downloader", no_network)
     monkeypatch.setattr(qd, "DEFAULT_CACHE_DIR", tmp_path / "cache")
+    monkeypatch.delenv(qd.LIVE_DATA_ENV, raising=False)
     out = tmp_path / "chart.png"
     argv = [
         "run_ma_crossover.py",

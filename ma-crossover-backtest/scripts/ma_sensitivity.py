@@ -32,7 +32,7 @@ from matplotlib.colors import TwoSlopeNorm
 from matplotlib.patches import Rectangle
 
 from quantbt import metrics
-from quantbt.data import load_yahoo
+from quantbt.data import add_live_data_flag, load_yahoo, use_live_data
 from quantbt.research.runner import load_rf
 from quantbt.research.sensitivity import ma_sharpe_grid, surface_summary
 from quantbt.validation import sharpe_std_error
@@ -48,7 +48,9 @@ def main() -> None:
     parser.add_argument("--start", default="2005-01-01")
     parser.add_argument("--end", default="2025-08-29")
     parser.add_argument("--out", default="reports/sensitivity")
+    add_live_data_flag(parser)
     args = parser.parse_args()
+    use_live_data(args.live_data)
     t0 = time.time()
 
     data_start = "1998-01-01"  # enough warm-up for a 300-day MA before 2005

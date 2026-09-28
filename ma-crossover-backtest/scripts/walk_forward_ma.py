@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 
 from quantbt import metrics
-from quantbt.data import load_yahoo
+from quantbt.data import add_live_data_flag, load_yahoo, use_live_data
 from quantbt.strategies import MACrossover
 from quantbt.validation import grid_search, overfit_report, walk_forward
 
@@ -29,7 +29,9 @@ def main() -> None:
     parser.add_argument("--test-years", type=float, default=1.0)
     parser.add_argument("--anchored", action="store_true")
     parser.add_argument("--out", default="reports/walk_forward_ma")
+    add_live_data_flag(parser)
     args = parser.parse_args()
+    use_live_data(args.live_data)
 
     data = load_yahoo(
         args.ticker, start=pd.Timestamp(args.start) - pd.DateOffset(years=2), end=args.end
