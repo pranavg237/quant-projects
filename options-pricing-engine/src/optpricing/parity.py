@@ -400,7 +400,9 @@ def american_upper_bound(pairs: pd.DataFrame, spot: float, rate_curve: RateCurve
     share, borrow :math:`Ke^{-r\tau}`. Spot is a single print with no bid-ask.
 
     Returns:
-        One row per expiry: ``expiry, days, pairs, upper_violations, worst_upper_excess``.
+        One row per expiry: ``expiry, days, pairs, upper_violations,
+        upper_violations_deep_itm_call`` (those with ``K < 0.95 S``, i.e. the call more
+        than 5% in the money) ``, worst_upper_excess``.
     """
     rows: list[dict[str, object]] = []
     for (expiry, tau), g in pairs.groupby(["expiry", "tau"], sort=True):
@@ -414,6 +416,7 @@ def american_upper_bound(pairs: pd.DataFrame, spot: float, rate_curve: RateCurve
                 "days": t * 365.0,
                 "pairs": len(g),
                 "upper_violations": int((excess > _TOL).sum()),
+                "upper_violations_deep_itm_call": int(((excess > _TOL) & (k < 0.95 * spot)).sum()),
                 "worst_upper_excess": float(max(excess.max(), 0.0)),
             }
         )

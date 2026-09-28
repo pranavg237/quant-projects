@@ -1066,6 +1066,7 @@
         "days": 5.2017670722337686,
         "pairs": 38,
         "upper_violations": 0,
+        "upper_violations_deep_itm_call": 0,
         "worst_upper_excess": 0.0
       },
       {
@@ -1073,6 +1074,7 @@
         "days": 7.201767072233761,
         "pairs": 104,
         "upper_violations": 0,
+        "upper_violations_deep_itm_call": 0,
         "worst_upper_excess": 0.0
       },
       {
@@ -1080,6 +1082,7 @@
         "days": 12.201767072233762,
         "pairs": 236,
         "upper_violations": 2,
+        "upper_violations_deep_itm_call": 0,
         "worst_upper_excess": 5.99571084404208
       },
       {
@@ -1087,6 +1090,7 @@
         "days": 21.201767072233782,
         "pairs": 122,
         "upper_violations": 1,
+        "upper_violations_deep_itm_call": 0,
         "worst_upper_excess": 0.0009615578578916484
       },
       {
@@ -1094,6 +1098,7 @@
         "days": 28.201767072233775,
         "pairs": 165,
         "upper_violations": 2,
+        "upper_violations_deep_itm_call": 2,
         "worst_upper_excess": 2.6748700679744957
       },
       {
@@ -1101,6 +1106,7 @@
         "days": 42.20176707223379,
         "pairs": 198,
         "upper_violations": 18,
+        "upper_violations_deep_itm_call": 13,
         "worst_upper_excess": 7.98641212086217
       },
       {
@@ -1108,6 +1114,7 @@
         "days": 73.2017670722338,
         "pairs": 168,
         "upper_violations": 60,
+        "upper_violations_deep_itm_call": 45,
         "worst_upper_excess": 7.533603116948527
       },
       {
@@ -1115,6 +1122,7 @@
         "days": 104.20176707223379,
         "pairs": 161,
         "upper_violations": 22,
+        "upper_violations_deep_itm_call": 22,
         "worst_upper_excess": 6.423045557289015
       },
       {
@@ -1122,6 +1130,7 @@
         "days": 182.2017670722338,
         "pairs": 123,
         "upper_violations": 7,
+        "upper_violations_deep_itm_call": 7,
         "worst_upper_excess": 6.452606998019007
       },
       {
@@ -1129,6 +1138,7 @@
         "days": 272.20176707223385,
         "pairs": 140,
         "upper_violations": 8,
+        "upper_violations_deep_itm_call": 8,
         "worst_upper_excess": 5.817215287159854
       },
       {
@@ -1136,6 +1146,7 @@
         "days": 455.20176707223374,
         "pairs": 148,
         "upper_violations": 3,
+        "upper_violations_deep_itm_call": 3,
         "worst_upper_excess": 2.6041109694222655
       },
       {
@@ -1143,6 +1154,7 @@
         "days": 637.2017670722337,
         "pairs": 131,
         "upper_violations": 5,
+        "upper_violations_deep_itm_call": 5,
         "worst_upper_excess": 1.3000770056225406
       }
     ]
@@ -1230,7 +1242,7 @@
       2.5062761504500415,
       2.5062835149482354
     ],
-    "seconds": 108.23445153236389,
+    "seconds": 106.80435991287231,
     "body_rmse_vol_points": 1.0870057489051592,
     "short_dated_put_wing_rmse_vol_points": 5.924714711779332,
     "per_expiry_flat_vols": [
@@ -1323,5 +1335,38 @@
     "ticker": "SPY",
     "asof": "2026-09-18T11:09:27.324959-04:00",
     "spot": 759.8699951171875
+  },
+  "validation": {
+    "heston_bs_limit_max_abs": 1.2172884922279081e-09,
+    "heston_gil_pelaez_vs_lewis_max_abs": 1.5989884625568218e-08,
+    "american_minus_european_call_no_dividend": 0.0,
+    "iv_grid_quotes": 182,
+    "iv_usable_quotes": 180,
+    "iv_min_vega_usable": 1.8534993248121538e-08,
+    "iv_max_abs_vol_error": 5.003731684688484e-07,
+    "iv_max_iterations": 37,
+    "iv_worst_price": 42.20868223859713,
+    "iv_worst_vega": 1.8534993248121538e-08,
+    "iv_worst_roundoff_floor": 5.056495055926351e-07,
+    "iv_quotes_vega_ge_1e-6": 178,
+    "iv_max_abs_vol_error_vega_ge_1e-6": 2.467892556978768e-10,
+    "iv_max_iterations_vega_ge_1e-6": 16,
+    "five_day_10pct_otm_call": [
+      {
+        "sigma": 0.1,
+        "vega": 2.358893725677751e-14,
+        "vol_error_from_1e-10_price_tol": 4239.275339598789
+      },
+      {
+        "sigma": 0.15,
+        "vega": 2.1215300153132214e-06,
+        "vol_error_from_1e-10_price_tol": 4.713579316728925e-05
+      },
+      {
+        "sigma": 0.2,
+        "vega": 0.0012897890985517492,
+        "vol_error_from_1e-10_price_tol": 7.75320555215468e-08
+      }
+    ]
   }
 }
