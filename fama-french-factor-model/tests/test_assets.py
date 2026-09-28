@@ -92,3 +92,22 @@ def test_download_pads_the_start_and_drops_empty_tickers(monkeypatch):
     assert calls["start"] == "2023-12-01"
     assert list(returns.columns) == ["AAA"]
     assert returns.index[0] == pd.Timestamp("2024-01-31")
+
+
+def test_download_accepts_a_month_as_the_end_date(monkeypatch):
+    # Regression test: `ffmodel analyze --end 2026-07` (the documented format) passed
+    # "2026-07" straight to Yahoo, which rejects it, so every such run failed.
+    calls = {}
+    index = pd.bdate_range("2026-04-01", "2026-08-14")
+    raw = pd.concat({"Close": pd.DataFrame({"AAA": np.linspace(10, 12, len(index))}, index=index)}, axis=1)
+
+    def fake_download(tickers, start=None, end=None, **kwargs):
+        calls["end"] = end
+        return raw
+
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(download=fake_download))
+    returns = download_returns(["AAA"], start="2026-05", end="2026-07")
+    assert calls["end"] == "2026-08-01"  # Yahoo's end is exclusive
+    assert returns.index[-1] == pd.Timestamp("2026-07-31")
+    download_returns(["AAA"], end="2026-07-15")
+    assert calls["end"] == "2026-07-16"
