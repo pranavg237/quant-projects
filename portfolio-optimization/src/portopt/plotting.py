@@ -517,36 +517,29 @@ def plot_estimation_window(experiments: dict[str, WindowExperiment]) -> Figure:
             ax.fill_between(
                 rows["window"], rows["p10_sharpe"], rows["p90_sharpe"], color=color, alpha=0.15
             )
-            ax.plot(rows["window"], rows["mean_sharpe"], color=color, marker="o", markersize=4)
-            ax.annotate(
-                name,
-                xy=(float(rows["window"].iloc[-1]), float(rows["mean_sharpe"].iloc[-1])),
-                xytext=(-4, 6),
-                textcoords="offset points",
-                ha="right",
-                fontsize=8,
+            ax.plot(
+                rows["window"],
+                rows["mean_sharpe"],
                 color=color,
+                marker="o",
+                markersize=4,
+                label=name,
             )
         ax.axhline(
-            experiment.equal_weight_sharpe, color=INK_SECONDARY, linestyle=(0, (4, 4)), lw=1.2
-        )
-        ax.annotate(
-            f"1/N  {experiment.equal_weight_sharpe:.2f}",
-            xy=(float(table["window"].min()), experiment.equal_weight_sharpe),
-            xytext=(2, -12),
-            textcoords="offset points",
-            fontsize=8,
+            experiment.equal_weight_sharpe,
             color=INK_SECONDARY,
+            linestyle=(0, (4, 4)),
+            lw=1.2,
+            label=f"1/N (exact, {experiment.equal_weight_sharpe:.2f})",
         )
-        ax.axhline(experiment.tangency_sharpe, color=INK_MUTED, linestyle=(0, (1, 2)), lw=1.2)
-        ax.annotate(
-            f"true tangency  {experiment.tangency_sharpe:.2f}",
-            xy=(float(table["window"].min()), experiment.tangency_sharpe),
-            xytext=(2, 4),
-            textcoords="offset points",
-            fontsize=8,
+        ax.axhline(
+            experiment.tangency_sharpe,
             color=INK_MUTED,
+            linestyle=(0, (1, 2)),
+            lw=1.2,
+            label=f"true tangency ceiling ({experiment.tangency_sharpe:.2f})",
         )
+        ax.legend(loc="lower right", fontsize=8, frameon=False)
         ax.set_xscale("log")
         ax.set_xlabel("estimation window (months, log scale)")
         ax.set_title(title)

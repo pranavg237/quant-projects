@@ -48,6 +48,8 @@ from portopt.estimation_error import WindowExperiment, run_window_experiment  # 
 PERIODS = 12.0
 SIM_WINDOWS = [24, 36, 60, 120, 240, 480, 960, 1920, 3840]
 REAL_WINDOWS = [24, 36, 60, 90, 120]
+#: An illustrative true Sharpe edge over 1/N, for the "how long to detect it" column.
+DETECT_EDGE = 0.10
 
 
 def _to_markdown(df: pd.DataFrame, floatfmt: str = "{:.3f}") -> str:
@@ -97,6 +99,11 @@ def _real_paired(returns: pd.DataFrame, rf: pd.Series, cost_bps: float) -> pd.Da
         )
         scored = run.returns.loc[first_scored:]
         test = mx.sharpe_difference_test(scored, equal_returns, rf, PERIODS)
+        # Standard error of the annualised Sharpe difference implied by the paired test,
+        # and how many months at that per-month noise level a true edge of DETECT_EDGE
+        # would need before it reached p = 0.05 about half the time (SE ~ 1/sqrt(months)).
+        standard_error = test.difference / test.z if test.z else float("nan")
+        months_needed = test.n_periods * (1.96 * standard_error / DETECT_EDGE) ** 2
         rows.append(
             {
                 "window_months": window,
@@ -104,7 +111,9 @@ def _real_paired(returns: pd.DataFrame, rf: pd.Series, cost_bps: float) -> pd.Da
                 "mv_sharpe": test.sharpe_a,
                 "equal_weight_sharpe": test.sharpe_b,
                 "difference": test.difference,
+                "se_difference": standard_error,
                 "p_value": test.p_value,
+                "months_to_detect_0.10": months_needed,
             }
         )
     frame = pd.DataFrame(rows)
@@ -195,6 +204,8 @@ def main() -> int:
         f"{header}\n\n" + _to_markdown(sim_table) + "\n## Real data, paired\n\n"
         f"{paired.attrs['first']} to {paired.attrs['last']} ({paired.attrs['n_months']} "
         f"months), long-only max-Sharpe (sample) vs 1/N, {args.cost_bps:.0f}bp costs. "
+        "months_to_detect_0.10: months of data at this noise level before a true 0.10 Sharpe "
+        "edge would reach p = 0.05 about half the time. "
         "p_value: paired Jobson-Korkie/Memmel test.\n\n" + _to_markdown(paired)
     )
     (args.results / "estimation_window.json").write_text(json.dumps(output, indent=2, default=str))
