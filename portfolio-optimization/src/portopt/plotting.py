@@ -16,6 +16,7 @@ from matplotlib.figure import Figure
 
 from .backtest import BacktestResult
 from .covariance import CovarianceDiagnostics
+from .estimation_error import WindowExperiment
 from .metrics import drawdown_series
 from .optimizers import EfficientFrontier, OptimizationResult
 from .style import (
@@ -34,6 +35,7 @@ __all__ = [
     "plot_drawdowns",
     "plot_efficient_frontier",
     "plot_equity_curves",
+    "plot_estimation_window",
     "plot_leverage_sweep",
     "plot_risk_contributions",
     "plot_risk_return_scatter",
@@ -494,6 +496,59 @@ def plot_covariance_diagnostics(diagnostics: dict[str, CovarianceDiagnostics]) -
     axes[1].set_xlabel("effective rank")
     axes[1].set_title("How many directions it really distinguishes")
     return _finish(fig)
+
+
+def plot_estimation_window(experiments: dict[str, WindowExperiment]) -> Figure:
+    """Expected true Sharpe of estimated portfolios against the estimation window.
+
+    One panel per calibration, sharing the y-axis. Lines are the mean across draws, bands
+    the 10th to 90th percentile; 1/N (dashed) and the true tangency ceiling (dotted) are
+    exact because they involve no estimation.
+    """
+    apply_house_style()
+    fig, axes = plt.subplots(
+        1, len(experiments), figsize=(5.6 * len(experiments), 4.4), sharey=True, squeeze=False
+    )
+    for ax, (title, experiment) in zip(axes[0], experiments.items(), strict=True):
+        table = experiment.table
+        names = list(dict.fromkeys(table["portfolio"]))
+        for color, name in zip(_series_colors(len(names)), names, strict=True):
+            rows = table[table["portfolio"] == name]
+            ax.fill_between(
+                rows["window"], rows["p10_sharpe"], rows["p90_sharpe"], color=color, alpha=0.15
+            )
+            ax.plot(
+                rows["window"],
+                rows["mean_sharpe"],
+                color=color,
+                marker="o",
+                markersize=4,
+                label=name,
+            )
+        ax.axhline(
+            experiment.equal_weight_sharpe,
+            color=INK_SECONDARY,
+            linestyle=(0, (4, 4)),
+            lw=1.2,
+            label=f"1/N (exact, {experiment.equal_weight_sharpe:.2f})",
+        )
+        ax.axhline(
+            experiment.tangency_sharpe,
+            color=INK_MUTED,
+            linestyle=(0, (1, 2)),
+            lw=1.2,
+            label=f"true tangency ceiling ({experiment.tangency_sharpe:.2f})",
+        )
+        ax.legend(loc="lower right", fontsize=8, frameon=False)
+        ax.set_xscale("log")
+        ax.set_xlabel("estimation window (months, log scale)")
+        ax.set_title(title)
+    axes[0][0].set_ylabel("expected out-of-sample Sharpe (annualised)")
+    return _finish(
+        fig,
+        "Simulated IID normal excess returns, 15 assets; mean of the true Sharpe across draws, "
+        "band = 10th-90th percentile",
+    )
 
 
 def save_all(figures: dict[str, Figure], out_dir: Path) -> list[Path]:
