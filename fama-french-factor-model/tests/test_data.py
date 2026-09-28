@@ -84,7 +84,7 @@ def fake_library(monkeypatch):
         "F-F_Momentum_Factor": MOM_TEXT,
         "25_Portfolios_5x5": PORTFOLIO_TEXT,
     }
-    monkeypatch.setattr(data, "fetch_dataset", lambda name, refresh=False: data.parse_french_csv(files[name]))
+    monkeypatch.setattr(data, "fetch_dataset", lambda name, refresh=False, data_dir=None: data.parse_french_csv(files[name]))
 
 
 def test_load_factors_joins_momentum(fake_library):
@@ -159,3 +159,50 @@ def test_load_returns_csv_and_portfolio(tmp_path):
     daily.write_text("date,A\n2020-01-02,1.0\n2020-01-03,2.0\n")
     with pytest.raises(ValueError, match="daily"):
         load_returns_csv(str(daily))
+
+
+FF5_TEXT = (
+    ",Mkt-RF,SMB,HML,RMW,CMA,RF\r\n"
+    "192607,   2.89,  -2.42,  -2.75,   0.10,   0.20,   0.22\r\n"
+    "192608,   2.64,  -1.44,   4.13,   0.30,   0.40,   0.25\r\n"
+    "192609,   0.38,  -1.20,   0.12,   0.50,   0.60,   0.23\r\n"
+)
+
+
+def test_snapshot_round_trip_runs_offline(monkeypatch, tmp_path):
+    from ffmodel import snapshot
+
+    texts = {"F-F_Research_Data_Factors": FF3_TEXT, "F-F_Research_Data_5_Factors_2x3": FF5_TEXT,
+             "F-F_Momentum_Factor": MOM_TEXT}
+
+    def fake_download(name, path):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as zf:
+            zf.writestr(f"{name}.csv", texts[name])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(buffer.getvalue())
+
+    monkeypatch.setattr(data, "_download", fake_download)
+    returns = pd.DataFrame({"SPY": [0.01, -0.02]}, index=pd.to_datetime(["1926-08-31", "1926-09-30"]))
+    monkeypatch.setattr(snapshot, "download_returns", lambda tickers, start, end, frequency: returns)
+
+    snap = tmp_path / "snap"
+    manifest = snapshot.save_snapshot(snap, ["SPY"], "1926-08", "1926-09")
+    assert set(manifest["french_library"]) == {f"{name}_CSV.zip" for name in texts}
+    assert manifest["french_library"]["F-F_Momentum_Factor_CSV.zip"]["first"] == "1926-08"
+    assert manifest["returns"]["periods"] == 2 and manifest["returns"]["last"] == "1926-09-30"
+    assert snapshot.read_manifest(snap)["downloaded_utc"] == manifest["downloaded_utc"]
+    assert snapshot.read_manifest(tmp_path) is None
+
+    def no_network(name, path):
+        raise AssertionError("reading a snapshot must not download anything")
+
+    monkeypatch.setattr(data, "_download", no_network)
+    ff6 = data.load_factors("ff6", data_dir=snap)
+    assert list(ff6.columns) == ["Mkt-RF", "SMB", "HML", "RMW", "CMA", "MOM", "RF"]
+    assert ff6.loc["1926-09-30", "CMA"] == pytest.approx(0.006)
+    loaded = load_returns_csv(str(snap / "returns.csv"))
+    np.testing.assert_allclose(loaded["SPY"].to_numpy(), returns["SPY"].to_numpy())
+    assert list(loaded.index) == list(returns.index)
+    with pytest.raises(RuntimeError, match="not in the data snapshot"):
+        data.load_portfolios("25_Portfolios_5x5", data_dir=snap)
