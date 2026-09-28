@@ -47,10 +47,11 @@ that found one strategy moved after a data vendor re-adjustment.
 **The MA crossover's edge does not survive a correction for how much was tried.** Five
 strategies and 63 parameter configurations were tested in total. Its out-of-sample
 Sharpe of 0.58 has a probabilistic Sharpe ratio of 0.995 on its own, but a deflated
-Sharpe ratio of 0.08 once all 63 trials are counted (0.16 for the best in-sample
-configuration): the best of 63 pure-noise strategies would be expected to show a Sharpe
-of about 0.90. The answer depends on assumptions, and RESULTS.md shows the full range:
-it clears 0.95 only if the project is treated as roughly five independent tries.
+Sharpe ratio of 0.08 once all 63 trials are counted with the paper's recipe (0.16 for
+the best in-sample configuration): the best of 63 pure-noise strategies would be expected
+to show a Sharpe of about 0.90. The answer depends on assumptions, and RESULTS.md shows
+the full range. Under any assumption it defends, it clears the usual 0.95 bar only if
+the whole project counts as about five independent tries.
 
 ![MA crossover Sharpe by fast and slow window](reports/sensitivity/ma_sharpe_heatmap.png)
 
