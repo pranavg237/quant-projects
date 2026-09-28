@@ -64,6 +64,14 @@ def test_surface_columns_and_derived_quantities(synthetic_surface: pd.DataFrame)
     assert synthetic_surface["tau"].is_monotonic_increasing
 
 
+def test_bid_ask_vols_bracket_the_mid_vol(synthetic_surface: pd.DataFrame) -> None:
+    """Price is increasing in vol, so the bid and ask vols must bracket the mid vol."""
+    s = synthetic_surface.dropna(subset=["iv_bid", "iv_ask"])
+    assert len(s) > 0.9 * len(synthetic_surface)
+    assert (s["iv_bid"] < s["implied_vol"]).all()
+    assert (s["implied_vol"] < s["iv_ask"]).all()
+
+
 def test_synthetic_surface_is_arbitrage_free(synthetic_surface: pd.DataFrame) -> None:
     report = surface_mod.arbitrage_report(synthetic_surface)
     assert report.calendar_checks > 50
