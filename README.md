@@ -25,9 +25,9 @@ produced it. Where a strategy loses to buying and holding the index, the README 
   confidence intervals or significance tests. Point estimates alone are not treated as
   evidence.
 - **Reproducible.** Market data is committed as dated snapshots, or its download date is
-  recorded. Every result was re-run for this version. Where a re-run did not match the
-  earlier numbers exactly (a Yahoo re-adjustment after a stock split; a small
-  environment-dependent drift in one simulation), the README says so.
+  recorded. Every result quoted in a README was re-run for this version. Where a re-run
+  did not match the earlier numbers exactly (a Yahoo re-adjustment after a stock split; a
+  small environment-dependent drift in one simulation), the README says so.
 - **Tested.** 731 tests across the seven projects, all offline, run by CI on every push.
   The four main packages also pass strict `mypy` and `ruff`.
 
