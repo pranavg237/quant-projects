@@ -8,6 +8,7 @@ from __future__ import annotations
 import sys
 
 from quantbt.data import load_yahoo, use_live_data
+from quantbt.factors.french import FACTOR_FILES, fetch_dataset
 from quantbt.research.universes import ALL_SYMBOLS
 
 
@@ -23,6 +24,10 @@ def main() -> None:
         except Exception as exc:
             failed.append(symbol)
             print(f"{symbol:6s} FAILED: {exc}", file=sys.stderr)
+    for (_, frequency), name in sorted(FACTOR_FILES.items()):
+        if frequency == "daily":
+            fetch_dataset(name)  # into data/cache/french/, refreshed if older than 30 days
+            print(f"{name}: cached")
     if failed:
         print(f"failed: {failed}", file=sys.stderr)
 

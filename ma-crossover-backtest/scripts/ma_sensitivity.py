@@ -63,15 +63,13 @@ def main() -> None:
     bench_sharpe = metrics.sharpe(bench, rf=rf.reindex(bench.index).fillna(0.0))
 
     # Cross-check against the event-driven engine's full-sample grid for the 17 points
-    # the walk-forward searches (reports/strategies/ma_crossover/grid.csv). On identical
-    # data the two implementations agree to ~1e-15; the committed grid.csv was built from
-    # an earlier download of the same dates, and Yahoo's re-adjustments move Sharpe in
-    # the 6th decimal, hence the tolerance.
+    # the walk-forward searches (reports/strategies/ma_crossover/grid.csv). Both read the
+    # same snapshot, so the two implementations must agree to floating-point precision.
     engine = pd.read_csv(WF_DIR / "grid.csv").rename(columns={"short": "fast", "long": "slow"})
     merged = engine.merge(table, on=["fast", "slow"], suffixes=("_engine", "_vec"))
     diff = float((merged["sharpe_engine"] - merged["sharpe_vec"]).abs().max())
     print(f"engine vs vectorised Sharpe on the {len(merged)} shared points: max |diff| {diff:.1e}")
-    if len(merged) != len(engine) or diff > 1e-5:
+    if len(merged) != len(engine) or diff > 1e-9:
         raise SystemExit("vectorised grid does not reproduce the engine's grid.csv")
 
     folds = pd.read_csv(WF_DIR / "folds.csv")
