@@ -14,12 +14,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
+from matplotlib.ticker import FuncFormatter, NullFormatter
 
 from .avellaneda_stoikov import AvellanedaStoikovParams, inventory_skew, optimal_spread
 from .calibration import FillIntensityFit
 from .engine import SimulationResult
 from .experiments import ComparisonResult
-from .metrics import markout_curve
+from .metrics import informed_markout_theory
 from .style import CATEGORICAL, GRID, INK_MUTED, INK_SECONDARY, apply_house_style
 from .types import MarketConfig
 
@@ -272,7 +273,11 @@ def plot_risk_return(comparison: ComparisonResult) -> Figure:
     ax.set_ylabel("mean PnL")
     ax.set_title("Avellaneda-Stoikov trades mean PnL for far less risk")
     ax.legend(loc="lower right")
-    return _finish(fig)
+    return _finish(
+        fig,
+        "Grey isoclines: Sharpe per simulated session (mean / std across sessions), "
+        "not annualised.",
+    )
 
 
 def _looks_geometric(x: np.ndarray) -> bool:
@@ -287,41 +292,83 @@ def _looks_geometric(x: np.ndarray) -> bool:
     return bool(np.std(ratios) / np.mean(ratios) < 0.05 and np.mean(ratios) > 1.2)
 
 
-def plot_sensitivity(sweeps: dict[str, pd.DataFrame]) -> Figure:
-    """Sharpe, mean PnL and inventory against each swept parameter, small multiples."""
-    apply_house_style()
-    n = len(sweeps)
-    fig, axes = plt.subplots(2, n, figsize=(4.2 * n, 7.0), squeeze=False)
+#: Rows of the sensitivity grid: (column, its standard-error column, axis label).
+_SENSITIVITY_ROWS: tuple[tuple[str, str, str], ...] = (
+    ("mean_pnl", "mean_pnl_se", "mean PnL per session"),
+    ("std_pnl", "std_pnl_se", "std of session PnL"),
+    ("sharpe", "sharpe_se", "Sharpe per session\n(not annualised)"),
+    ("std_final_inventory", "std_final_inventory_se", "std of final inventory"),
+)
 
-    for col, (parameter, frame) in enumerate(sweeps.items()):
-        x = frame[parameter].to_numpy(dtype=np.float64)
-        if _looks_geometric(x):
-            axes[0][col].set_xscale("log")
-            axes[1][col].set_xscale("log")
-        axes[0][col].plot(x, frame["sharpe"], color=CATEGORICAL[0], marker="o", markersize=4)
-        axes[0][col].set_ylabel("Sharpe" if col == 0 else "")
-        axes[0][col].set_title(parameter)
-        axes[1][col].plot(
-            x,
-            frame["std_final_inventory"],
-            color=CATEGORICAL[3],
-            marker="o",
-            markersize=4,
-            label="std(final q)",
-        )
-        axes[1][col].plot(
-            x,
-            frame["mean_abs_inventory"],
-            color=CATEGORICAL[2],
-            marker="s",
-            markersize=4,
-            label="mean |q|",
-        )
-        axes[1][col].set_xlabel(parameter)
-        axes[1][col].set_ylabel("inventory" if col == 0 else "")
-    axes[1][0].legend(loc="upper right")
-    fig.suptitle("Parameter sensitivity of the Avellaneda-Stoikov maker", x=0.01, ha="left")
-    return _finish(fig)
+
+def plot_sensitivity(sweep: pd.DataFrame, labels: dict[str, str] | None = None) -> Figure:
+    """Four statistics against each swept parameter, per policy, with 95% bands.
+
+    Small multiples: one column per swept parameter, one row per statistic, one line per
+    policy. The shaded band is +-1.96 standard errors across sessions (bootstrap for the
+    std, Sharpe and inventory rows). Colours follow the policy, in the fixed slot order of
+    first appearance, so every panel paints the same policy the same way.
+
+    Args:
+        sweep: Long-format output of :func:`~mmsim.experiments.policy_sensitivity_sweep`,
+            possibly several sweeps concatenated (distinguished by ``parameter``).
+        labels: Optional x-axis label per parameter name.
+    """
+    apply_house_style()
+    labels = labels or {}
+    parameters = list(dict.fromkeys(sweep["parameter"]))
+    policies = list(dict.fromkeys(sweep["policy"]))
+    colors = dict(zip(policies, CATEGORICAL, strict=False))
+    n_rows, n_cols = len(_SENSITIVITY_ROWS), len(parameters)
+    fig, axes = plt.subplots(
+        n_rows, n_cols, figsize=(3.6 * n_cols, 2.7 * n_rows), squeeze=False, sharex="col"
+    )
+
+    for col, parameter in enumerate(parameters):
+        block = sweep[sweep["parameter"] == parameter]
+        grid = np.sort(block["value"].unique().astype(np.float64))
+        geometric = _looks_geometric(grid)
+        for row, (stat, se_col, ylabel) in enumerate(_SENSITIVITY_ROWS):
+            ax = axes[row][col]
+            if geometric:
+                ax.set_xscale("log")
+                # Label every other swept value in plain numbers, not 2x10^0 notation.
+                ax.set_xticks(grid[::2])
+                ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:.2g}"))
+                ax.xaxis.set_minor_formatter(NullFormatter())
+            for policy in policies:
+                sub = block[block["policy"] == policy].sort_values("value")
+                if sub.empty:
+                    continue
+                x = sub["value"].to_numpy(dtype=np.float64)
+                y = sub[stat].to_numpy(dtype=np.float64)
+                se = sub[se_col].to_numpy(dtype=np.float64)
+                ax.fill_between(
+                    x, y - 1.96 * se, y + 1.96 * se, color=colors[policy], alpha=0.18, lw=0
+                )
+                ax.plot(x, y, color=colors[policy], marker="o", markersize=3.5, label=policy)
+            if col == 0:
+                ax.set_ylabel(ylabel)
+            if row == 0:
+                ax.set_title(labels.get(parameter, parameter))
+            if row == n_rows - 1:
+                ax.set_xlabel(labels.get(parameter, parameter))
+    handles, names = axes[0][0].get_legend_handles_labels()
+    fig.suptitle("Parameter sensitivity, three policies", x=0.01, y=0.995, ha="left")
+    fig.text(
+        0.01,
+        0.962,
+        "Bands: +-1.96 standard errors across sessions. Sharpe is per simulated session, "
+        "not annualised, and not comparable to a trading strategy's Sharpe.",
+        ha="left",
+        fontsize=9,
+        color=INK_SECONDARY,
+    )
+    fig.legend(
+        handles, names, loc="upper right", bbox_to_anchor=(0.995, 0.995), ncol=3, frameon=False
+    )
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
+    return fig
 
 
 def plot_fill_intensity_fit(fit: FillIntensityFit, market: MarketConfig) -> Figure:
@@ -402,36 +449,104 @@ def plot_volatility_signature(signatures: dict[str, pd.DataFrame]) -> Figure:
 
 
 def plot_markout(
-    runs: dict[str, list[SimulationResult]],
-    horizons: tuple[int, ...] = (1, 2, 5, 10, 25, 50, 100, 250),
+    decomposition: pd.DataFrame,
+    impact_ticks: float,
+    impact_speed: float,
+    bar_horizon: int = 100,
 ) -> Figure:
-    """Adverse selection: signed mid move after a fill, averaged across runs and fills.
+    """Adverse selection, split by who the maker traded with.
 
-    Negative and falling means the flow that hits you knows something. The level the curve
-    settles at is the per-fill cost the spread has to cover.
+    **Left:** per-unit markout (signed mid move after the fill, in ticks) against horizon,
+    for each policy, separately for fills against informed (solid) and uninformed
+    (dashed) takers, with 95% bands clustered by session. The grey dotted line is the
+    model's own prediction for an informed fill, :math:`-J(1-(1-v)^h)`.
+
+    **Right:** the same thing as PnL per session at one horizon: the edge earned at the
+    fill from each counterparty type, the adverse-selection cost each one then imposed,
+    and what is left -- the realised spread.
+
+    Args:
+        decomposition: Output of :func:`~mmsim.metrics.markout_decomposition`.
+        impact_ticks: Informed impact :math:`J`, for the theory line.
+        impact_speed: Informed impact release speed :math:`v`, for the theory line.
+        bar_horizon: Horizon, in steps, for the right-hand panel. Must be in the frame.
     """
     apply_house_style()
-    fig, ax = plt.subplots(figsize=(8.0, 5.0))
-    for (name, results), color in zip(runs.items(), CATEGORICAL, strict=False):
-        curves = [markout_curve(r, horizons) for r in results if not r.fill_prices.empty]
-        if not curves:
-            continue
-        stacked = pd.concat(curves)
-        # Weight each run's markout by its fill count, so a quiet run does not count as
-        # much as a busy one.
-        stacked["weighted"] = stacked["mean_markout"] * stacked["n_fills"]
-        grouped = stacked.groupby("horizon")[["weighted", "n_fills"]].sum()
-        agg = grouped["weighted"] / grouped["n_fills"]
-        ax.plot(
-            agg.index.to_numpy(), agg.to_numpy(), color=color, marker="o", markersize=4, label=name
-        )
-    ax.axhline(0.0, color=INK_MUTED, linewidth=0.9, linestyle=(0, (4, 4)), zorder=0)
+    fig, axes = plt.subplots(1, 2, figsize=(13.0, 5.0), gridspec_kw={"width_ratios": [1.1, 1]})
+    policies = list(dict.fromkeys(decomposition["policy"]))
+    colors = dict(zip(policies, CATEGORICAL, strict=False))
+
+    ax = axes[0]
+    for policy in policies:
+        for counterparty, style_ in (("informed", "-"), ("uninformed", (0, (4, 3)))):
+            sub = decomposition[
+                (decomposition["policy"] == policy)
+                & (decomposition["counterparty"] == counterparty)
+            ].sort_values("horizon")
+            h = sub["horizon"].to_numpy(dtype=np.float64)
+            y = sub["markout_ticks"].to_numpy(dtype=np.float64)
+            se = sub["markout_ticks_se"].to_numpy(dtype=np.float64)
+            ax.fill_between(h, y - 1.96 * se, y + 1.96 * se, color=colors[policy], alpha=0.15)
+            ax.plot(
+                h,
+                y,
+                color=colors[policy],
+                linestyle=style_,
+                marker="o",
+                markersize=3.5,
+                label=f"{policy}, {counterparty}",
+            )
+    dense = np.geomspace(1.0, float(decomposition["horizon"].max()), 200)
+    ax.plot(
+        dense,
+        informed_markout_theory(dense, impact_ticks, impact_speed),
+        color=INK_MUTED,
+        linestyle=(0, (1, 2)),
+        linewidth=1.6,
+        label=r"theory, informed: $-J(1-(1-v)^h)$",
+    )
+    ax.axhline(0.0, color=INK_MUTED, linewidth=0.9, zorder=0)
     ax.set_xscale("log")
     ax.set_xlabel("steps after fill")
-    ax.set_ylabel("signed mid move (price units)")
-    ax.set_title("Markout: how much of the captured spread the informed flow takes back")
-    ax.legend(loc="lower left")
-    return _finish(fig, "Negative means the price moved against the maker after it traded")
+    ax.set_ylabel("markout per unit filled (ticks)")
+    ax.set_title("Markout by counterparty")
+    ax.legend(loc="lower left", fontsize=7.5)
+
+    ax = axes[1]
+    at = decomposition[decomposition["horizon"] == float(bar_horizon)]
+    components = (
+        ("edge_pnl_per_session", "uninformed", "edge earned\nfrom uninformed"),
+        ("edge_pnl_per_session", "informed", "edge earned\nfrom informed"),
+        ("adverse_selection_pnl_per_session", "uninformed", "adverse sel.\nuninformed"),
+        ("adverse_selection_pnl_per_session", "informed", "adverse sel.\ninformed"),
+        ("realised_pnl_per_session", "all", "realised\nspread, total"),
+    )
+    width = 0.8 / max(len(policies), 1)
+    x = np.arange(len(components), dtype=np.float64)
+    for k, policy in enumerate(policies):
+        values = []
+        for column, counterparty, _ in components:
+            cell = at[(at["policy"] == policy) & (at["counterparty"] == counterparty)][column]
+            value = float(cell.iloc[0]) if not cell.empty else float("nan")
+            # Costs are drawn below zero so the bars read as a ledger.
+            values.append(-value if column.startswith("adverse") else value)
+        ax.bar(
+            x + (k - (len(policies) - 1) / 2) * width,
+            values,
+            width=width * 0.92,
+            color=colors[policy],
+            label=policy,
+        )
+    ax.axhline(0.0, color=INK_MUTED, linewidth=0.9)
+    ax.set_xticks(x, [c[2] for c in components], fontsize=8)
+    ax.set_ylabel("PnL per session (price units)")
+    ax.set_title(f"Where the spread goes, marked {bar_horizon} steps after each fill")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3, fontsize=8, frameon=False)
+    return _finish(
+        fig,
+        "Negative markout means the mid moved against the maker after it traded. "
+        "Bands: +-1.96 session-clustered standard errors.",
+    )
 
 
 def plot_book_snapshot(
