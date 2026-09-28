@@ -30,7 +30,7 @@ from quantbt.validation import sharpe_std_error
 from quantbt.vectorized import backtest_ma_crossover
 
 STRATEGIES = ["ma_crossover", "tsmom", "xsmom", "mean_reversion", "pairs"]
-HEATMAP_CELLS = 116  # valid cells in scripts/ma_sensitivity.py, 17 of them already counted
+HEATMAP_GRID = Path("reports/sensitivity/ma_sharpe_grid.csv")  # scripts/ma_sensitivity.py
 
 
 def _oos_excess(root: Path, name: str) -> pd.Series:
@@ -92,7 +92,17 @@ def main() -> None:
     rows.append({"series": f"ma_crossover {short}/{long}, previous method (MA grid only)", **old})
     table = pd.DataFrame(rows)
 
-    n_heat = n_trials - len(ma_grid) + HEATMAP_CELLS
+    # If the heatmap had been used to choose parameters, every one of its cells would be a
+    # trial too. Its cells include the 17 MA grid points, so they are not counted twice.
+    heat = pd.read_csv(HEATMAP_GRID)
+    ma_keys = {
+        (int(r["short"]), int(r["long"]))
+        for r in pd.read_csv(root / "ma_crossover" / "grid.csv").to_dict("records")
+    }
+    new_cells = sum(
+        (int(f), int(s)) not in ma_keys for f, s in zip(heat["fast"], heat["slow"], strict=True)
+    )
+    n_heat = n_trials + new_cells
     counts = {
         "N=1 (no correction: the PSR)": 1,
         "N=5 (one per strategy)": 5,

@@ -1,0 +1,12 @@
+label,fast,slow,sharpe,n_neighbours,neighbour_mean,neighbour_min,percentile_in_grid,beats_benchmark
+in-sample best of the 17-point grid,10,200,0.675625,8.000000,0.619879,0.586714,0.982759,True
+the textbook 50/200,50,200,0.539162,8.000000,0.566296,0.536337,0.439655,True
+best cell of this dense grid,10,75,0.732656,8.000000,0.519114,0.405450,0.991379,True
+chosen by walk-forward in 4 folds,50,250,0.573908,8.000000,0.564693,0.498832,0.629310,True
+chosen by walk-forward in 4 folds,10,100,0.645739,8.000000,0.594483,0.507106,0.965517,True
+chosen by walk-forward in 3 folds,50,100,0.463757,8.000000,0.502211,0.417166,0.086207,False
+chosen by walk-forward in 2 folds,100,150,0.513794,7.000000,0.541918,0.462175,0.241379,False
+chosen by walk-forward in 2 folds,20,50,0.429867,5.000000,0.465367,0.386784,0.043103,False
+chosen by walk-forward in 1 folds,10,150,0.565749,8.000000,0.604706,0.554941,0.594828,True
+chosen by walk-forward in 1 folds,50,150,0.599441,8.000000,0.545694,0.482851,0.818966,True
+chosen by walk-forward in 1 folds,20,200,0.623729,8.000000,0.613622,0.562653,0.922414,True

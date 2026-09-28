@@ -1,0 +1,31 @@
+n_assumption,var_assumption,var_trials_sharpe_annual,sharpe,n_obs,skew,kurtosis,psr,n_trials,sr0_annual,dsr,series
+N=1 (no correction: the PSR),"V=0.0056 (MA grid only, previous)",0.005575,0.580201,5198.000000,-0.623525,8.222113,0.995369,1.000000,0.000000,0.995369,ma_crossover walk-forward OOS
+N=1 (no correction: the PSR),V=0.0504 (sampling variance of one Sharpe),0.050372,0.580201,5198.000000,-0.623525,8.222113,0.995369,1.000000,0.000000,0.995369,ma_crossover walk-forward OOS
+N=1 (no correction: the PSR),V=0.1448 (all 63 trials),0.144803,0.580201,5198.000000,-0.623525,8.222113,0.995369,1.000000,0.000000,0.995369,ma_crossover walk-forward OOS
+N=5 (one per strategy),"V=0.0056 (MA grid only, previous)",0.005575,0.580201,5198.000000,-0.623525,8.222113,0.995369,5.000000,0.089046,0.986198,ma_crossover walk-forward OOS
+N=5 (one per strategy),V=0.0504 (sampling variance of one Sharpe),0.050372,0.580201,5198.000000,-0.623525,8.222113,0.995369,5.000000,0.267663,0.919507,ma_crossover walk-forward OOS
+N=5 (one per strategy),V=0.1448 (all 63 trials),0.144803,0.580201,5198.000000,-0.623525,8.222113,0.995369,5.000000,0.453817,0.714590,ma_crossover walk-forward OOS
+"N=17 (MA grid only, previous count)","V=0.0056 (MA grid only, previous)",0.005575,0.580201,5198.000000,-0.623525,8.222113,0.995369,17.000000,0.136496,0.976708,ma_crossover walk-forward OOS
+"N=17 (MA grid only, previous count)",V=0.0504 (sampling variance of one Sharpe),0.050372,0.580201,5198.000000,-0.623525,8.222113,0.995369,17.000000,0.410293,0.776987,ma_crossover walk-forward OOS
+"N=17 (MA grid only, previous count)",V=0.1448 (all 63 trials),0.144803,0.580201,5198.000000,-0.623525,8.222113,0.995369,17.000000,0.695643,0.302310,ma_crossover walk-forward OOS
+N=63 (all five grids),"V=0.0056 (MA grid only, previous)",0.005575,0.580201,5198.000000,-0.623525,8.222113,0.995369,63.000000,0.176476,0.964910,ma_crossover walk-forward OOS
+N=63 (all five grids),V=0.0504 (sampling variance of one Sharpe),0.050372,0.580201,5198.000000,-0.623525,8.222113,0.995369,63.000000,0.530466,0.588258,ma_crossover walk-forward OOS
+N=63 (all five grids),V=0.1448 (all 63 trials),0.144803,0.580201,5198.000000,-0.623525,8.222113,0.995369,63.000000,0.899395,0.076127,ma_crossover walk-forward OOS
+N=162 (... plus every heatmap cell),"V=0.0056 (MA grid only, previous)",0.005575,0.580201,5198.000000,-0.623525,8.222113,0.995369,162.000000,0.201292,0.955382,ma_crossover walk-forward OOS
+N=162 (... plus every heatmap cell),V=0.0504 (sampling variance of one Sharpe),0.050372,0.580201,5198.000000,-0.623525,8.222113,0.995369,162.000000,0.605063,0.455607,ma_crossover walk-forward OOS
+N=162 (... plus every heatmap cell),V=0.1448 (all 63 trials),0.144803,0.580201,5198.000000,-0.623525,8.222113,0.995369,162.000000,1.025872,0.022811,ma_crossover walk-forward OOS
+N=1 (no correction: the PSR),"V=0.0056 (MA grid only, previous)",0.005575,0.675625,5198.000000,-0.818630,9.797765,0.998695,1.000000,0.000000,0.998695,ma_crossover 10/200 in-sample best
+N=1 (no correction: the PSR),V=0.0504 (sampling variance of one Sharpe),0.050372,0.675625,5198.000000,-0.818630,9.797765,0.998695,1.000000,0.000000,0.998695,ma_crossover 10/200 in-sample best
+N=1 (no correction: the PSR),V=0.1448 (all 63 trials),0.144803,0.675625,5198.000000,-0.818630,9.797765,0.998695,1.000000,0.000000,0.998695,ma_crossover 10/200 in-sample best
+N=5 (one per strategy),"V=0.0056 (MA grid only, previous)",0.005575,0.675625,5198.000000,-0.818630,9.797765,0.998695,5.000000,0.089046,0.995520,ma_crossover 10/200 in-sample best
+N=5 (one per strategy),V=0.0504 (sampling variance of one Sharpe),0.050372,0.675625,5198.000000,-0.818630,9.797765,0.998695,5.000000,0.267663,0.965446,ma_crossover 10/200 in-sample best
+N=5 (one per strategy),V=0.1448 (all 63 trials),0.144803,0.675625,5198.000000,-0.818630,9.797765,0.998695,5.000000,0.453817,0.838493,ma_crossover 10/200 in-sample best
+"N=17 (MA grid only, previous count)","V=0.0056 (MA grid only, previous)",0.005575,0.675625,5198.000000,-0.818630,9.797765,0.998695,17.000000,0.136496,0.991850,ma_crossover 10/200 in-sample best
+"N=17 (MA grid only, previous count)",V=0.0504 (sampling variance of one Sharpe),0.050372,0.675625,5198.000000,-0.818630,9.797765,0.998695,17.000000,0.410293,0.881439,ma_crossover 10/200 in-sample best
+"N=17 (MA grid only, previous count)",V=0.1448 (all 63 trials),0.144803,0.675625,5198.000000,-0.818630,9.797765,0.998695,17.000000,0.695643,0.464464,ma_crossover 10/200 in-sample best
+N=63 (all five grids),"V=0.0056 (MA grid only, previous)",0.005575,0.675625,5198.000000,-0.818630,9.797765,0.998695,63.000000,0.176476,0.986926,ma_crossover 10/200 in-sample best
+N=63 (all five grids),V=0.0504 (sampling variance of one Sharpe),0.050372,0.675625,5198.000000,-0.818630,9.797765,0.998695,63.000000,0.530466,0.741109,ma_crossover 10/200 in-sample best
+N=63 (all five grids),V=0.1448 (all 63 trials),0.144803,0.675625,5198.000000,-0.818630,9.797765,0.998695,63.000000,0.899395,0.159375,ma_crossover 10/200 in-sample best
+N=162 (... plus every heatmap cell),"V=0.0056 (MA grid only, previous)",0.005575,0.675625,5198.000000,-0.818630,9.797765,0.998695,162.000000,0.201292,0.982718,ma_crossover 10/200 in-sample best
+N=162 (... plus every heatmap cell),V=0.0504 (sampling variance of one Sharpe),0.050372,0.675625,5198.000000,-0.818630,9.797765,0.998695,162.000000,0.605063,0.623390,ma_crossover 10/200 in-sample best
+N=162 (... plus every heatmap cell),V=0.1448 (all 63 trials),0.144803,0.675625,5198.000000,-0.818630,9.797765,0.998695,162.000000,1.025872,0.059314,ma_crossover 10/200 in-sample best
