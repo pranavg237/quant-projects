@@ -1,0 +1,4 @@
+# Each project is its own repository; this repo only holds the index.
+*/
+*.tar.gz
+.DS_Store
