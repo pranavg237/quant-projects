@@ -291,3 +291,13 @@ because the original raw download was not kept (`data/cache/` is gitignored).
 
 The lesson is the one in `data/README.md`: a result tied to a data vendor's current
 adjustment is only reproducible against a stored snapshot.
+
+**A second fresh download on the same day contradicts that explanation.** The pipeline was
+run again from another fresh Yahoo download (also 2026-09-28) while adding the
+deflated-Sharpe and heatmap work. `ma_crossover`, `tsmom`, `xsmom` and `pairs` matched the
+tables above to within about 1e-5 in Sharpe. `mean_reversion` came back at the
+*original* numbers instead: Sharpe 0.44, longest drawdown 1,102 days, turnover 10.4. Both
+downloads postdate the December 2025 splits, so the splits alone cannot explain the
+difference. `mean_reversion` moves between two states depending on the download, and the
+cause is not isolated. The tables above keep the committed run. The fix is a committed
+price snapshot, which this repository still lacks.
