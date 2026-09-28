@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.DS_Store
+.ipynb_checkpoints/
+
+# Cached market data: raw downloads are ignored, curated snapshots are committed.
+data/raw/
+!data/snapshots/

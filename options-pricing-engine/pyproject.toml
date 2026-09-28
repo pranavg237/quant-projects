@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "optpricing"
+version = "1.0.0"
+description = "Options pricing engine: Black-Scholes, binomial trees, Monte Carlo, Heston, and volatility surfaces."
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pandas>=2.1",
+    "matplotlib>=3.8",
+    "yfinance>=0.2.40",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "ARG", "PL", "RUF", "ANN"]
+ignore = [
+    "PLR0913",  # many arguments is idiomatic for pricing signatures
+    "PLR0917",  # ... and callers legitimately pass (S, K, tau, r, sigma) positionally
+    "PLR2004",  # magic numbers are common in numerical code
+    "ANN401",   # Any is occasionally needed for **kwargs passthrough
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests set the Matplotlib backend before importing pyplot (E402), import inside
+# functions to keep fixtures lazy (PLC0415), use bare lambdas in parametrize (PLW0108),
+# and define stub doubles whose signatures must mirror the real API even where an
+# argument is ignored (ARG002/ARG005, RUF012).
+"tests/*" = [
+    "PLR2004", "ANN201", "ANN001", "ANN202", "ARG001", "ARG002", "ARG005",
+    "E402", "PLC0415", "PLW0108", "RUF012",
+]
+"scripts/*" = ["T201"]
+
+[tool.mypy]
+# No `python_version` pin: numpy>=2.3 ships stubs that use PEP 695 `type` statements,
+# which mypy refuses to parse when targeting < 3.12. The package itself is 3.11-compatible.
+strict = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+plugins = []
+mypy_path = "src"
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["yfinance.*", "scipy.*", "matplotlib.*", "pandas.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "network: tests that require live network access (deselected by default)",
+    "slow: long-running convergence tests",
+]
+
+[tool.coverage.run]
+source = ["src/optpricing"]
+branch = true
+omit = ["*/plotting.py"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]

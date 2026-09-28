@@ -1,0 +1,16 @@
+# Core numerics
+numpy>=1.26
+scipy>=1.11
+pandas>=2.1
+matplotlib>=3.8
+
+# Market data (option chains, spot prices, risk-free proxy)
+yfinance>=0.2.40
+
+# Dev / QA
+pytest>=8.0
+pytest-cov>=5.0
+ruff>=0.5
+mypy>=1.10
+pandas-stubs>=2.1
+cycler>=0.11
