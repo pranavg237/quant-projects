@@ -1,0 +1,3 @@
+# Installs quantbt with its runtime and dev dependencies (pytest, ruff, mypy).
+# Requires Python >= 3.12.
+-e .[dev]

@@ -1,0 +1,2 @@
+# Installs ffmodel (and its `ffmodel` command) with its runtime and dev dependencies.
+-e .[dev]

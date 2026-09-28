@@ -16,3 +16,6 @@ pytest-cov>=5.0
 ruff>=0.5
 mypy>=1.10
 pandas-stubs>=2.1
+
+# This project itself, so `import portopt` works in tests and scripts
+-e .
