@@ -1,0 +1,10 @@
+| informed_fraction | expected_cost_ticks | policy | mean_pnl | sharpe | std_final_inventory | mean_trades |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.000 | 0.000 | Avellaneda-Stoikov | 12.705 | 12.852 | 8.153 | 252.500 |
+| 0.000 | 0.000 | Symmetric | 12.618 | 12.189 | 16.541 | 251.970 |
+| 0.100 | 0.200 | Avellaneda-Stoikov | 12.485 | 10.730 | 2.458 | 256.318 |
+| 0.100 | 0.200 | Symmetric | 13.507 | 3.649 | 20.002 | 249.182 |
+| 0.200 | 0.400 | Avellaneda-Stoikov | 12.535 | 11.870 | 1.538 | 261.409 |
+| 0.200 | 0.400 | Symmetric | 12.686 | 2.804 | 15.964 | 239.621 |
+| 0.300 | 0.600 | Avellaneda-Stoikov | 12.627 | 11.962 | 1.286 | 268.970 |
+| 0.300 | 0.600 | Symmetric | 11.328 | 1.964 | 17.429 | 224.788 |

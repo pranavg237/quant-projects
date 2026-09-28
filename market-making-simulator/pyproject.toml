@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mmsim"
+version = "1.0.0"
+description = "Limit order book simulator and Avellaneda-Stoikov market making with inventory risk."
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26", "scipy>=1.11", "pandas>=2.1", "matplotlib>=3.8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "ARG", "PL", "RUF", "ANN"]
+ignore = [
+    "PLR0913",  # simulation configs legitimately take many parameters
+    "PLR0917",  # ... and are often passed positionally in tests
+    "PLR2004",  # magic numbers are common in numerical code
+    "ANN401",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "PLR2004", "ANN201", "ANN001", "ANN202", "ARG001", "ARG002", "ARG005",
+    "E402", "PLC0415", "PLW0108", "RUF012",
+]
+"scripts/*" = ["T201", "PLR0915"]
+
+[tool.mypy]
+# No `python_version` pin: numpy>=2.3 ships stubs using PEP 695 `type` statements, which
+# mypy refuses to parse when targeting < 3.12. The package itself is 3.11-compatible.
+strict = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+mypy_path = "src"
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["scipy.*", "matplotlib.*", "pandas.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = ["slow: long-running Monte Carlo comparisons"]
+
+[tool.coverage.run]
+source = ["src/mmsim"]
+branch = true
+omit = ["*/plotting.py"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]
