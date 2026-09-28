@@ -1,4 +1,12 @@
-# Each project is its own repository; this repo only holds the index.
-*/
-*.tar.gz
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv-shared/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 .DS_Store
+*.tar.gz
