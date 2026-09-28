@@ -172,15 +172,20 @@ distinguishable from 1/N (smallest p = 0.20).
   arrival rate A and the informed fraction are each swept for all three policies on the
   same seeds, with bootstrap standard errors, a CSV and a figure. A-S's advantage grows
   when inventory is riskier relative to spread income (higher κ, σ, more informed flow),
-  nearly vanishes at low volatility, and with too little risk aversion (γ = 0.01) a plain
-  position limit beats it.
+  nearly vanishes at low volatility. At the lowest risk aversion tested (γ = 0.01) a plain
+  position limit beats it, but one step up the grid A-S is level or ahead again, so it is
+  only vulnerable if its risk aversion is set far too low.
 - **Honesty about noise.** The old informed-flow table (66 sessions, no error bars) showed
   A-S 12.9 vs symmetric 12.2 with no informed flow. The rebuilt table uses 100 sessions on
   a different seed block and reads 10.5 ± 0.8 vs 8.8 ± 0.6; on matched subsets the two
   seed blocks differ by about 2 standard errors. A per-session Sharpe near 10 carries a
   standard error of roughly 0.8 at this sample size, which is why every table now shows
   one. Every Sharpe remains labelled per simulated session, not annualised, including the
-  figure axes.
+  figure axes and results tables.
+- **Why A-S holds a big inventory with no informed flow.** Its final-inventory std is 8.1
+  at 0% informed flow, against 1–3 otherwise. It's not a bug: with no informed flow the
+  fitted volatility is tiny (0.07), so the quote skew qγσ²h stays under one tick until the
+  position reaches about 39, and the maker behaves almost symmetrically.
 
 ### fama-french-factor-model: reproducible data, checked standard errors, honest rolling betas
 
