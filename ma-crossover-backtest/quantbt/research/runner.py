@@ -125,6 +125,8 @@ def run_spec(
     # Every Sharpe-like statistic below is in excess of the risk-free rate, matching the
     # summary metrics; a mostly-in-cash strategy otherwise looks excellent on raw returns.
     grid_rf = rf_series.reindex(grid.returns.index).fillna(0.0)
+    # dsr_is below deflates by this one strategy's grid only, which understates the search.
+    # scripts/multiple_testing.py computes the DSR over every strategy's configurations.
     rep_is = overfit_report(
         grid.returns[grid.best_index],
         rf=grid_rf,

@@ -180,3 +180,27 @@ phases. Newest entries at the bottom.
     deliberately permits negative cash and gross exposure above 1 — that is a strategy
     constraint, not a bookkeeping one — but an unreported leverage is indistinguishable
     from none. Reporting it costs two lines and makes the permissive default safe.
+
+## Phase 8: Robustness and multiple testing
+
+46. **The deflated Sharpe ratio counts every configuration of every strategy (N = 63).**
+    The per-strategy grid (17 for the MA crossover) understates the search, because the
+    write-up reports the best of five strategies. 63 is still a lower bound: it cannot
+    count ideas that were never coded. The DSR is reported as a grid over the trial count
+    and the cross-trial Sharpe variance rather than as one number, because in this project
+    the variance assumption moves the answer at least as much as the count does.
+47. **The cross-trial variance of the 17 MA configurations is not used as the headline.**
+    Those configurations are near-copies, so their Sharpe ratios barely differ (variance
+    0.006). Plugging that into the DSR treats near-duplicates as if their tiny spread were
+    the noise in a Sharpe estimate, which is what produced the old DSR of 0.99. The honest
+    options are the paper's recipe (variance of all 63 trials) or the sampling variance of
+    one Sharpe estimate; both are shown.
+48. **The parameter heatmap is in-sample and is labelled that way on the figure itself.**
+    It exists to show whether good parameters form a plateau or a spike, not to pick
+    parameters. Nothing reads from it. It uses the vectorised backtest because the dense
+    grid would take the event-driven engine about 8 minutes (about 4 s a cell) against a
+    few seconds vectorised. The script cross-checks the 17 shared cells against the
+    engine's `grid.csv` and refuses to write if they disagree.
+49. **Heatmap cells are colored relative to buy-and-hold, not to zero.** The question the
+    figure answers is "does any region beat simply holding SPY?", so buy-and-hold's Sharpe
+    over the same dates is the diverging midpoint (white).
