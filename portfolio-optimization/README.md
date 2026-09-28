@@ -11,8 +11,8 @@ damage.
 
 ```bash
 pip install -r requirements.txt
-python scripts/run_analysis.py       # ~10-13 min, offline from committed snapshots; writes figures/ and results/
-python scripts/estimation_window.py  # ~5 min, the estimation-window experiment
+python scripts/run_analysis.py       # ~4 min (up to ~13 on a loaded machine), offline from committed snapshots; writes figures/ and results/
+python scripts/estimation_window.py  # ~3-5 min, the estimation-window experiment
 python -m pytest                     # 80 tests, offline
 ```
 

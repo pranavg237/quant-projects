@@ -6,15 +6,16 @@ results were inflated by a same-bar fill, no transaction costs and no out-of-sam
 discipline. Those bugs, and their measured effect, are documented in
 [AUDIT.md](AUDIT.md).
 
-Five strategies run on it. Four lose to buying and holding the index, and
-[RESULTS.md](RESULTS.md) says so in the first paragraph.
+Five strategies run on it. Four lose to buying and holding the index. The fifth, the MA
+crossover, edges it on Sharpe (0.58 vs 0.53 over the same dates) by far less than the
+noise, and [RESULTS.md](RESULTS.md) says so in the first paragraph.
 
 ```bash
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m pytest              # 140 tests, 98% coverage, offline
 .venv/bin/ruff check . && .venv/bin/mypy    # both clean, mypy in strict mode
 .venv/bin/python scripts/run_ma_crossover.py
-.venv/bin/python scripts/ma_sensitivity.py     # parameter heatmap, ~15 s
+.venv/bin/python scripts/ma_sensitivity.py     # parameter heatmap, ~10 s
 .venv/bin/python scripts/multiple_testing.py   # deflated Sharpe over all 63 trials, ~3 s
 .venv/bin/python scripts/run_strategies.py     # all five strategies, ~26 min
 ```
@@ -43,8 +44,12 @@ their first training window.
 
 Turnover is one-way, as a multiple of capital per year.
 
-**None of the five strategies beats buy-and-hold SPY on a risk-adjusted basis, and none has
-a statistically significant Fama-French five-factor alpha** (every |t| < 2). The MA
+**No strategy shows a reliable edge over buy-and-hold SPY, and none has a statistically
+significant Fama-French five-factor alpha** (every |t| < 2). Four have lower Sharpe ratios
+than buy-and-hold. The MA crossover's 0.58 beats buy-and-hold's 0.53 over its own
+2005-2025 window (the table's SPY row covers 2010-2025, when SPY did better), but that gap
+sits well inside its bootstrap interval (0.21 to 1.01) and does not survive the
+multiple-testing correction below. The MA
 crossover's real contribution is a smaller drawdown than SPY over its own 2005-2025 window
 (-22% vs -55%), not extra return. [RESULTS.md](RESULTS.md) has the bootstrap intervals,
 probability of backtest overfitting and factor loadings, plus a reproducibility check:

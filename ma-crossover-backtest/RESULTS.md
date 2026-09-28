@@ -11,7 +11,7 @@ Rebuild everything with:
 python scripts/run_strategies.py      # ~25 minutes, writes reports/strategies/
 python scripts/build_tearsheets.py    # writes reports/tearsheets/
 python scripts/multiple_testing.py    # ~3 seconds, reads reports/strategies/, writes reports/multiple_testing/
-python scripts/ma_sensitivity.py      # ~15 seconds, writes reports/sensitivity/
+python scripts/ma_sensitivity.py      # ~10 seconds, writes reports/sensitivity/
 ```
 
 ## How these numbers were produced
