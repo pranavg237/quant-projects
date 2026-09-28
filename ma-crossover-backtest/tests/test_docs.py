@@ -116,6 +116,26 @@ def _number(cell: str) -> float:
     return float(raw)
 
 
+def _check_headline_table(text: str, table: pd.DataFrame) -> None:
+    headline = _markdown_rows(text, "| CAGR | Vol |")
+    columns = ["cagr", "ann_vol", "sharpe", "sortino", "max_drawdown", "max_dd_days", "turnover"]
+    for name, row in table.iterrows():
+        cells = headline[str(name)]
+        assert len(cells) == 8, f"{name}: expected 8 columns, got {cells}"
+        for cell, column in zip(cells, columns, strict=False):
+            reported, actual = _number(cell), float(row[column])
+            tol = 0.5 if column == "max_dd_days" else max(abs(actual) * 0.02, 0.005)
+            assert abs(reported - actual) <= tol, f"{name}.{column}: {reported} != {actual}"
+
+
+@pytest.mark.skipif(not RESULTS_CSV.exists(), reason="run scripts/run_strategies.py first")
+def test_readme_headline_table_matches_the_generated_table() -> None:
+    """The copy of the headline table in README.md cannot drift from the pipeline either."""
+    _check_headline_table(
+        Path("README.md").read_text(), pd.read_csv(RESULTS_CSV).set_index("strategy")
+    )
+
+
 @pytest.mark.skipif(not RESULTS_CSV.exists(), reason="run scripts/run_strategies.py first")
 def test_results_md_matches_the_generated_table() -> None:
     """Every headline number in RESULTS.md is the one the pipeline actually produced.
@@ -126,15 +146,7 @@ def test_results_md_matches_the_generated_table() -> None:
     table = pd.read_csv(RESULTS_CSV).set_index("strategy")
     text = Path("RESULTS.md").read_text()
 
-    headline = _markdown_rows(text, "| CAGR | Vol |")
-    columns = ["cagr", "ann_vol", "sharpe", "sortino", "max_drawdown", "max_dd_days", "turnover"]
-    for name, row in table.iterrows():
-        cells = headline[str(name)]
-        assert len(cells) == 8, f"{name}: expected 8 columns, got {cells}"
-        for cell, column in zip(cells, columns, strict=False):
-            reported, actual = _number(cell), float(row[column])
-            tol = 0.5 if column == "max_dd_days" else max(abs(actual) * 0.02, 0.005)
-            assert abs(reported - actual) <= tol, f"{name}.{column}: {reported} != {actual}"
+    _check_headline_table(text, table)
 
     diagnostics = _markdown_rows(text, "| Bootstrap 95% CI |")
     for name, row in table.iterrows():

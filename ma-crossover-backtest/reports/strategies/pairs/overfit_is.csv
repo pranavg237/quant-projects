@@ -1,12 +1,12 @@
 ,0
-sharpe,0.20942829990349535
-sharpe_se_annual,0.25142404449885847
-psr,0.79756874211473
-dsr,0.0031500374784409007
+sharpe,0.20942839365188734
+sharpe_se_annual,0.2514240230535136
+psr,0.7975688672985549
+dsr,0.0031500807712264616
 n_trials,8
-min_track_record_periods,15356.823355285636
-bootstrap_ci_lo,-0.25943105328152244
-bootstrap_ci_hi,0.6132631871189899
+min_track_record_periods,15356.806987983407
+bootstrap_ci_lo,-0.25943234525487124
+bootstrap_ci_hi,0.6132590913740531
 bootstrap_p_sharpe_le_0,0.183
 pbo,0.0
 flags,PSR 0.80 < 0.95: Sharpe not distinguishable from zero; DSR 0.00 < 0.95 after 8 trials: likely selection effect; bootstrap P(Sharpe<=0) = 0.18

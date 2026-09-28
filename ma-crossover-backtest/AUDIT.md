@@ -64,7 +64,13 @@ signal bar.
 | Next bar's close | 45.19% | 0.47 |
 
 Inflation: about 4.6 percentage points of a 48-point return, roughly a tenth of the
-whole result, from one shift. Trend-following signals are systematically flattered by
+whole result, from one shift.
+
+*Re-checked 2026-09-28* with an independent script on a fresh Yahoo download (SPY,
+2018-01-02 to 2023-12-29, no costs): same-bar close fill 57.80% / Sharpe 0.54, next-open
+fill 52.93% / Sharpe 0.51. The levels differ from the table because the data was
+re-downloaded and the original script's warm-up handling was not reconstructed exactly,
+but the inflation (4.9 points) reproduces. Trend-following signals are systematically flattered by
 this bug because the bar after a breakout tends to continue in the breakout direction.
 
 ### 3.2 No transaction costs or slippage (MEDIUM)
