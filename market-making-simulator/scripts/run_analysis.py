@@ -162,9 +162,9 @@ def horizon_study(n_runs: int) -> list[dict[str, Any]]:
 def main() -> int:
     """Run the whole study."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runs-reference", type=int, default=1000)
-    parser.add_argument("--runs-book", type=int, default=120)
-    parser.add_argument("--runs-sweep", type=int, default=300)
+    parser.add_argument("--runs-reference", type=int, default=2000)
+    parser.add_argument("--runs-book", type=int, default=200)
+    parser.add_argument("--runs-sweep", type=int, default=500)
     parser.add_argument("--book-steps", type=int, default=3000)
     parser.add_argument("--out", type=Path, default=REPO_ROOT / "figures")
     parser.add_argument("--results", type=Path, default=REPO_ROOT / "results")
