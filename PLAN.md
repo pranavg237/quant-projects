@@ -121,3 +121,10 @@ enough breadth, and the rule is depth over breadth.
 **Recommendation for the owner (not executed):** delete or archive
 `options-pricing-toolkit`. Everything it does, `options-pricing-engine` does better, and a
 reviewer who opens it second sees the weaker version of work they've already seen.
+
+## Status
+
+All 14 items above were executed. [CHANGES.md](CHANGES.md) describes what each one changed,
+including findings the audit did not anticipate: the options engine ignored its snapshot,
+the market-making defaults didn't match its README, and fama-french's `--end` was broken.
+The recommendation to delete `options-pricing-toolkit` is left to the owner.
