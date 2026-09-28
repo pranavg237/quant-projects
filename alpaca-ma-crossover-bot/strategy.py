@@ -7,6 +7,7 @@ this live/paper bot.
 from __future__ import annotations
 
 import datetime as dt
+import math
 from enum import Enum
 from zoneinfo import ZoneInfo
 
@@ -58,6 +59,36 @@ def completed_bars(bars: list[dict], now: dt.datetime) -> list[dict]:
     return bars
 
 
+def validate_bars(bars: list[dict], now: dt.datetime, long_window: int,
+                  max_age_days: int = 5) -> str | None:
+    """Return a reason the bars are unusable, or None if they are fine.
+
+    Refuses to trade on:
+      - too few bars for the long moving average (missing history, or a data outage);
+      - a bar with a missing, non-numeric or non-positive close;
+      - stale data: the newest completed bar is more than `max_age_days` calendar days
+        old. Five days covers a normal weekend plus a holiday (e.g. a Thursday bar seen on
+        the following Monday); anything older means the feed has stopped updating, and a
+        signal computed from it would be a signal about the past.
+    """
+    if len(bars) < long_window:
+        return (f"only {len(bars)} completed bars, need >= {long_window} "
+                f"(market data may lag on a free/paper account)")
+    for i, bar in enumerate(bars):
+        if not isinstance(bar.get("t"), str):
+            return f"bar {i} has no timestamp"
+        close = bar.get("c")
+        if not isinstance(close, (int, float)) or not math.isfinite(close) or close <= 0:
+            return f"bar {i} ({bar.get('t')}) has an invalid close: {close!r}"
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    last_session = pd.Timestamp(bars[-1]["t"]).tz_convert(MARKET_TZ).date()
+    age = (now.astimezone(MARKET_TZ).date() - last_session).days
+    if age > max_age_days:
+        return f"stale bars: newest completed bar is {last_session} ({age} days old, max {max_age_days})"
+    return None
+
+
 def position_size(equity: float, price: float, risk_fraction: float,
                   max_position_fraction: float = 0.25,
                   buying_power: float | None = None) -> int:
@@ -76,16 +107,27 @@ def position_size(equity: float, price: float, risk_fraction: float,
     return int(dollars // price)
 
 
-def decide_order(current_qty: float, signal: Signal, target_qty: int) -> tuple[str, float] | None:
+def decide_order(current_qty: float, signal: Signal, target_qty: int,
+                 top_up_below: float = 0.5) -> tuple[str, float] | None:
     """Compares current holdings to the desired signal and returns
     (side, qty) to submit, or None if already positioned correctly.
-    target_qty is only used when going from FLAT->LONG (how many shares to buy);
-    going LONG->FLAT always sells the full current position."""
+
+    target_qty is only used on the buy side; going LONG->FLAT always sells the full
+    current position.
+
+    If the signal is LONG and we hold something, but less than `top_up_below` of the
+    target (e.g. a buy that was partially filled and then cancelled or expired), buy the
+    difference. The threshold is deliberately wide so ordinary price drift in the target
+    share count does not make the bot trade every day.
+    """
     has_position = current_qty > 0
     if signal == Signal.LONG and not has_position:
         if target_qty <= 0:
             return None  # not enough equity/buying power for even 1 share
         return ("buy", target_qty)
+    if signal == Signal.LONG and current_qty < top_up_below * target_qty:
+        shortfall = math.floor(target_qty - current_qty)
+        return ("buy", shortfall) if shortfall > 0 else None
     if signal == Signal.FLAT and has_position:
         return ("sell", current_qty)
     return None  # already in the right state
