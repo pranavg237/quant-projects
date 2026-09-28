@@ -45,6 +45,25 @@ def sharpe_std_error(returns: pd.Series, sr_period: float | None = None) -> floa
     return float(np.sqrt(max(var, 0.0)))
 
 
+def psr_from_stats(
+    sr: float, sr_benchmark: float, n_obs: int, skew: float, kurtosis: float
+) -> float:
+    """The PSR formula on summary statistics, all Sharpe ratios *per period* (not annual).
+
+    ``PSR = Phi((sr - sr_benchmark) * sqrt(n - 1) / sqrt(1 - skew*sr + (kurt - 1)/4 * sr^2))``
+
+    ``kurtosis`` is the raw (non-excess) kurtosis, 3 for a normal distribution. This is
+    equation (2) of Bailey & Lopez de Prado (2014), "The Deflated Sharpe Ratio", with
+    ``sr_benchmark`` = 0 for the PSR and = the expected maximum Sharpe for the DSR.
+    """
+    if n_obs < 2:
+        return float("nan")
+    var = (1.0 - skew * sr + (kurtosis - 1.0) / 4.0 * sr**2) / (n_obs - 1)
+    if var <= 0:
+        return float("nan")
+    return float(stats.norm.cdf((sr - sr_benchmark) / np.sqrt(var)))
+
+
 def probabilistic_sharpe_ratio(returns: pd.Series, benchmark_sharpe_annual: float = 0.0) -> float:
     """P(true Sharpe > benchmark) given the sample: the PSR of Bailey & Lopez de Prado."""
     r = returns.dropna()
@@ -54,16 +73,17 @@ def probabilistic_sharpe_ratio(returns: pd.Series, benchmark_sharpe_annual: floa
         return float("nan")
     sr = float(r.mean() / sd)
     sr_star = benchmark_sharpe_annual / np.sqrt(ppy)
-    se = sharpe_std_error(r, sr)
-    if se == 0:
-        return float("nan")
-    return float(stats.norm.cdf((sr - sr_star) / se))
+    n, skew, kurt = _moments(r)
+    return psr_from_stats(sr, sr_star, n, skew, kurt)
 
 
 def expected_max_sharpe(n_trials: int, var_sharpe: float) -> float:
     """Expected maximum of ``n_trials`` independent Sharpe draws with variance ``var_sharpe``.
 
-    Uses the extreme-value approximation from Bailey & Lopez de Prado (2014).
+    Uses the extreme-value approximation from Bailey & Lopez de Prado (2014), eq. (1):
+    ``sqrt(V) * ((1 - g) * Phi^-1(1 - 1/N) + g * Phi^-1(1 - 1/(N e)))`` with ``g`` the
+    Euler-Mascheroni constant. It assumes the true Sharpe of every trial is zero, so the
+    result is the Sharpe the *best* of ``N`` pure-noise configurations would show.
     """
     if n_trials <= 1:
         return 0.0
@@ -71,6 +91,26 @@ def expected_max_sharpe(n_trials: int, var_sharpe: float) -> float:
     z1 = stats.norm.ppf(1.0 - 1.0 / n_trials)
     z2 = stats.norm.ppf(1.0 - 1.0 / (n_trials * np.e))
     return float(np.sqrt(var_sharpe) * ((1 - euler) * z1 + euler * z2))
+
+
+def deflated_sharpe_from_stats(
+    sr: float,
+    n_obs: int,
+    skew: float,
+    kurtosis: float,
+    n_trials: int,
+    var_trials_sharpe: float,
+) -> float:
+    """The DSR on summary statistics, every Sharpe input *per period* (not annualised).
+
+    ``var_trials_sharpe`` is the variance of the per-period Sharpe ratios across the
+    ``n_trials`` configurations tried. The DSR is the PSR measured against the expected
+    maximum of ``n_trials`` noise Sharpes instead of against zero (Bailey & Lopez de
+    Prado 2014, eq. 2). With their worked example (annual SR 2.5, daily, T = 1250,
+    N = 100, annual V = 0.5, skew -3, kurtosis 10) this returns 0.9004.
+    """
+    sr_star = expected_max_sharpe(n_trials, var_trials_sharpe)
+    return psr_from_stats(sr, sr_star, n_obs, skew, kurtosis)
 
 
 def deflated_sharpe_ratio(
@@ -94,9 +134,13 @@ def deflated_sharpe_ratio(
         n_trials = max(n_trials, len(arr))
     if var_trials_sharpe_annual is None:
         raise ValueError("need var_trials_sharpe_annual or trials_sharpe_annual")
+    # An annual Sharpe is sqrt(ppy) times the per-period one, so its variance is ppy times.
     var_period = var_trials_sharpe_annual / ppy
-    sr_star_period = expected_max_sharpe(n_trials, var_period)
-    return probabilistic_sharpe_ratio(r, benchmark_sharpe_annual=sr_star_period * np.sqrt(ppy))
+    sd = float(r.std(ddof=1))
+    if sd == 0 or len(r) < 4:
+        return float("nan")
+    n, skew, kurt = _moments(r)
+    return deflated_sharpe_from_stats(float(r.mean() / sd), n, skew, kurt, n_trials, var_period)
 
 
 def min_track_record_length(
