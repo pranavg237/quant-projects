@@ -28,8 +28,6 @@ jobs:
             typed: false
           - project: alpaca-ma-crossover-bot
             typed: false
-          - project: options-pricing-toolkit
-            typed: false
     defaults:
       run:
         working-directory: ${{ matrix.project }}

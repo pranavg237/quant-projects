@@ -14,7 +14,6 @@ produced it. Where a strategy loses to buying and holding the index, the README 
 | [**portfolio-optimization**](./portfolio-optimization) | Markowitz, Ledoit-Wolf, risk parity, HRP and Black-Litterman, walk-forward tested on 15 ETFs | No method's Sharpe differs significantly from 1/N (all p > 0.15). Unconstrained leverage loses 95% in one month, and a cap fixes it |
 | [**fama-french-factor-model**](./fama-french-factor-model) | CAPM to FF6 regressions with Newey-West errors, return attribution, GRS and Fama-MacBeth tests, as a library and CLI | Recovers textbook results: HML is redundant given the other FF5 factors (alpha t = 0.75), and GRS rejects every model on the 25 size/value portfolios |
 | [**alpaca-ma-crossover-bot**](./alpaca-ma-crossover-bot) | The 50/200 SPY crossover run as a daily paper-trading job on Alpaca | No live track record. Backtest 2005-2025: Sharpe 0.54 vs 0.53 for buy-and-hold, max drawdown -34% vs -55% |
-| [options-pricing-toolkit](./options-pricing-toolkit) | *Earlier work*: a compact Black-Scholes calculator with Greeks and a 0-2 DTE decay plot | Superseded by options-pricing-engine |
 
 ## How the results are kept honest
 
@@ -28,7 +27,7 @@ produced it. Where a strategy loses to buying and holding the index, the README 
   recorded. Every result quoted in a README was re-run for this version. Where a re-run
   did not match the earlier numbers exactly (a Yahoo re-adjustment after a stock split; a
   small environment-dependent drift in one simulation), the README says so.
-- **Tested.** 731 tests across the seven projects, all offline, run by CI on every push.
+- **Tested.** TESTCOUNT tests across the six projects, all offline, run by CI on every push.
   The four main packages also pass strict `mypy` and `ruff`.
 
 [PLAN.md](PLAN.md) is the audit that started the current round of work, and
