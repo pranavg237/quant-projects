@@ -5,8 +5,7 @@ import argparse
 import re
 import sys
 from datetime import datetime
-from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -30,7 +29,8 @@ SORT_NAMES = {
 }
 
 
-def main(argv=None) -> int:
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Entry point for the ``ffmodel`` command. Returns the process exit code."""
     args = build_parser().parse_args(argv)
     try:
         return args.func(args) or 0
@@ -40,6 +40,7 @@ def main(argv=None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """The argument parser for the ``analyze``, ``test-portfolios`` and ``factors`` commands."""
     parser = argparse.ArgumentParser(prog="ffmodel", description="Fama-French factor models.")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -81,7 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _open_report(args, title: str) -> Optional[report.Report]:
+def _open_report(args: argparse.Namespace, title: str) -> Optional[report.Report]:
     if args.no_report:
         return None
     return report.Report(args.out or f"reports/{args.command}-{datetime.now():%Y%m%d-%H%M%S}", title)
@@ -111,7 +112,8 @@ def _parse_weights(text: str) -> Dict[str, float]:
     return weights
 
 
-def cmd_analyze(args) -> int:
+def cmd_analyze(args: argparse.Namespace) -> int:
+    """Factor regressions, attribution and rolling estimates for tickers or a CSV."""
     if args.tickers:
         returns = download_returns(args.tickers, args.start, args.end, args.freq)
         source = "Yahoo Finance (split- and dividend-adjusted closes)"
@@ -186,7 +188,7 @@ def cmd_analyze(args) -> int:
     return 0
 
 
-def _sort_layout(dataset: str, n: int):
+def _sort_layout(dataset: str, n: int) -> Optional[Tuple[Tuple[int, int], str, str]]:
     """Grid shape and sort names for datasets like 25_Portfolios_ME_OP_5x5, else None."""
     match = re.search(r"Portfolios_?(.*?)_?(\d+)x(\d+)", dataset, flags=re.IGNORECASE)
     if not match:
@@ -200,7 +202,8 @@ def _sort_layout(dataset: str, n: int):
     return (rows, cols), SORT_NAMES.get(keys[0], keys[0]), SORT_NAMES.get(keys[1], keys[1])
 
 
-def cmd_test_portfolios(args) -> int:
+def cmd_test_portfolios(args: argparse.Namespace) -> int:
+    """GRS and Fama-MacBeth tests on a set of French test portfolios."""
     raw = data.load_portfolios(args.dataset, args.freq, args.weighting, args.start, args.end, refresh=args.refresh)
     models = list(MODELS) if args.compare else [args.model]
     factor_sets = {m: data.load_factors(m, args.freq, args.start, args.end, refresh=args.refresh) for m in models}
@@ -266,7 +269,8 @@ def cmd_test_portfolios(args) -> int:
     return 0
 
 
-def cmd_factors(args) -> int:
+def cmd_factors(args: argparse.Namespace) -> int:
+    """Summary statistics, correlations and spanning regressions for the factors themselves."""
     factors = data.load_factors(args.model, args.freq, args.start, args.end, refresh=args.refresh)
     spec = get_model(args.model)
     rep = _open_report(args, f"{spec.label} factors")

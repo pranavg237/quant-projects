@@ -6,13 +6,15 @@ import math
 import re
 import textwrap
 from pathlib import Path
-from typing import Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import matplotlib
 import numpy as np
+from numpy.typing import ArrayLike
 import pandas as pd
 from matplotlib import dates as mdates
 from matplotlib import font_manager
+from matplotlib.axes import Axes
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm, to_rgb
 from matplotlib.figure import Figure
@@ -88,16 +90,19 @@ _RC = {
 PCT = PercentFormatter(1.0, decimals=None)
 
 
-def _styled(func):
+def _styled(func: Callable[..., Figure]) -> Callable[..., Figure]:
+    """Draw inside the package's Matplotlib style without changing global settings."""
+
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Figure:
         with matplotlib.rc_context(_RC):
             return func(*args, **kwargs)
 
     return wrapper
 
 
-def _figure(width: float, height: float, title: str, subtitle: str = "", nrows: int = 1, ncols: int = 1, **subplot_kw):
+def _figure(width: float, height: float, title: str, subtitle: str = "", nrows: int = 1, ncols: int = 1,
+            **subplot_kw: Any) -> Tuple[Figure, np.ndarray]:
     """A figure with a left-aligned title and subtitle above a plot area ``height`` inches tall."""
     lines = textwrap.wrap(subtitle, width=int(width * 15)) if subtitle else []
     header = 0.42 + 0.17 * len(lines) + (0.1 if lines else 0)
@@ -111,25 +116,27 @@ def _figure(width: float, height: float, title: str, subtitle: str = "", nrows: 
     return fig, axes
 
 
-def _date_axis(ax) -> None:
+def _date_axis(ax: Axes) -> None:
     locator = mdates.AutoDateLocator(minticks=3, maxticks=6)
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
 
 
-def _end_label(ax, x, y, text: str) -> None:
+def _end_label(ax: Axes, x: Any, y: float, text: str) -> None:
     ax.annotate(text, (x, y), xytext=(5, 0), textcoords="offset points", va="center", ha="left",
                 fontsize=8.5, color=INK_2, annotation_clip=False)
 
 
-def _category_axis(ax, positions, labels) -> None:
+def _category_axis(ax: Axes, positions: ArrayLike, labels: Sequence[str]) -> None:
     ax.set_yticks(positions, labels=labels)
     ax.tick_params(axis="y", labelcolor=INK_2, labelsize=9.5, length=0)
     ax.grid(axis="y", visible=False)
     ax.spines["left"].set_visible(False)
 
 
-def _hbar_with_labels(ax, labels, values, lows=None, highs=None, fmt=lambda v: f"{v:.2f}") -> None:
+def _hbar_with_labels(ax: Axes, labels: Sequence[str], values: ArrayLike,
+                      lows: Optional[ArrayLike] = None, highs: Optional[ArrayLike] = None,
+                      fmt: Callable[[float], str] = lambda v: f"{v:.2f}") -> None:
     """One-series horizontal bars from a zero baseline, value at the tip (past any interval)."""
     values = np.asarray(values, float)
     lows = values if lows is None else np.asarray(lows, float)
@@ -150,6 +157,7 @@ def _hbar_with_labels(ax, labels, values, lows=None, highs=None, fmt=lambda v: f
 
 @_styled
 def plot_loadings(result: RegressionResult) -> Figure:
+    """Bar chart of a regression's factor betas with 95% confidence intervals."""
     spec = get_model(result.model)
     ci = result.raw.conf_int().loc[result.factors]
     start, end = result.period
@@ -168,6 +176,7 @@ def plot_loadings(result: RegressionResult) -> Figure:
 
 @_styled
 def plot_attribution(attribution: Attribution, name: str) -> Figure:
+    """How much of the annualised excess return each factor, alpha and the residual explain."""
     summary = attribution.summary
     parts = summary.drop(index=["total", "residual"])["return (ann.)"]
     total = summary.loc["total", "return (ann.)"]
@@ -188,6 +197,7 @@ def plot_attribution(attribution: Attribution, name: str) -> Figure:
 
 @_styled
 def plot_cumulative_fit(attribution: Attribution, name: str) -> Figure:
+    """Cumulative actual excess return against the part the factor model explains."""
     c = attribution.contributions
     actual = c.sum(axis=1).cumsum()
     explained = c.drop(columns=["alpha", "residual"]).sum(axis=1).cumsum()
@@ -218,6 +228,7 @@ def _panel_grid(n: int) -> Tuple[int, int]:
 @_styled
 def plot_rolling(rolled: pd.DataFrame, factors: Sequence[str], name: str, model: str, window: int,
                  periods_per_year: int) -> Figure:
+    """Rolling-window alpha and betas, one panel each."""
     panels = ["alpha"] + list(factors)
     nrows, ncols = _panel_grid(len(panels))
     fig, axes = _figure(
@@ -245,6 +256,7 @@ def plot_rolling(rolled: pd.DataFrame, factors: Sequence[str], name: str, model:
 @_styled
 def plot_pricing(realized: pd.Series, predicted: Mapping[str, pd.Series], pvalues: Mapping[str, float],
                  title: str) -> Figure:
+    """Realized vs model-implied average returns of test portfolios, one panel per model."""
     nrows, ncols = _panel_grid(len(predicted))
     fig, axes = _figure(
         3.9 * ncols + 0.4, 3.5 * nrows, title,
@@ -274,7 +286,7 @@ def plot_pricing(realized: pd.Series, predicted: Mapping[str, pd.Series], pvalue
     return fig
 
 
-def _text_color_on(fill) -> str:
+def _text_color_on(fill: str) -> str:
     rgb = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in to_rgb(fill)]
     luminance = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
     return INK if luminance > 0.179 else "#ffffff"
@@ -327,6 +339,7 @@ def plot_alpha_heatmaps(alphas: Mapping[str, pd.Series], shape: Tuple[int, int],
 
 @_styled
 def plot_factor_growth(factors: pd.DataFrame, title: str) -> Figure:
+    """Growth of $1 invested in each factor, on a log scale."""
     F = factors.drop(columns="RF", errors="ignore")
     growth = (1 + F).cumprod()
     fig, axes = _figure(
@@ -353,7 +366,8 @@ def plot_factor_growth(factors: pd.DataFrame, title: str) -> Figure:
 _PCT_KEYS = ("alpha (ann.)", "alpha| (ann.)", "mean (ann.)", "vol (ann.)", "lambda (ann.)", "return", "period", "share")
 
 
-def format_value(column, value, decimals: Optional[int] = None) -> str:
+def format_value(column: Any, value: Any, decimals: Optional[int] = None) -> str:
+    """Format one table cell according to what its column holds (percent, count, p-value, beta)."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return ""
     if isinstance(value, str):
@@ -381,6 +395,7 @@ def format_table(df: pd.DataFrame, decimals: Optional[int] = None) -> pd.DataFra
 
 
 def markdown_table(df: pd.DataFrame, decimals: Optional[int] = None) -> str:
+    """Render a DataFrame as a GitHub Markdown table using :func:`format_table`."""
     shown = format_table(df, decimals)
     esc = lambda s: str(s).replace("|", "\\|")  # noqa: E731
     lines = [
@@ -398,7 +413,7 @@ def _slug(name: str) -> str:
 class Report:
     """Collects Markdown text, PNG figures and CSV tables in one directory."""
 
-    def __init__(self, directory, title: str):
+    def __init__(self, directory: Union[str, Path], title: str) -> None:
         self.dir = Path(directory)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.lines = [f"# {title}", ""]

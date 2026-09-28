@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -13,13 +13,15 @@ from statsmodels.regression.rolling import RollingOLS
 from .regression import infer_periods_per_year, newey_west_lags
 
 
-def _panel(excess_returns: pd.DataFrame, factors: pd.DataFrame):
+def _panel(excess_returns: pd.DataFrame, factors: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     data = pd.concat({"R": excess_returns, "F": factors}, axis=1, join="inner")
     return data["R"], data["F"]
 
 
 @dataclass
 class GRSResult:
+    """Gibbons-Ross-Shanken test that every intercept is zero, plus Fama-French (2015) summaries."""
+
     statistic: float
     pvalue: float
     df_num: int
@@ -100,6 +102,8 @@ def grs_test(excess_returns: pd.DataFrame, factors: pd.DataFrame, periods_per_ye
 
 @dataclass
 class FamaMacBethResult:
+    """Fama-MacBeth factor risk premia with plain, Shanken and optional Newey-West errors."""
+
     lambdas: pd.Series
     se: pd.Series
     tstats: pd.Series
