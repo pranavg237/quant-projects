@@ -48,6 +48,8 @@ _FORMAT_BY_WIDTH = {4: "%Y", 6: "%Y%m", 8: "%Y%m%d"}
 
 @dataclass(frozen=True)
 class FrenchTable:
+    """One table parsed from a Ken French data-library file."""
+
     title: str
     frequency: str
     data: pd.DataFrame  # decimals

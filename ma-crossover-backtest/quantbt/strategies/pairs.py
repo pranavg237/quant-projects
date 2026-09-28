@@ -23,6 +23,8 @@ from quantbt.strategy import Context, Strategy
 
 @dataclass(frozen=True)
 class PairModel:
+    """A cointegrated pair frozen at formation: hedge ratio and spread statistics."""
+
     a: str
     b: str
     hedge: float  # log(a) ~ alpha + hedge * log(b)
@@ -57,6 +59,8 @@ def fit_pair(log_a: pd.Series, log_b: pd.Series, a: str, b: str) -> PairModel:
 
 
 class PairsTrading(Strategy):
+    """Trade the z-score of cointegrated pairs, re-selected every quarter, dollar neutral."""
+
     name = "pairs"
 
     def __init__(

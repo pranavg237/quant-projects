@@ -46,6 +46,8 @@ def price(S: float, K: float, T: float, r: float, sigma: float, option_type: str
 
 @dataclass
 class Greeks:
+    """Option sensitivities, scaled the way brokers display them."""
+
     delta: float
     gamma: float
     vega: float     # price change per 1 vol point (0.01)

@@ -26,6 +26,8 @@ def newey_west_lags(nobs: int) -> int:
 
 @dataclass(frozen=True)
 class FactorRegression:
+    """Alpha, factor loadings and fit statistics of one factor regression."""
+
     name: str
     model: str
     factors: list[str]

@@ -14,6 +14,7 @@ from black_scholes import price, greeks, implied_vol
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Parser for the ``price`` and ``iv`` sub-commands."""
     p = argparse.ArgumentParser(description="Black-Scholes options calculator")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -38,7 +39,8 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main():
+def main() -> None:
+    """Price an option or solve its implied vol, and print the Greeks."""
     args = build_parser().parse_args()
     T = args.dte / 365.0
 

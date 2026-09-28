@@ -568,6 +568,7 @@ def build_tearsheet(inputs: TearsheetInputs) -> str:
 
 
 def write_tearsheet(inputs: TearsheetInputs, path: str | Path) -> Path:
+    """Render a self-contained HTML tearsheet to ``path`` and return the path written."""
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(build_tearsheet(inputs), encoding="utf-8")

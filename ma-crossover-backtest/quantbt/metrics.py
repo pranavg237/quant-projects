@@ -50,10 +50,12 @@ def equity_curve(returns: pd.Series, initial: float = 1.0) -> pd.Series:
 
 
 def total_return(equity: pd.Series) -> float:
+    """Total return over the whole equity curve, as a fraction."""
     return float(equity.iloc[-1] / equity.iloc[0] - 1.0)
 
 
 def years_spanned(index: pd.Index) -> float:
+    """Calendar years between the first and last date."""
     idx = pd.DatetimeIndex(index)
     return float((idx[-1] - idx[0]).days) / 365.25
 
@@ -77,6 +79,7 @@ def annualized_return(returns: pd.Series, ppy: int | None = None) -> float:
 
 
 def annualized_vol(returns: pd.Series, ppy: int | None = None) -> float:
+    """Sample standard deviation of returns, scaled by the square root of periods per year."""
     ppy = ppy or periods_per_year(returns.index)
     r = returns.dropna()
     if len(r) < 2:
@@ -126,6 +129,8 @@ def max_drawdown(equity: pd.Series) -> float:
 
 @dataclass(frozen=True)
 class DrawdownInfo:
+    """Depth, dates and duration of a drawdown (see :func:`max_drawdown_info`)."""
+
     depth: float
     peak: pd.Timestamp
     trough: pd.Timestamp
@@ -184,6 +189,7 @@ def max_drawdown_info(equity: pd.Series) -> DrawdownInfo:
 
 
 def calmar(equity: pd.Series) -> float:
+    """CAGR divided by the absolute maximum drawdown."""
     mdd = max_drawdown(equity)
     if mdd == 0.0:
         return float("nan")
@@ -227,6 +233,7 @@ def hit_rate(pnls: pd.Series | np.ndarray | list[float]) -> float:
 
 
 def profit_factor(pnls: pd.Series | np.ndarray | list[float]) -> float:
+    """Gross profit over gross loss across trades. Above 1 means winners outweigh losers."""
     arr = np.asarray(pnls, dtype=float)
     losses = -arr[arr < 0].sum()
     gains = arr[arr > 0].sum()

@@ -119,6 +119,8 @@ def min_track_record_length(
 
 @dataclass(frozen=True)
 class BootstrapResult:
+    """Resampled performance statistics and their confidence intervals."""
+
     samples: pd.DataFrame  # one row per resample: sharpe, cagr, max_drawdown
     observed: pd.Series
     block_len: float
@@ -265,6 +267,8 @@ def pbo_cscv(
 
 @dataclass(frozen=True)
 class OverfitReport:
+    """Probabilistic and deflated Sharpe ratios, with warning flags."""
+
     sharpe: float
     sharpe_se_annual: float
     psr: float
