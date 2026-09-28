@@ -48,7 +48,10 @@ import numpy as np
 from .book import LimitOrderBook
 from .types import MarketConfig, Side, Trade
 
-__all__ = ["FlowConfig", "OrderFlowGenerator"]
+__all__ = ["INFORMED_OWNER", "FlowConfig", "OrderFlowGenerator"]
+
+#: Owner tag carried by informed market orders, so a fill can be attributed to them.
+INFORMED_OWNER = "informed"
 
 
 @dataclass(frozen=True)
@@ -208,7 +211,7 @@ class OrderFlowGenerator:
             side = Side.BID if self.rng.random() < 0.5 else Side.ASK
             size = self._draw_size()
             informed = self.rng.random() < cfg.informed_fraction
-            owner = "informed" if informed else "noise_taker"
+            owner = INFORMED_OWNER if informed else "noise_taker"
             _, executed = book.submit_market(side, size, timestamp, owner)
             trades.extend(executed)
             if informed and executed:

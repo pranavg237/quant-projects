@@ -81,8 +81,8 @@ not quite "the average spread this strategy quoted".
 
 ### F. Sharpe is per session, and sessions are arbitrary
 The Sharpe numbers here (8-11 for A-S) are per simulated session, and a "session" is
-defined by `n_steps` and the arrival rate. Doubling the arrival rate roughly doubles the
-Sharpe, as the sensitivity sweep shows. So the *level* is not comparable to a real desk's
+defined by `n_steps` and the arrival rate. The sensitivity sweep shows the A-S Sharpe
+rising from 2.8 to 22.7 as the arrival rate goes from 20 to 600 (roughly as `A^0.6`). So the *level* is not comparable to a real desk's
 Sharpe; only the *ratio between strategies* is meaningful. The README says so, but it is a
 real limitation of any simulation study of this kind.
 
@@ -108,3 +108,18 @@ direction that matters -- but it is untested at non-zero values beyond a unit te
 ### J. Everything is one asset
 No cross-asset hedging, no correlated inventory. A real desk manages a portfolio of
 inventories and hedges the common factor, which changes the optimal skew substantially.
+
+### K. Markout uses information a desk does not have
+The adverse-selection split relies on knowing which takers were informed, which only a
+simulation can know. A desk would have to classify flow statistically (by client, by
+size, by subsequent markout), and misclassification would blur the split. Markouts are
+also measured against the *efficient* price, which the simulated maker observes directly;
+a real maker sees only the book mid, which is noisier and lags. Both make the measured
+adverse selection cleaner than a desk's would be.
+
+### L. Sensitivity is one parameter at a time
+Each sweep moves one parameter with the others at their base values, so interactions (for
+example, how the best `gamma` shifts with `sigma`) are not explored. The reference-engine
+sweeps use 500 sessions per point and the order-book informed-flow sweep only 100 (for run
+time), so the latter's per-session Sharpe standard errors are 0.2-0.9, and differences
+smaller than about two of them should not be read as findings.

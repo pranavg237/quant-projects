@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
@@ -31,13 +31,20 @@ from mmsim.avellaneda_stoikov import AvellanedaStoikovParams, HorizonMode  # noq
 from mmsim.calibration import fit_as_params_to_book, volatility_signature  # noqa: E402
 from mmsim.engine import simulate_reference  # noqa: E402
 from mmsim.experiments import (  # noqa: E402
+    SessionRunner,
+    book_runner,
     build_policy_set,
     compare_policies_book,
     compare_policies_reference,
-    sensitivity_sweep,
+    policy_sensitivity_sweep,
+    reference_runner,
 )
 from mmsim.flow import FlowConfig  # noqa: E402
-from mmsim.metrics import pnl_decomposition  # noqa: E402
+from mmsim.metrics import (  # noqa: E402
+    informed_markout_theory,
+    markout_decomposition,
+    pnl_decomposition,
+)
 from mmsim.strategies import AvellanedaStoikovPolicy, average_optimal_spread  # noqa: E402
 from mmsim.types import MarketConfig  # noqa: E402
 
@@ -48,6 +55,19 @@ PAPER = AvellanedaStoikovParams(gamma=0.1, kappa=1.5, arrival_rate=140.0, sigma=
 PAPER_TABLE_1 = {
     "Inventory": {"spread": 1.49, "profit": 65.0, "std_profit": 6.6, "std_final_q": 2.0},
     "Symmetric": {"spread": 1.49, "profit": 68.4, "std_profit": 13.4, "std_final_q": 8.4},
+}
+
+
+#: Markout horizons, in book steps, for the adverse-selection decomposition.
+MARKOUT_HORIZONS = (1, 2, 5, 10, 20, 50, 100, 250)
+
+#: Axis labels for the sensitivity figure.
+SWEEP_LABELS = {
+    "gamma": "risk aversion gamma",
+    "kappa": "fill-decay kappa",
+    "sigma": "volatility sigma",
+    "arrival_rate": "arrival intensity A",
+    "informed_fraction": "informed fraction (book)",
 }
 
 
@@ -165,6 +185,7 @@ def main() -> int:
     parser.add_argument("--runs-reference", type=int, default=2000)
     parser.add_argument("--runs-book", type=int, default=200)
     parser.add_argument("--runs-sweep", type=int, default=500)
+    parser.add_argument("--runs-informed", type=int, default=100)
     parser.add_argument("--book-steps", type=int, default=3000)
     parser.add_argument("--out", type=Path, default=REPO_ROOT / "figures")
     parser.add_argument("--results", type=Path, default=REPO_ROOT / "results")
@@ -324,106 +345,169 @@ def main() -> int:
     }
     results["as_params_from_book"] = asdict(params) | {"horizon_mode": str(params.horizon_mode)}
 
-    _banner("5. Adverse selection: does it change the ranking?")
-    adverse_rows: list[dict[str, Any]] = []
-    for informed in (0.0, 0.10, 0.20, 0.30):
-        cfg = FlowConfig(informed_fraction=informed, info_impact_ticks=2.0)
-        local_params, _, _ = fit_as_params_to_book(
-            cfg, market, gamma=0.5, risk_horizon=0.1, n_steps=2500, seed=2
-        )
-        comparison = compare_policies_book(
-            build_policy_set(local_params, inventory_limit=6.0)[:2],
-            cfg,
-            market,
-            n_runs=max(args.runs_book // 3, 20),
-            n_steps=args.book_steps,
-        )
-        for _, row in comparison.metrics.iterrows():
-            adverse_rows.append(
-                {
-                    "informed_fraction": informed,
-                    "expected_cost_ticks": cfg.expected_adverse_selection_per_fill,
-                    "policy": row["policy"],
-                    "mean_pnl": row["mean_pnl"],
-                    "sharpe": row["sharpe"],
-                    "std_final_inventory": row["std_final_inventory"],
-                    "mean_trades": row["mean_trades"],
-                }
-            )
-    adverse_frame = pd.DataFrame(adverse_rows)
+    _banner("5. Adverse selection: markout by counterparty, and where the spread goes")
+    decomposition = markout_decomposition(
+        book_comparison.runs, MARKOUT_HORIZONS, tick_size=market.tick_size
+    )
+    theory = informed_markout_theory(
+        MARKOUT_HORIZONS, flow.info_impact_ticks, flow.info_impact_speed
+    )
+    decomposition["informed_theory_markout_ticks"] = decomposition["horizon"].map(
+        dict(zip(map(float, MARKOUT_HORIZONS), theory.tolist(), strict=True))
+    )
+    shown = decomposition[decomposition["horizon"].isin([1.0, 5.0, 20.0, 100.0])]
     print(
         "  "
-        + adverse_frame.to_string(index=False, float_format=lambda x: f"{x:8.3f}").replace(
-            "\n", "\n  "
-        )
+        + shown[
+            [
+                "policy",
+                "counterparty",
+                "horizon",
+                "volume_per_session",
+                "edge_ticks",
+                "markout_ticks",
+                "markout_ticks_se",
+                "realised_spread_ticks",
+                "informed_theory_markout_ticks",
+            ]
+        ]
+        .to_string(index=False, float_format=lambda x: f"{x:8.3f}")
+        .replace("\n", "\n  ")
     )
-    results["adverse_selection"] = adverse_frame.to_dict(orient="records")
+    print("\n  PnL per session: edge, adverse selection and realised spread at h=100 steps")
+    print(
+        "  "
+        + decomposition[decomposition["horizon"] == 100.0][
+            [
+                "policy",
+                "counterparty",
+                "edge_pnl_per_session",
+                "adverse_selection_pnl_per_session",
+                "realised_pnl_per_session",
+            ]
+        ]
+        .to_string(index=False, float_format=lambda x: f"{x:8.3f}")
+        .replace("\n", "\n  ")
+    )
+    results["markout_decomposition"] = decomposition.to_dict(orient="records")
 
-    _banner("6. Parameter sensitivity")
-    sweeps: dict[str, pd.DataFrame] = {}
+    # Where does the policy difference in adverse selection come from? Split the
+    # *uninformed* fills by whether they unwound the position or added to it.
+    unwind = markout_decomposition(
+        book_comparison.runs,
+        (20, 100),
+        tick_size=market.tick_size,
+        by="inventory_effect",
+        where={"counterparty": "uninformed"},
+    )
+    print("\n  Uninformed fills only, split by whether the fill reduced |inventory|:")
+    print(
+        "  "
+        + unwind[
+            [
+                "policy",
+                "inventory_effect",
+                "horizon",
+                "volume_per_session",
+                "markout_ticks",
+                "markout_ticks_se",
+                "adverse_selection_pnl_per_session",
+            ]
+        ]
+        .to_string(index=False, float_format=lambda x: f"{x:8.3f}")
+        .replace("\n", "\n  ")
+    )
+    results["markout_uninformed_by_inventory_effect"] = unwind.to_dict(orient="records")
 
-    def build_gamma(value: float) -> tuple[Any, AvellanedaStoikovParams]:
-        p = AvellanedaStoikovParams(
-            gamma=value,
-            kappa=1.5,
-            arrival_rate=140.0,
-            sigma=2.0,
-            horizon=0.5,
-            horizon_mode=HorizonMode.STATIONARY,
+    _banner("6. Parameter sensitivity, three policies, with standard errors")
+
+    def reference_policies(model: AvellanedaStoikovParams) -> list[Any]:
+        return build_policy_set(model, inventory_limit=3.0)
+
+    def stationary_model(**changes: Any) -> AvellanedaStoikovParams:
+        # The maker's model: the section-3 stationary A-S maker, one parameter changed.
+        return replace(stationary, **changes)
+
+    def world(**changes: Any) -> AvellanedaStoikovParams:
+        # The simulated market: the section-3 market, one parameter changed.
+        return replace(sim_market, **changes)
+
+    def build_gamma(value: float) -> tuple[list[Any], SessionRunner]:
+        # Risk aversion is a preference: the maker changes, the market does not.
+        return reference_policies(stationary_model(gamma=value)), reference_runner(world())
+
+    def build_kappa(value: float) -> tuple[list[Any], SessionRunner]:
+        # kappa is a property of the market; the maker is assumed to know it.
+        return (
+            reference_policies(stationary_model(kappa=value)),
+            reference_runner(world(kappa=value)),
         )
-        return AvellanedaStoikovPolicy(p), sim_market
 
-    def build_sigma(value: float) -> tuple[Any, AvellanedaStoikovParams]:
-        p = AvellanedaStoikovParams(
-            gamma=0.1,
-            kappa=1.5,
-            arrival_rate=140.0,
-            sigma=value,
-            horizon=0.5,
-            horizon_mode=HorizonMode.STATIONARY,
+    def build_sigma(value: float) -> tuple[list[Any], SessionRunner]:
+        return (
+            reference_policies(stationary_model(sigma=value)),
+            reference_runner(world(sigma=value)),
         )
-        world = AvellanedaStoikovParams(gamma=0.1, kappa=1.5, arrival_rate=140.0, sigma=value)
-        return AvellanedaStoikovPolicy(p), world
 
-    def build_intensity(value: float) -> tuple[Any, AvellanedaStoikovParams]:
-        p = AvellanedaStoikovParams(
-            gamma=0.1,
-            kappa=1.5,
-            arrival_rate=value,
-            sigma=2.0,
-            horizon=0.5,
-            horizon_mode=HorizonMode.STATIONARY,
+    def build_intensity(value: float) -> tuple[list[Any], SessionRunner]:
+        # A does not enter the optimal quotes at all; only the fill rate changes.
+        return (
+            reference_policies(stationary_model(arrival_rate=value)),
+            reference_runner(world(arrival_rate=value)),
         )
-        world = AvellanedaStoikovParams(gamma=0.1, kappa=1.5, arrival_rate=value, sigma=2.0)
-        return AvellanedaStoikovPolicy(p), world
 
-    for parameter, values, builder in (
-        ("gamma", np.geomspace(0.01, 3.0, 9), build_gamma),
-        ("sigma", np.linspace(0.5, 5.0, 9), build_sigma),
-        ("arrival_rate", np.geomspace(20.0, 600.0, 9), build_intensity),
-    ):
-        frame = sensitivity_sweep(
-            list(values), builder, parameter, n_runs=args.runs_sweep, n_steps=200
+    def build_informed(value: float) -> tuple[list[Any], SessionRunner]:
+        # Informed flow only exists in the book world. sigma, A and kappa are re-estimated
+        # from the book at each informed fraction, as a desk would re-fit them.
+        cfg = FlowConfig(informed_fraction=value, info_impact_ticks=flow.info_impact_ticks)
+        local, _, _ = fit_as_params_to_book(
+            cfg, market, gamma=0.5, risk_horizon=0.1, n_steps=2500, seed=2
         )
-        sweeps[parameter] = frame
-        print(f"\n  {parameter}:")
+        return (
+            build_policy_set(local, inventory_limit=6.0),
+            book_runner(cfg, market, n_steps=args.book_steps),
+        )
+
+    sweep_specs: list[tuple[str, list[float], Any, int]] = [
+        ("gamma", list(np.geomspace(0.01, 3.0, 9)), build_gamma, args.runs_sweep),
+        ("kappa", list(np.geomspace(0.5, 4.5, 9)), build_kappa, args.runs_sweep),
+        ("sigma", list(np.linspace(0.5, 5.0, 9)), build_sigma, args.runs_sweep),
+        ("arrival_rate", list(np.geomspace(20.0, 600.0, 9)), build_intensity, args.runs_sweep),
+        (
+            "informed_fraction",
+            [0.0, 0.1, 0.2, 0.3, 0.4],
+            build_informed,
+            args.runs_informed,
+        ),
+    ]
+    sweep_frames = []
+    for parameter, values, builder, n_runs in sweep_specs:
+        frame = policy_sensitivity_sweep(values, builder, parameter, n_runs=n_runs)
+        frame.insert(2, "engine", "book" if parameter == "informed_fraction" else "reference")
+        sweep_frames.append(frame)
+        print(f"\n  {parameter}  ({n_runs} sessions per policy per value):")
         print(
             "  "
             + frame[
                 [
-                    parameter,
+                    "value",
+                    "policy",
                     "mean_pnl",
+                    "mean_pnl_se",
                     "std_pnl",
                     "sharpe",
-                    "mean_abs_inventory",
+                    "sharpe_se",
+                    "std_final_inventory",
                     "mean_trades",
                     "mean_spread_captured",
                 ]
             ]
+            .rename(columns={"sharpe": "sharpe_per_session", "sharpe_se": "se"})
             .to_string(index=False, float_format=lambda x: f"{x:8.3f}")
             .replace("\n", "\n  ")
         )
-        results[f"sweep_{parameter}"] = frame.to_dict(orient="records")
+    sweep = pd.concat(sweep_frames, ignore_index=True)
+    results["sensitivity"] = sweep.to_dict(orient="records")
 
     _banner("7. Figures")
     figures = {
@@ -431,12 +515,14 @@ def main() -> int:
         "inventory_paths": plotting.plot_inventory_paths(reference_comparison),
         "pnl_distribution": plotting.plot_pnl_distribution(reference_comparison),
         "risk_return": plotting.plot_risk_return(reference_comparison),
-        "sensitivity": plotting.plot_sensitivity(sweeps),
+        "sensitivity": plotting.plot_sensitivity(sweep, SWEEP_LABELS),
         "fill_intensity": plotting.plot_fill_intensity_fit(fill_fit, market),
         "volatility_signature": plotting.plot_volatility_signature(signatures),
         "book_risk_return": plotting.plot_risk_return(book_comparison),
         "book_inventory_paths": plotting.plot_inventory_paths(book_comparison),
-        "markout": plotting.plot_markout(book_comparison.runs),
+        "markout": plotting.plot_markout(
+            decomposition, flow.info_impact_ticks, flow.info_impact_speed, bar_horizon=100
+        ),
         "session": plotting.plot_quotes_and_inventory(
             book_comparison.runs[next(iter(book_comparison.runs))][0]
         ),
@@ -450,7 +536,40 @@ def main() -> int:
         _to_markdown(reference_comparison.metrics[display])
     )
     (args.results / "book_comparison.md").write_text(_to_markdown(book_comparison.metrics[display]))
+    informed = sweep[sweep["parameter"] == "informed_fraction"]
+    adverse_frame = pd.DataFrame(
+        {
+            "informed_fraction": informed["value"],
+            "expected_cost_ticks": informed["value"] * flow.info_impact_ticks,
+            "policy": informed["policy"],
+            "mean_pnl": informed["mean_pnl"],
+            "mean_pnl_se": informed["mean_pnl_se"],
+            "sharpe_per_session": informed["sharpe"],
+            "sharpe_per_session_se": informed["sharpe_se"],
+            "std_final_inventory": informed["std_final_inventory"],
+            "mean_trades": informed["mean_trades"],
+        }
+    )
     (args.results / "adverse_selection.md").write_text(_to_markdown(adverse_frame))
+    # CSVs: Sharpe columns are renamed so the label travels with the number.
+    sharpe_names = {"sharpe": "sharpe_per_session", "sharpe_se": "sharpe_per_session_se"}
+    sweep.rename(columns=sharpe_names).to_csv(
+        args.results / "sensitivity.csv", index=False, float_format="%.6g"
+    )
+    decomposition.to_csv(
+        args.results / "markout_decomposition.csv", index=False, float_format="%.6g"
+    )
+    unwind.to_csv(
+        args.results / "markout_uninformed_by_inventory_effect.csv",
+        index=False,
+        float_format="%.6g",
+    )
+    for name in (
+        "sensitivity.csv",
+        "markout_decomposition.csv",
+        "markout_uninformed_by_inventory_effect.csv",
+    ):
+        print(f"  wrote {_shown(args.results / name)}")
     print(f"  wrote {_shown(args.results / 'results.json')}")
     return 0
 

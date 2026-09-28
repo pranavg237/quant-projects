@@ -21,6 +21,7 @@ from mmsim.calibration import estimate_fill_intensity
 from mmsim.engine import simulate_book
 from mmsim.experiments import build_policy_set, compare_policies_reference, sensitivity_sweep
 from mmsim.flow import FlowConfig
+from mmsim.metrics import markout_decomposition
 from mmsim.strategies import AvellanedaStoikovPolicy, SymmetricPolicy
 from mmsim.types import MarketConfig, Side
 
@@ -86,7 +87,12 @@ def test_session_and_markout_figures_render(
     ]
     for fig in (
         plotting.plot_quotes_and_inventory(runs[0]),
-        plotting.plot_markout({"Symmetric": runs}, horizons=(1, 5, 25)),
+        plotting.plot_markout(
+            markout_decomposition({"Symmetric": runs}, horizons=(1, 5, 25)),
+            impact_ticks=2.0,
+            impact_speed=0.05,
+            bar_horizon=25,
+        ),
     ):
         assert len(fig.axes) >= 1
         plt.close(fig)
@@ -126,12 +132,13 @@ def test_sensitivity_figure_renders() -> None:
         )
         return AvellanedaStoikovPolicy(params), world
 
-    sweeps = {
-        "gamma": sensitivity_sweep(
-            list(np.geomspace(0.02, 2.0, 4)), build, "gamma", n_runs=20, n_steps=80
-        )
-    }
-    fig = plotting.plot_sensitivity(sweeps)
+    sweep = sensitivity_sweep(
+        list(np.geomspace(0.02, 2.0, 4)), build, "gamma", n_runs=20, n_steps=80
+    ).rename(columns={"gamma": "value"})
+    sweep["parameter"] = "gamma"
+    fig = plotting.plot_sensitivity(sweep, {"gamma": "risk aversion"})
+    # Every Sharpe axis carries its per-session label.
+    assert "not annualised" in fig.axes[2].get_ylabel()
     assert fig.axes[0].get_xscale() == "log"
     plt.close(fig)
 

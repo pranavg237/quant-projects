@@ -68,7 +68,7 @@ arrival in `dt` is `1 - exp(-lambda*dt)`. They agree to `O(dt^2)`, but at the pa
 parameters (`lambda ~ 45`, `dt = 0.005`) the linear form overstates the fill rate by 10%,
 and it exceeds 1 outright for tight quotes on a coarse grid. The default is exact;
 `fill_model="linear"` exists so the published table can be reproduced, and it is what makes
-the reproduction land on 65.7 against 65.0 rather than 57.9.
+the reproduction land on 64.98 against 65.0 rather than 57.35.
 
 ## Model parameters are estimated from the book, not chosen
 
@@ -131,7 +131,7 @@ market-making Sharpe ratios look absurd in print.
 
 The published finite-horizon model lets `T - t` shrink to zero, so both the inventory skew
 and the risk premium vanish as the session ends. Measured: the standard deviation of
-inventory grows from 1.13 mid-session to 3.01 at the bell -- control collapses exactly when
+inventory grows from 1.17 mid-session to 2.90 at the bell -- control collapses exactly when
 the paper measures it. A real desk has no terminal time, so `HorizonMode.STATIONARY` freezes
 the effective horizon at a constant and the strategy becomes time-homogeneous. Inventory
 std then stays flat at ~1.2 throughout. Both modes are implemented so the difference can be
@@ -157,3 +157,46 @@ headline configuration this raised the fill count by about 60% (50 to 82 fills p
 `requote_every=1`). The monotone decline in fills with `requote_every` survives, because
 absence-after-fill and quote staleness still dominate the queue-priority gain in this
 market.
+
+## Markout is split by counterparty, and checked against the model's own number
+
+Each book fill records whether the taker was informed. A real desk cannot see this and
+has to infer it; a simulation can, and that is what makes the analysis checkable. An
+informed order adds `J` ticks of pending impact, released at rate `v` per step, so a fill
+against it should mark out at exactly `-J(1-(1-v)^h)`. The measured informed markout at
+h = 1, 5, 20, 100 matches that curve (a test pins it), so the markout machinery is
+validated against a first-principles number before any conclusion is drawn from it.
+
+The per-fill identity is edge + markout = realised spread (edge measured against the mid
+the maker quoted against). Everything is **size-weighted per unit**, because the maker's
+fills are partial and a 0.3-unit fill should not count as much as a whole one. Markouts
+whose horizon runs past the end of the session are dropped at that horizon rather than
+truncated to the last mid, which would mix horizons.
+
+## Standard errors treat the session as the unit
+
+Fills in one session share a price path and an inventory history, so they are not
+independent. Markout standard errors are clustered by session (delta method on the ratio
+of per-session sums); cross-session statistics (PnL std, per-session Sharpe, final
+inventory std) get seeded bootstrap errors over sessions, because market-making PnL is
+skewed and the normal-theory formulas assume it is not. The mean's error is the plain
+`s/sqrt(n)`.
+
+## The sensitivity sweep compares all three policies, on matched spreads
+
+Earlier the sweep ran the Avellaneda-Stoikov maker alone, which shows how *it* responds to
+a parameter but not whether its advantage survives. Now every policy runs at every value,
+on the same seeds, and the benchmarks are re-matched to A-S's average spread at each value
+(for `gamma`, `kappa` and `sigma` the matched spread moves; `A` does not enter the quotes).
+`gamma`, `kappa`, `sigma` and `A` are swept in the idealised engine, where they are
+defined; the informed fraction only exists in the order book, so it is swept there, with
+`sigma`, `A` and `kappa` re-estimated from the book at each fraction.
+
+The informed-fraction sweep uses the sweep's own seed block (4242), not the headline
+comparison's (20260918). The previous two-policy adverse-selection table used the headline
+seeds and 66 sessions; its 0%-informed row (Sharpe 12.9 vs 12.2) does not reproduce on
+the new seeds with 100 sessions (10.5 vs 8.8). Measured on 66 sessions from each seed
+block, the gap is about two standard errors -- consistent with sampling noise, and exactly
+why the table now carries standard errors. A per-session Sharpe near 10 estimated from 100
+sessions has a bootstrap standard error of 0.7-0.9, so only large, consistent gaps between
+policies should be read as findings.
