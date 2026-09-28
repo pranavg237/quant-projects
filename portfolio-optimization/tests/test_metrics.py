@@ -101,3 +101,26 @@ def test_sharpe_interval_contains_the_estimate(monthly: pd.Series) -> None:
     lower, upper = mx.sharpe_confidence_interval(monthly, 12.0)
     point = monthly.mean() / monthly.std(ddof=1) * np.sqrt(12)
     assert lower < point < upper
+
+
+def test_trading_cost_table_reconciles_with_the_cost_rate(returns: pd.DataFrame) -> None:
+    from portopt import strategies as st
+
+    builders = {
+        "1/N": bt.equal_weight_builder,
+        "max-Sharpe": st.make_max_sharpe(12.0, st.sample_estimator),
+    }
+    runs = bt.compare_strategies(returns, builders, lookback=36, cost_bps=25.0)
+    table = mx.trading_cost_table(runs, 0.0).set_index("strategy")
+    for name, run in runs.items():
+        row = table.loc[name]
+        years = len(run.returns) / 12.0
+        # Linear costs: drag in bp/yr is exactly the one-way rate times annual turnover.
+        assert row["cost_drag_bps"] == pytest.approx(25.0 * row["annual_turnover"])
+        assert row["annual_turnover"] == pytest.approx(run.turnover.sum() / years)
+        assert row["mean_turnover"] == pytest.approx(run.turnover.iloc[1:].mean())
+        assert row["borrow_drag_bps"] == 0.0
+        assert row["gross_sharpe"] >= row["net_sharpe"]
+        assert row["sharpe_lost"] == pytest.approx(row["gross_sharpe"] - row["net_sharpe"])
+    # The optimiser trades more than 1/N, so it loses more to costs.
+    assert table.loc["max-Sharpe", "cost_drag_bps"] > table.loc["1/N", "cost_drag_bps"]

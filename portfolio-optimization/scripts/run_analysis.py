@@ -280,6 +280,33 @@ def main() -> int:
         "at the 5% level."
     )
     results["walk_forward"] = summary.to_dict(orient="records")
+
+    costs_table = mx.trading_cost_table({**backtests, benchmark.name: benchmark}, rf)
+    print(
+        f"\n  Turnover and costs ({args.cost_bps:.0f}bp one way, {args.borrow_bps:.0f}bp/yr "
+        "borrow). mean_turnover excludes the initial purchase:"
+    )
+    _show(costs_table)
+    results["trading_costs"] = costs_table.to_dict(orient="records")
+
+    # The Ledoit-Wolf intensity the shrunk strategies actually used, window by window.
+    walk_deltas = pd.Series(
+        [
+            cov.ledoit_wolf(returns.iloc[i - args.lookback : i], "constant_correlation")[1]
+            for i in range(args.lookback, len(returns))
+        ]
+    )
+    print(
+        f"\n  Ledoit-Wolf (constant-correlation) intensity across the {len(walk_deltas)} "
+        f"walk-forward windows: mean {walk_deltas.mean():.3f}, "
+        f"range {walk_deltas.min():.3f} to {walk_deltas.max():.3f}"
+    )
+    results["walk_forward_shrinkage"] = {
+        "target": "constant_correlation",
+        "mean": float(walk_deltas.mean()),
+        "min": float(walk_deltas.min()),
+        "max": float(walk_deltas.max()),
+    }
     results["walk_forward_sample"] = {
         "first_month": str(oos_index[0].date()),
         "last_month": str(oos_index[-1].date()),
@@ -466,6 +493,13 @@ def main() -> int:
     args.results.mkdir(parents=True, exist_ok=True)
     (args.results / "results.json").write_text(json.dumps(results, indent=2, default=str))
     (args.results / "walk_forward.md").write_text(_to_markdown(summary[display]))
+    (args.results / "costs.md").write_text(
+        f"Out of sample {oos_index[0]:%Y-%m} to {oos_index[-1]:%Y-%m}, "
+        f"{args.lookback}-month window, {args.cost_bps:.0f}bp one-way costs. "
+        "mean_turnover is one-way per monthly rebalance, excluding the initial purchase; "
+        "annual_turnover includes it. Sharpe ratios are on excess returns over T-bills.\n\n"
+        + _to_markdown(costs_table)
+    )
     (args.results / "leverage_sweep.md").write_text(
         _to_markdown(
             sweep[
