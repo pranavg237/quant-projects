@@ -166,13 +166,11 @@ def test_calibration_respects_bounds(true_heston_params: HestonParams) -> None:
     assert result.rmse_vol > 1e-3
 
 
-def test_real_spy_calibration_quality(cached_spy_snapshot: data_mod.ChainSnapshot) -> None:
+def test_real_spy_calibration_quality(
+    cached_spy_snapshot: data_mod.ChainSnapshot, spy_surface: pd.DataFrame
+) -> None:
     """Regression guard on the headline README number, from the committed snapshot."""
-    clean, _ = data_mod.clean_chain(cached_spy_snapshot)
-    curve = data_mod.RateCurve([0.25, 30.0], [0.039, 0.05])
-    surf = surface_mod.thin_surface(
-        surface_mod.build_surface(cached_spy_snapshot, clean, curve), max_per_expiry=14
-    )
+    surf = surface_mod.thin_surface(spy_surface, max_per_expiry=14)
     result = cal.calibrate(surf, cached_spy_snapshot.spot, seeds=cal.DEFAULT_SEEDS[:2])
     _, per_expiry_errors = cal.fit_flat_vol_per_expiry(surf)
     per_expiry_rmse = float(np.sqrt((per_expiry_errors["vol_error"] ** 2).mean()))
@@ -273,13 +271,11 @@ def test_holdout_result_degradation_edge_case() -> None:
     assert cal.HoldoutResult("m", 2.0, 3.0, 10, 10).degradation == pytest.approx(1.5)
 
 
-def test_real_spy_holdout(cached_spy_snapshot: data_mod.ChainSnapshot) -> None:
+def test_real_spy_holdout(
+    cached_spy_snapshot: data_mod.ChainSnapshot, spy_surface: pd.DataFrame
+) -> None:
     """The README's out-of-sample claim, guarded on the committed snapshot."""
-    clean, _ = data_mod.clean_chain(cached_spy_snapshot)
-    curve = data_mod.RateCurve([0.25, 30.0], [0.039, 0.05])
-    surf = surface_mod.thin_surface(
-        surface_mod.build_surface(cached_spy_snapshot, clean, curve), max_per_expiry=12
-    )
+    surf = surface_mod.thin_surface(spy_surface, max_per_expiry=12)
     results = cal.cross_validate(surf, cached_spy_snapshot.spot, seeds=cal.DEFAULT_SEEDS[:1])
     heston = results[0]
     # No overfitting: out-of-sample within 50% of in-sample on real, noisy quotes.

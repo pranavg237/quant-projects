@@ -1,4 +1,5 @@
 """Unit tests for the pure pre-trade risk checks in risk.py."""
+
 import os
 import sys
 from pathlib import Path
@@ -7,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from risk import (  # noqa: E402
+from risk import (
     AccountSnapshot,
     OrderIntent,
     RiskLimits,
@@ -36,8 +37,13 @@ def test_normal_buy_is_approved_and_every_check_is_reported():
     d = evaluate_order(buy(200), 0, HEALTHY, LIMITS)
     assert d.approved and d.risk_increasing
     assert [c.name for c in d.checks] == [
-        "kill_switch", "order_sanity", "no_short", "daily_loss",
-        "position_pct", "position_notional", "buying_power",
+        "kill_switch",
+        "order_sanity",
+        "no_short",
+        "daily_loss",
+        "position_pct",
+        "position_notional",
+        "buying_power",
     ]
     assert d.rejections == []
 
@@ -113,13 +119,16 @@ def test_sell_larger_than_position_is_rejected():
     assert status(d, "no_short") == "fail"
 
 
-@pytest.mark.parametrize("order", [
-    OrderIntent("SPY", "buy", 0, 100.0),
-    OrderIntent("SPY", "buy", -5, 100.0),
-    OrderIntent("SPY", "buy", float("nan"), 100.0),
-    OrderIntent("SPY", "buy", 10, 0.0),
-    OrderIntent("SPY", "short", 10, 100.0),
-])
+@pytest.mark.parametrize(
+    "order",
+    [
+        OrderIntent("SPY", "buy", 0, 100.0),
+        OrderIntent("SPY", "buy", -5, 100.0),
+        OrderIntent("SPY", "buy", float("nan"), 100.0),
+        OrderIntent("SPY", "buy", 10, 0.0),
+        OrderIntent("SPY", "short", 10, 100.0),
+    ],
+)
 def test_insane_orders_are_rejected(order):
     d = evaluate_order(order, 0, HEALTHY, LIMITS)
     assert not d.approved
@@ -133,11 +142,17 @@ def test_is_risk_increasing():
     assert not is_risk_increasing(10, "sell", 4)
 
 
-@pytest.mark.parametrize("kwargs", [
-    {"max_position_pct": 0}, {"max_position_pct": 1.5},
-    {"max_position_notional": 0}, {"max_position_notional": float("inf")},
-    {"max_daily_loss_pct": 0}, {"max_daily_loss_pct": 1},
-])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"max_position_pct": 0},
+        {"max_position_pct": 1.5},
+        {"max_position_notional": 0},
+        {"max_position_notional": float("inf")},
+        {"max_daily_loss_pct": 0},
+        {"max_daily_loss_pct": 1},
+    ],
+)
 def test_invalid_limits_are_rejected(kwargs):
     with pytest.raises(ValueError):
         RiskLimits(**kwargs)

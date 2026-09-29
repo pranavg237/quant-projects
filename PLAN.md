@@ -148,3 +148,14 @@ properly is skipped and the README says why.
 
 After merging, an agent that had not seen the work re-ran every project from a clean
 clone and checked every README number. [CHANGES.md](CHANGES.md) records the outcome.
+
+## Round 3: closing round 2's open items
+
+| Project | Work |
+|---|---|
+| options-pricing-engine | Build the American early-exercise correction into the surface and forward, keep the European surface for comparison, and re-run the calibration. |
+| fama-french-factor-model | Commit snapshots for the factor and 25-portfolio examples so every example runs offline. |
+| alpaca-ma-crossover-bot | Pass ruff and strict mypy, and turn on those checks in CI. |
+
+As before, a fresh agent re-ran the changed projects from a clean clone and checked every
+number; [CHANGES.md](CHANGES.md) records the outcome.

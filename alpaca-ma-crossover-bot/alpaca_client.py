@@ -25,13 +25,14 @@ Retry policy
   Alpaca also rejects a second order with the same `client_order_id`, so even a mistaken
   resubmission with the same id cannot create a duplicate.
 """
+
 from __future__ import annotations
 
 import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import requests
 
@@ -53,8 +54,14 @@ class AlpacaError(RuntimeError):
             (timeout, connection error or 5xx). Only meaningful for order submission.
     """
 
-    def __init__(self, message: str, *, status_code: int | None = None,
-                 api_code: int | None = None, ambiguous: bool = False) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        api_code: int | None = None,
+        ambiguous: bool = False,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.api_code = api_code
@@ -78,11 +85,19 @@ class AlpacaClient:
     pass a fake one so the whole client runs without a network.
     """
 
-    def __init__(self, api_key_id: str | None = None, api_secret_key: str | None = None,
-                 trading_base_url: str | None = None, data_base_url: str | None = None, *,
-                 session: Any = None, timeout: float = 15.0, max_attempts: int = 3,
-                 backoff_seconds: float = 0.5,
-                 sleep: Callable[[float], None] = time.sleep) -> None:
+    def __init__(
+        self,
+        api_key_id: str | None = None,
+        api_secret_key: str | None = None,
+        trading_base_url: str | None = None,
+        data_base_url: str | None = None,
+        *,
+        session: Any = None,
+        timeout: float = 15.0,
+        max_attempts: int = 3,
+        backoff_seconds: float = 0.5,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
         key_id = api_key_id or os.environ.get("ALPACA_API_KEY_ID")
         secret = api_secret_key or os.environ.get("ALPACA_API_SECRET_KEY")
         if not key_id or not secret:
@@ -90,7 +105,9 @@ class AlpacaClient:
                 "Missing Alpaca credentials. Set ALPACA_API_KEY_ID and "
                 "ALPACA_API_SECRET_KEY (see .env.example)."
             )
-        self.trading_base_url = trading_base_url or os.environ.get("ALPACA_BASE_URL", DEFAULT_TRADING_BASE_URL)
+        self.trading_base_url = trading_base_url or os.environ.get(
+            "ALPACA_BASE_URL", DEFAULT_TRADING_BASE_URL
+        )
         self.data_base_url = data_base_url or DEFAULT_DATA_BASE_URL
         self._secrets = (key_id, secret)
         self._headers = {"APCA-API-KEY-ID": key_id, "APCA-API-SECRET-KEY": secret}
@@ -120,20 +137,39 @@ class AlpacaClient:
         except ValueError:
             pass
         status = int(resp.status_code)
-        return AlpacaError(self._scrub(f"{method} {path} -> {status}: {detail[:500]}"),
-                           status_code=status, api_code=api_code, ambiguous=status >= 500)
+        return AlpacaError(
+            self._scrub(f"{method} {path} -> {status}: {detail[:500]}"),
+            status_code=status,
+            api_code=api_code,
+            ambiguous=status >= 500,
+        )
 
-    def _request(self, method: str, base_url: str, path: str, *, params: dict | None = None,
-                 json_body: dict | None = None, retry: bool) -> Any:
+    def _request(
+        self,
+        method: str,
+        base_url: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | None = None,
+        retry: bool,
+    ) -> Any:
         attempts = self._max_attempts if retry else 1
         last_error: AlpacaError | None = None
         for attempt in range(1, attempts + 1):
             try:
-                resp = self._session.request(method, f"{base_url}{path}", headers=self._headers,
-                                             params=params, json=json_body, timeout=self._timeout)
+                resp = self._session.request(
+                    method,
+                    f"{base_url}{path}",
+                    headers=self._headers,
+                    params=params,
+                    json=json_body,
+                    timeout=self._timeout,
+                )
             except (requests.Timeout, requests.ConnectionError) as e:
                 last_error = AlpacaError(
-                    self._scrub(f"{method} {path} -> {type(e).__name__}: {e}"), ambiguous=True)
+                    self._scrub(f"{method} {path} -> {type(e).__name__}: {e}"), ambiguous=True
+                )
             else:
                 if resp.ok:
                     return resp.json()
@@ -145,17 +181,17 @@ class AlpacaClient:
         assert last_error is not None
         raise last_error
 
-    def _get(self, base_url: str, path: str, params: dict | None = None) -> Any:
+    def _get(self, base_url: str, path: str, params: dict[str, Any] | None = None) -> Any:
         return self._request("GET", base_url, path, params=params, retry=True)
 
     # -- account / clock / positions ------------------------------------
-    def get_account(self) -> dict:
+    def get_account(self) -> dict[str, Any]:
         """Account status, equity, last_equity (previous close) and buying power."""
-        return self._get(self.trading_base_url, "/v2/account")
+        return cast(dict[str, Any], self._get(self.trading_base_url, "/v2/account"))
 
-    def get_clock(self) -> dict:
+    def get_clock(self) -> dict[str, Any]:
         """Market clock: is_open, next_open, next_close, timestamp."""
-        return self._get(self.trading_base_url, "/v2/clock")
+        return cast(dict[str, Any], self._get(self.trading_base_url, "/v2/clock"))
 
     def get_position(self, symbol: str) -> Position | None:
         """The open position in ``symbol``, or None if flat."""
@@ -173,7 +209,9 @@ class AlpacaClient:
         )
 
     # -- market data ---------------------------------------------------
-    def get_daily_bars(self, symbol: str, start: str, end: str | None = None, limit: int = 1000) -> list[dict]:
+    def get_daily_bars(
+        self, symbol: str, start: str, end: str | None = None, limit: int = 1000
+    ) -> list[dict[str, Any]]:
         """Daily OHLCV bars, oldest first. `start`/`end` are YYYY-MM-DD strings.
 
         Requests split- and dividend-adjusted prices (`adjustment=all`). Alpaca's default
@@ -184,29 +222,47 @@ class AlpacaClient:
         if end:
             params["end"] = end
         data = self._get(self.data_base_url, f"/v2/stocks/{symbol}/bars", params=params)
-        return data.get("bars") or []
+        return cast(list[dict[str, Any]], data.get("bars") or [])
 
     # -- orders ----------------------------------------------------------
-    def list_open_orders(self, symbol: str) -> list[dict]:
+    def list_open_orders(self, symbol: str) -> list[dict[str, Any]]:
         """Orders for ``symbol`` that are not yet in a terminal state."""
-        return self._get(self.trading_base_url, "/v2/orders",
-                         params={"status": "open", "symbols": symbol, "limit": 100})
+        return cast(
+            list[dict[str, Any]],
+            self._get(
+                self.trading_base_url,
+                "/v2/orders",
+                params={"status": "open", "symbols": symbol, "limit": 100},
+            ),
+        )
 
-    def get_order(self, order_id: str) -> dict:
-        return self._get(self.trading_base_url, f"/v2/orders/{order_id}")
+    def get_order(self, order_id: str) -> dict[str, Any]:
+        return cast(dict[str, Any], self._get(self.trading_base_url, f"/v2/orders/{order_id}"))
 
-    def get_order_by_client_order_id(self, client_order_id: str) -> dict | None:
+    def get_order_by_client_order_id(self, client_order_id: str) -> dict[str, Any] | None:
         """The order with this client_order_id (any status), or None if none exists."""
         try:
-            return self._get(self.trading_base_url, "/v2/orders:by_client_order_id",
-                             params={"client_order_id": client_order_id})
+            return cast(
+                dict[str, Any],
+                self._get(
+                    self.trading_base_url,
+                    "/v2/orders:by_client_order_id",
+                    params={"client_order_id": client_order_id},
+                ),
+            )
         except AlpacaError as e:
             if e.status_code == 404:
                 return None
             raise
 
-    def submit_market_order(self, symbol: str, qty: float, side: str, time_in_force: str = "day",
-                            client_order_id: str | None = None) -> dict:
+    def submit_market_order(
+        self,
+        symbol: str,
+        qty: float,
+        side: str,
+        time_in_force: str = "day",
+        client_order_id: str | None = None,
+    ) -> dict[str, Any]:
         """Submit a market order and return Alpaca's order record. Never retried."""
         if side not in ("buy", "sell"):
             raise ValueError("side must be 'buy' or 'sell'")
@@ -219,11 +275,16 @@ class AlpacaClient:
         }
         if client_order_id:
             body["client_order_id"] = client_order_id
-        return self._request("POST", self.trading_base_url, "/v2/orders", json_body=body, retry=False)
+        return cast(
+            dict[str, Any],
+            self._request("POST", self.trading_base_url, "/v2/orders", json_body=body, retry=False),
+        )
 
 
 if __name__ == "__main__":
     client = AlpacaClient()
     account = client.get_account()
-    print(f"Account status: {account['status']}, equity: ${float(account['equity']):,.2f}, "
-          f"buying power: ${float(account['buying_power']):,.2f}")
+    print(
+        f"Account status: {account['status']}, equity: ${float(account['equity']):,.2f}, "
+        f"buying power: ${float(account['buying_power']):,.2f}"
+    )

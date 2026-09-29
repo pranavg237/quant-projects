@@ -646,7 +646,7 @@ def plot_parity_residuals(
 
     Each vertical bar is one strike: the tradeable range of the synthetic forward
     :math:`[C_{bid} - P_{ask},\ C_{ask} - P_{bid}]`, measured relative to European parity
-    with the pipeline's forward, :math:`D(F - K)`. A bar that misses zero is a European
+    with the European-parity forward, :math:`D(F - K)`. A bar that misses zero is a European
     parity violation beyond the spread. The line is what American exercise predicts for
     the same quantity (early-exercise premia plus the shift to the American-adjusted
     forward); a bar that misses the line is a violation even after allowing for it.
@@ -695,7 +695,7 @@ def plot_parity_residuals(
         ha="left",
     )
     return _finish(
-        fig, "Zero = European parity, pipeline forward. y-axis scaled to the fitted strikes"
+        fig, "Zero = European parity at its own forward. y-axis scaled to the fitted strikes"
     )
 
 

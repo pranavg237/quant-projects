@@ -1,0 +1,13 @@
+# Tool configuration only; the bot is run as scripts, not installed as a package.
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["alpaca_client.py", "bot.py", "risk.py", "runlog.py", "strategy.py"]
+
+[[tool.mypy.overrides]]
+module = ["dotenv"]
+ignore_missing_imports = true

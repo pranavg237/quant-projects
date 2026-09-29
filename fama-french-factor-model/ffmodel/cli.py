@@ -87,8 +87,10 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--fm-lags", type=int, default=0, help="Newey-West lags for Fama-MacBeth errors (default: 0)")
     t.set_defaults(func=cmd_test_portfolios)
 
-    s = sub.add_parser("snapshot", help="download factor files and Yahoo returns into a directory for offline runs")
-    s.add_argument("--tickers", nargs="+", required=True, help="Yahoo Finance tickers")
+    s = sub.add_parser("snapshot", help="download French files and Yahoo returns into a directory for offline runs")
+    s.add_argument("--tickers", nargs="+", default=[], help="Yahoo Finance tickers (omit for French files only)")
+    s.add_argument("--portfolios", nargs="+", default=[], metavar="DATASET",
+                   help="also save these French test-portfolio files, e.g. 25_Portfolios_5x5")
     s.add_argument("--freq", choices=["monthly", "daily"], default="monthly")
     s.add_argument("--start", help="first date, e.g. 1990-01")
     s.add_argument("--end", help="last date, e.g. 2024-12")
@@ -141,7 +143,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         returns = returns.loc[args.start:args.end]
         source = args.csv
         manifest = snapshot.read_manifest(Path(args.csv).parent)
-        if manifest:
+        if manifest and "returns" in manifest:
             source = (f"{manifest['returns']['source']}, saved snapshot `{Path(args.csv).parent.name}` "
                       f"(downloaded {manifest['downloaded_utc'][:10]})")
     if args.weights:
@@ -260,6 +262,12 @@ def _factor_source(args: argparse.Namespace) -> str:
     return f"; saved snapshot `{Path(args.data_dir).name}`{when}"
 
 
+def _french_source(args: argparse.Namespace) -> str:
+    """'Kenneth R. French Data Library', plus the snapshot and its download date when --data-dir is given."""
+    snap = _factor_source(args)
+    return "Kenneth R. French Data Library" + (f" ({snap[2:]})" if snap else "")
+
+
 def _significance_section(rep: Optional[report.Report], results: Dict, args: argparse.Namespace) -> None:
     """Alpha significance across assets, with a Holm correction for testing several alphas at once."""
     if len(results) < 2:
@@ -278,10 +286,13 @@ def _significance_section(rep: Optional[report.Report], results: Dict, args: arg
 
 def cmd_snapshot(args: argparse.Namespace) -> int:
     """Save factor files and Yahoo returns so a later analysis can run offline."""
-    manifest = snapshot.save_snapshot(args.out, args.tickers, args.start, args.end, args.freq)
-    r = manifest["returns"]
-    print(f"Saved {len(manifest['french_library'])} French library files and {r['periods']} periods of returns "
-          f"for {', '.join(r['tickers'])} ({r['first']} to {r['last']}) to {args.out}")
+    manifest = snapshot.save_snapshot(args.out, args.tickers, args.start, args.end, args.freq, args.portfolios)
+    saved = f"{len(manifest['french_library'])} French library files"
+    r = manifest.get("returns")
+    if r:
+        saved += (f" and {r['periods']} periods of returns for {', '.join(r['tickers'])} "
+                  f"({r['first']} to {r['last']})")
+    print(f"Saved {saved} to {args.out}")
     return 0
 
 
@@ -315,7 +326,7 @@ def cmd_test_portfolios(args: argparse.Namespace) -> int:
     rep = _open_report(args, f"Asset pricing tests: {args.dataset}")
     _note(rep, f"{raw.shape[1]} {args.weighting}-weighted portfolios ({args.dataset}), {args.freq}, "
                f"{index[0]:%b %Y} to {index[-1]:%b %Y} ({len(index)} periods). Returns are in excess of the "
-               f"T-bill rate; alphas and premia are annualized.")
+               f"T-bill rate; alphas and premia are annualized. Source: {_french_source(args)}.")
 
     grs_rows, alpha_cols, predicted, pvalues, fm_results, alphas = {}, {}, {}, {}, {}, {}
     realized = None
@@ -373,7 +384,7 @@ def cmd_factors(args: argparse.Namespace) -> int:
     spec = get_model(args.model)
     rep = _open_report(args, f"{spec.label} factors")
     _note(rep, f"{args.freq.capitalize()} factor returns, {factors.index[0]:%b %Y} to {factors.index[-1]:%b %Y} "
-               f"({len(factors)} periods). Source: Kenneth R. French Data Library.")
+               f"({len(factors)} periods). Source: {_french_source(args)}.")
     _show(rep, "Summary statistics", factor_summary(factors), "summary", level=2)
     _show(rep, "Correlations", factors.drop(columns="RF").corr(), "correlations", level=2)
     if len(spec.factors) > 1:
