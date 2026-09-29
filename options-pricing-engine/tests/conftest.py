@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as dt
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -97,11 +98,17 @@ def flat_rate_curve() -> data_mod.RateCurve:
 def synthetic_surface(
     synthetic_snapshot: data_mod.ChainSnapshot, flat_rate_curve: data_mod.RateCurve
 ) -> pd.DataFrame:
-    """The synthetic chain run through the real cleaning and surface pipeline."""
+    """The synthetic chain run through the real cleaning and surface pipeline.
+
+    The chain is European by construction, so it is built with ``exercise="european"``;
+    what the American correction does to it is tested in ``test_american.py``.
+    """
     from optpricing import surface as surface_mod
 
     clean, _ = data_mod.clean_chain(synthetic_snapshot)
-    return surface_mod.build_surface(synthetic_snapshot, clean, flat_rate_curve)
+    return surface_mod.build_surface(
+        synthetic_snapshot, clean, flat_rate_curve, exercise="european"
+    )
 
 
 @pytest.fixture(scope="session")
@@ -117,3 +124,26 @@ def cached_spy_snapshot() -> data_mod.ChainSnapshot:
     if not candidates:
         pytest.skip("no committed SPY snapshot")
     return data_mod.ChainSnapshot.from_csv(candidates[-1])
+
+
+#: The rate curve the SPY regression tests price with (close to the committed one).
+SPY_TEST_CURVE = data_mod.RateCurve([0.25, 30.0], [0.039, 0.05])
+
+
+@pytest.fixture(scope="session")
+def spy_build(cached_spy_snapshot: data_mod.ChainSnapshot) -> Any:
+    """The committed SPY chain through the default (American-corrected) surface.
+
+    Built once per session: the de-Americanisation fixed point costs ~15 s.
+    """
+    from optpricing import surface as surface_mod
+
+    clean, _ = data_mod.clean_chain(cached_spy_snapshot)
+    return surface_mod.build_surface_detailed(cached_spy_snapshot, clean, SPY_TEST_CURVE)
+
+
+@pytest.fixture(scope="session")
+def spy_surface(spy_build: Any) -> pd.DataFrame:
+    """The surface of :func:`spy_build`."""
+    surface: pd.DataFrame = spy_build.surface
+    return surface

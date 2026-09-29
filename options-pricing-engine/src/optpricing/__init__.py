@@ -4,6 +4,7 @@ Modules
 -------
 ``blackscholes``   Analytic Black-Scholes-Merton price and Greeks (fully vectorised).
 ``binomial``       Cox-Ross-Rubinstein / Jarrow-Rudd trees for European and American options.
+``american``       Early-exercise premia and de-Americanising American quotes.
 ``montecarlo``     Monte Carlo pricing with antithetic and control variates.
 ``implied_vol``    Newton-Raphson implied volatility with a bracketed bisection fallback.
 ``heston``         Heston (1993) stochastic volatility pricing via the characteristic function.
@@ -15,13 +16,14 @@ Modules
 
 from __future__ import annotations
 
-from . import binomial, blackscholes, data, heston, implied_vol, montecarlo, surface
+from . import american, binomial, blackscholes, data, heston, implied_vol, montecarlo, surface
 from .types import ExerciseStyle, FloatArray, OptionType
 
 __all__ = [
     "ExerciseStyle",
     "FloatArray",
     "OptionType",
+    "american",
     "binomial",
     "blackscholes",
     "data",

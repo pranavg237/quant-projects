@@ -35,7 +35,11 @@ is demonstrable rather than asserted.
 26% of SPY strike triples failed a zero-tolerance convexity test. At \$1 strike spacing the
 theoretical butterfly value is comparable to the \$0.01 tick, so that number is rounding,
 not arbitrage. Netting off the bid-ask cost of all three legs leaves 2.9%. Reporting the
-26% alone would have been alarming and meaningless.
+26% alone would have been alarming and meaningless. The American correction then made the
+point again: it moved the zero-tolerance count to 37.6% (746/1986) while the tradeable count
+*fell* to 2.1% (41). 209 of the 229 extra triples are runs of identical tick-quantised mids
+whose butterfly is exactly zero, tipped negative by millionths of a dollar; at a tenth of a
+cent the counts are 497 before and 501 after (`results/exercise_comparison.md`).
 
 ### 5. Negative time to expiry produced nonsense — **FIXED**
 `tau = -1` was silently *inflating* the price via `exp(-r·tau)` rather than returning
@@ -60,15 +64,17 @@ wrong. The step-size analysis did find that the textbook `eps^(1/3)` / `eps^(1/4
 lose ~10x on one-day gamma and volga, because the price's round-off is `eps * S`, not
 `eps * V`. The README also said "10 Greeks"; there are nine, plus the price.
 
-### 8. The call/put gap at the forward was blamed on quote noise — **MEASURED, not yet fixed**
+### 8. The call/put gap at the forward was blamed on quote noise — **FIXED, with an overshoot**
 The README said call and put vols meet at the forward with a ~0.5 vol point gap that was
-"a hard floor from free data". The parity analysis shows it is mostly American exercise:
+"a hard floor from free data". The parity analysis showed it is mostly American exercise:
 deep-ITM American puts in the forward-fitting window pull the parity forward down, by 2bp
-at a month and 85bp at 21 months. Pricing the early-exercise premium on a tree cuts the
-scatter of the per-strike forwards 2.4-5.6x beyond six months, cuts in-window parity
-violations beyond the spread from 44.5% to 10.6%, and closes the call/put gap at 637 days
-from -1.08 to +0.18 vol points. The surface and Heston numbers still use the biased
-forward (see B).
+at a month and 86bp at 21 months. The surface now removes every quote's early-exercise
+premium and uses the de-Americanised parity forward (item B). On the surface itself the
+call/put gap at the forward goes from -0.24 / -0.26 / -0.51 / -1.08 vol points at 73 / 272
+/ 455 / 637 days to -0.01 / +0.03 / +0.20 / +0.37. So it is fixed out to nine months and
+over-corrected at 15-21 months, on three strikes per expiry, against a bid-ask band of
+0.07-0.09. The leading suspect is the tree's continuous dividend yield (below); it is not
+tested.
 
 ---
 
@@ -82,34 +88,58 @@ report it moves a lot. Measuring that needs a time series of chains, which needs
 paid feed or weeks of daily collection. This is the largest gap in the repo and it is
 stated in the README rather than papered over.
 
-### B. American exercise is ignored when inverting SPY quotes — **now measured**
-SPY options are American. The surface treats them as European. For the OTM quotes the
-surface inverts, the early-exercise premium is small. The first version of this item
-stopped there, and missed the bigger effect: the *forward* is fitted by parity over
-strikes within 10% of spot, which includes in-the-money puts whose early-exercise premium
-at 4% rates is roughly `r K tau` -- dollars, not cents, at long maturities. `parity.py`
-now prices that premium (American minus European on one CRR lattice) and re-solves the
-forward: +2bp at a month, +85bp at 21 months (item 8). Not yet done: using the adjusted
-forward and de-Americanised OTM prices in `build_surface`, and re-running the calibration.
-That changes every downstream number and deserves its own review. The tree also uses a
-continuous dividend yield, which cannot represent the pre-ex-date exercise of deep-ITM
-calls under SPY's discrete dividends; the pipeline would still be materially wrong on a
-single stock around a dividend.
+### B. American exercise in the surface — **FIXED for the continuous-yield model; discrete dividends open**
+SPY options are American; the surface used to treat them as European. The first version
+of this item said the premium on the OTM quotes the surface inverts is small. That is
+true short-dated and wrong long-dated: the 21-month puts near the forward carry up to
+\$11.81 (median \$0.75), because the ATM-forward strike is 8% in the money against spot.
+The bigger effect was the *forward*, fitted by parity over strikes that include ITM puts
+whose premium is roughly `r K tau`.
+
+`build_surface` now de-Americanises every quote (201-step Leisen-Reimer lattice, a
+per-quote fixed point for the vol-premium circularity, contraction <= 0.11, <= 8
+iterations) and iterates the forward with the surface (5 passes to 6e-8). The old
+pipeline is `exercise="european"` and both are calibrated in every run
+(`results/exercise_comparison.md`). Heston RMSE 2.51 -> 2.26, holdout 2.38 -> 2.14,
+body 1.09 -> 1.10, short-dated put wing 5.92 -> 5.26, one-vol-per-expiry Black-Scholes
+10.61 -> 10.66. The Heston gain looked suspicious, because the wing quotes barely moved
+(at most 0.018 vol points), so it was checked by cross-scoring: the new parameters score
+5.26 on the *old* wing quotes too. The gain is a different compromise across maturities
+(a lower, flatter long end lets the optimiser raise xi from 1.96 to 2.08), not a better
+fit to changed data.
+
+Two findings from doing it. (1) The first run priced the premium on CRR, whose premium
+has a sawtooth in strike about five times the true curvature on \$1 strikes; Leisen-Reimer
+removes it and is now the default. That was blamed at the time for a jump in the
+zero-tolerance butterfly count, and wrongly: the jump survived the switch and is the
+tick-run effect in item 4. (2) Pricing the parity module's American theory at the
+de-Americanised vols, which is what self-consistency requires, fits parity slightly
+*worse* than the earlier run that used the uncorrected vols. In-window violations rise
+from 10.6% to 11.5%, and the long-dated forward scatter from 1.38/1.76 to 1.63/2.18 at
+15/21 months.
+
+Still open: the lattice uses a continuous dividend yield, and the implied yield here is
+not positive, so every call premium is zero. SPY's discrete dividends give deep-ITM calls a
+pre-ex-date premium the model cannot see, which would pull the forward back down. That is
+the leading suspect for the long-dated overshoot in item 8. The premium also depends on
+`r` itself, not just the carry, so it inherits the Treasury-for-funding assumption (H).
+The pipeline would still be materially wrong on a single stock around a dividend.
 
 ### C. No confidence intervals on the calibrated parameters — **FIXED, with a caveat**
 Now computed from the Jacobian at the optimum. The relative standard errors are small
-(0.8%–3.8%), and that *understates* the uncertainty because the calculation assumes
-independent residuals while adjacent strikes are strongly dependent. The genuinely useful
-output turned out to be the correlation matrix: `corr(kappa, xi) = +0.83` and
-`corr(kappa, theta) = -0.79`. My guess before measuring was "above 0.9"; the measured
-value is 0.83, so kappa and xi are strongly but not degenerately linked. It remains a
+(0.9%–4.2% on the corrected surface), and that *understates* the uncertainty because the
+calculation assumes independent residuals while adjacent strikes are strongly dependent.
+The genuinely useful output turned out to be the correlation matrix: `corr(kappa, xi) =
++0.84` and `corr(kappa, theta) = -0.79` (+0.83 / -0.79 on the uncorrected surface). My
+guess before measuring was "above 0.9"; the measured value is 0.84, so kappa and xi are
+strongly but not degenerately linked. It remains a
 *local* quantity — it describes the basin the optimiser landed in, not global uncertainty
 on a multimodal objective.
 
 ### D. Model comparison is in-sample — **FIXED**
 Now cross-validated: fit on alternate strikes within each expiry, score on the rest.
-Heston goes 2.55 in-sample to 2.38 out-of-sample (ratio 0.93); both Black-Scholes
-benchmarks sit at 0.96 and 0.95. Nothing overfits, which is what five parameters against 234
+Heston goes 2.30 in-sample to 2.14 out-of-sample (ratio 0.93) on the corrected surface
+(2.55 to 2.38 before); both Black-Scholes benchmarks sit at 0.96 and 0.95. Nothing overfits, which is what five parameters against 234
 training quotes should do — but it is now measured rather than assumed. Note this tests
 interpolation across strikes, **not** extrapolation in maturity, which is the harder
 question and is still untested (and is really item A in disguise).
@@ -121,7 +151,7 @@ parameters move if the spread filter goes from 20% to 60%? — would say whether
 are robust to them. Not run.
 
 ### F. The Feller condition is violated and only noted
-`2·kappa·theta/xi² = 0.16`. That is fine for the characteristic function (the variance
+`2·kappa·theta/xi² = 0.13` (0.16 before the American correction). That is fine for the characteristic function (the variance
 process just touches zero) and typical of equity calibrations, but the repo's own Heston
 Monte Carlo uses full-truncation Euler, which is *known* to be biased in exactly that
 regime. The MC is only used as a validation cross-check at parameters where Feller holds
@@ -130,8 +160,9 @@ the calibrated parameters they would get a biased answer, and only a docstring w
 An Andersen QE scheme would fix it properly.
 
 ### G. No performance work
-The calibration takes ~105-110 seconds for four seeds over 468 quotes (106.8 s in the
-committed run, `results/results.json` `heston.seconds`). Most of that is 512-node
+The calibration takes ~105-110 seconds for four seeds over 468 quotes (109.5 s in the
+committed run, `results/results.json` `heston.seconds`), and the pipeline now runs it
+twice (both surfaces) plus the holdout, so a full run is ~9 minutes. Most of that is 512-node
 Gauss-Legendre quadrature evaluated inside `least_squares`' finite-difference Jacobian.
 Analytic gradients of the characteristic function, or the COS method instead of direct
 inversion, would be 10-50x faster. Irrelevant for one surface; a blocker for calibrating
@@ -140,8 +171,8 @@ every day across a universe.
 ### H. The risk-free curve is Treasury, not OIS
 A few basis points at these maturities, far inside the bid-ask. The first version of this
 item called it "visibly the reason" the implied dividend yield comes out at ~0.3% against
-SPY's actual ~1.1%. That was asserted, not measured, and the American adjustment makes the
-gap wider (implied q about -0.1% to -0.2% beyond six months). Parity only identifies the
+SPY's actual ~1.1%. That was asserted, not measured, and the American adjustment, now in
+the surface, makes the gap wider (implied q -0.13% to -0.19% beyond six months). Parity only identifies the
 carry `r - q`; splitting it needs a dividend forecast and the funding rate, neither of
 which is in the data. Funding is the leading hypothesis, stated as a hypothesis.
 
