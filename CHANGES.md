@@ -1,12 +1,64 @@
 # Changes
 
 What changed, and why, in plain language. Each item says what was wrong, what I did about
-it, and what it changed. The plans behind all three rounds are in [PLAN.md](PLAN.md).
+it, and what it changed. The plans behind all four rounds are in [PLAN.md](PLAN.md).
 
+- [Round 4](#round-4-loose-ends-from-round-3): dividends and the returns-file hash.
 - [Round 3](#round-3-closing-round-2s-open-items): close round 2's open items.
 - [Round 2](#round-2-from-correct-and-tested-to-shows-quant-judgment): deepen every project.
 - [Round 1](#round-1-make-everything-run-test-and-report-honestly): make everything run,
   test and report honestly.
+
+# Round 4: loose ends from round 3
+
+- **Options: SPY's real dividends tested as the cause of the long-dated overshoot.** They
+  explain part of it and not the rest. Added as an option, not the default.
+- **fama-french: the Yahoo returns file in the snapshot is now hash-checked** like the
+  French files.
+- **Tests: 938 → 996.**
+
+## options-pricing-engine: does SPY's real dividend schedule explain the overshoot?
+
+Round 3's fix for American exercise left one loose end. At 15 and 21 months the call and
+put implied vols at the forward disagreed by +0.20 and +0.37 vol points, against a bid-ask
+band of about 0.08. The suspect was that the pricing tree used a smooth dividend yield,
+while SPY pays quarterly cash dividends that make deep in-the-money calls worth exercising
+just before each ex-date. This round tested that properly.
+
+- **Data.** SPY's dividend history (136 ex-dates) is saved with a manifest giving the
+  source, time and file hash, and the code refuses a changed file. The seven dividends
+  after the snapshot, through the longest expiry, are projected by repeating the last four
+  quarterly amounts on SPY's usual ex-date rule (third Friday of Mar/Jun/Sep/Dec). That
+  rule reproduces 107 of 108 ex-dates since 2000.
+- **Model.** The tree can now take a list of cash dividends (the standard
+  escrowed-dividend approach). It matches Black-Scholes on the dividend-adjusted spot,
+  reduces exactly to the old code when no dividend falls in an option's life, exercises
+  calls only just before an ex-date, and converges to a closed form for one dividend. A
+  bug (call premia several times too large) was found by comparing against a much finer
+  tree, and a test now pins it.
+- **Result.** The 21-month gap falls from +0.37 to +0.21 and the 15-month one from +0.20
+  to +0.17, so the hypothesis is partly right. The remainder doesn't move when dividends
+  are scaled ±10%, the tree is refined, or rates shift ±25 bp. The fit to the surface is
+  not better (Heston 2.30 vs 2.26 vol points) and the 104-day gap gets slightly worse
+  (+0.07 → +0.10). It also rules out an earlier guess that the 104-day miss came from the
+  December ex-date.
+- **Decision.** Discrete dividends are an option (`dividends=`, `--dividends discrete`),
+  not the default, because they don't win on every measure. Every run now builds and
+  reports all three surfaces side by side (full run about 16.5 minutes).
+- **What it points to next.** With dividends known, the parity forward implies funding
+  about 76–96 bp above the Treasury rate at 6–21 months. A ±10% dividend error moves that
+  by only about 8 bp, so the rate used for the early-exercise premium is the leading
+  suspect for the remainder. That is a hypothesis, not tested.
+
+## fama-french-factor-model: the returns file is hash-checked too
+
+Round 3 said every French file was hash-checked, but the Yahoo `returns.csv` in the
+older snapshot had no hash. Its SHA-256 is now recorded in the manifest (computed from the
+file as committed, which git shows is unchanged since the snapshot), new snapshots record
+it automatically, and `analyze --csv` refuses a snapshot returns file that no longer
+matches. The example report still regenerates byte-identically offline. Tests 58 → 61.
+
+---
 
 # Round 3: closing round 2's open items
 
