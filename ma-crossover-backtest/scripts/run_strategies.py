@@ -12,6 +12,7 @@ import traceback
 
 import pandas as pd
 
+from quantbt.data import add_live_data_flag, use_live_data
 from quantbt.research.runner import StrategySpec, load_rf, results_table, run_spec
 from quantbt.research.universes import (
     ASSET_CLASS_ETFS,
@@ -111,7 +112,9 @@ def main() -> None:
     parser.add_argument("--test-years", type=float, default=1.0)
     parser.add_argument("--bootstrap", type=int, default=1000)
     parser.add_argument("--out", default="reports/strategies")
+    add_live_data_flag(parser)
     args = parser.parse_args()
+    use_live_data(args.live_data)
 
     specs = [s for s in SPECS if not args.only or s.name in args.only]
     rf = load_rf("1998-01-01", args.end)

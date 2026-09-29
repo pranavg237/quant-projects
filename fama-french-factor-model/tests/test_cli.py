@@ -11,11 +11,11 @@ from ffmodel.models import get_model
 def offline(monkeypatch):
     factors = make_factors(T=240, start="2000-01-31")
 
-    def fake_load_factors(model="ff5", frequency="monthly", start=None, end=None, refresh=False):
+    def fake_load_factors(model="ff5", frequency="monthly", start=None, end=None, refresh=False, data_dir=None):
         return factors.loc[start:end, list(get_model(model).factors) + ["RF"]]
 
     def fake_load_portfolios(dataset="25_Portfolios_5x5", frequency="monthly", weighting="value",
-                             start=None, end=None, refresh=False):
+                             start=None, end=None, refresh=False, data_dir=None):
         rng = np.random.default_rng(3)
         betas = rng.uniform(0.5, 1.5, size=(25, 3))
         r = factors[["Mkt-RF", "SMB", "HML"]].to_numpy() @ betas.T + rng.normal(0, 0.02, (len(factors), 25)) + 0.003
@@ -50,6 +50,16 @@ def test_analyze_writes_full_report(offline, tmp_path, capsys):
     assert len(list(out.glob("*.png"))) == 3 * 4  # loadings, attribution, cumulative, rolling per asset
     assert (out / "summary.csv").exists()
     assert "Fama-French 3-factor regressions" in capsys.readouterr().out
+    assert "Newey-West (HAC) with 4 lags" in text  # T = 240
+    assert "Alphas: one test per asset vs. the whole family" in text
+    assert "A: t-statistics under different standard errors" in text
+    assert "the first ends Dec 2002 and the last Dec 2019" in text
+    assert "HC3, MacKinnon-White" in text  # short windows never use Newey-West
+    rolled = pd.read_csv(out / "a-rolling.csv", index_col=0)
+    assert {"se(alpha)", "se(Mkt-RF)"} <= set(rolled.columns)
+    assert "se(alpha)" not in pd.read_csv(out / "a-rolling-summary.csv", index_col=0).columns
+    assert "A: did the exposures change? (6 separate 36-period blocks)" in text
+    assert (out / "portfolio-stability.csv").exists()
 
 
 def test_test_portfolios_command(offline, tmp_path):

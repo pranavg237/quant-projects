@@ -40,6 +40,41 @@ def test_optimal_spread_formula(paper_params: AvellanedaStoikovParams) -> None:
     )
 
 
+def test_quotes_against_hand_computed_numbers() -> None:
+    r"""Every formula checked against numbers worked out by hand, not by the same formula.
+
+    gamma=0.1, kappa=1.5, sigma=2, T=1, t=0.5 (so T-t=0.5), s=100, q=3:
+
+    * r = 100 - 3 * 0.1 * 4 * 0.5 = 99.4
+    * spread = 0.1 * 4 * 0.5 + (2/0.1) ln(1 + 0.1/1.5) = 0.2 + 20 ln(16/15)
+      = 0.2 + 1.2907704228 = 1.4907704228
+    * bid = r - spread/2 = 98.6546147886, ask = r + spread/2 = 100.1453852114
+
+    and in the paper's per-side form,
+    delta^a = (1 - 2q) gamma sigma^2 (T-t) / 2 + (1/gamma) ln(1 + gamma/kappa)
+            = (1 - 6) * 0.1 + 0.6453852114 = 0.1453852114, and
+    delta^b = (1 + 2q) gamma sigma^2 (T-t) / 2 + (1/gamma) ln(1 + gamma/kappa)
+            = (1 + 6) * 0.1 + 0.6453852114 = 1.3453852114.
+    """
+    params = AvellanedaStoikovParams(gamma=0.1, kappa=1.5, sigma=2.0, horizon=1.0)
+    tau = params.time_remaining(0.5)
+    assert tau == 0.5
+    assert float(reservation_price(100.0, 3.0, tau, params)) == pytest.approx(99.4, abs=1e-12)
+    assert float(optimal_spread(tau, params)) == pytest.approx(1.4907704227514234, abs=1e-12)
+    bid, ask = optimal_quotes(100.0, 3.0, 0.5, params)
+    assert bid is not None and ask is not None
+    assert bid == pytest.approx(98.6546147886243, abs=1e-12)
+    assert ask == pytest.approx(100.1453852113757, abs=1e-12)
+    assert ask - 100.0 == pytest.approx(0.1453852113757117, abs=1e-12)  # delta^a
+    assert 100.0 - bid == pytest.approx(1.3453852113757117, abs=1e-12)  # delta^b
+
+    # A second, unrelated point: gamma=1, kappa=2, sigma=0.5, T-t=2, s=50, q=-2.
+    # r = 50 + 2 * 1 * 0.25 * 2 = 51; spread = 0.5 + 2 ln(1.5) = 1.3109302162.
+    other = AvellanedaStoikovParams(gamma=1.0, kappa=2.0, sigma=0.5, horizon=2.0)
+    assert float(reservation_price(50.0, -2.0, 2.0, other)) == pytest.approx(51.0, abs=1e-12)
+    assert float(optimal_spread(2.0, other)) == pytest.approx(1.3109302162163288, abs=1e-12)
+
+
 def test_spread_is_linear_in_time_remaining(paper_params: AvellanedaStoikovParams) -> None:
     taus = np.linspace(0.0, 2.0, 21)
     spreads = np.asarray(optimal_spread(taus, paper_params))

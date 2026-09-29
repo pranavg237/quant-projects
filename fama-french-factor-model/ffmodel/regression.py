@@ -8,6 +8,7 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
+from scipy import stats
 from statsmodels.regression.rolling import RollingOLS
 
 from .models import ALL_FACTORS, get_model
@@ -32,7 +33,13 @@ def infer_periods_per_year(index: pd.DatetimeIndex) -> int:
 
 
 def newey_west_lags(nobs: int) -> int:
-    """Newey-West (1994) rule of thumb: floor(4 * (T/100)^(2/9))."""
+    """Newey-West (1994) rule of thumb: floor(4 * (T/100)^(2/9)).
+
+    The lag grows very slowly with the sample: 3 lags for T = 28 to 99, 4 for 100 to 272,
+    5 for 273 to 620, 6 for 621 to 1,240. That suits monthly returns, which have little
+    autocorrelation: a few lags guard against it (and against conditional
+    heteroskedasticity) without making the variance estimate itself noisy.
+    """
     return int(4 * (nobs / 100.0) ** (2.0 / 9.0))
 
 
@@ -86,6 +93,11 @@ class RegressionResult:
     @property
     def nobs(self) -> int:
         return int(self.raw.nobs)
+
+    @property
+    def hac_lags(self) -> Optional[int]:
+        """Newey-West lags used for the standard errors (None unless ``cov_type`` is "hac")."""
+        return int(self.raw.cov_kwds["maxlags"]) if self.cov_type == "hac" else None
 
     @property
     def resid(self) -> pd.Series:
@@ -188,14 +200,9 @@ def fit_factor_model(
     y, X = data["excess_return"], _design(data, spec.factors)
 
     cov = cov.lower()
-    if cov == "hac":
-        raw = sm.OLS(y, X).fit(cov_type="HAC", cov_kwds={"maxlags": newey_west_lags(len(y)) if lags is None else lags})
-    elif cov == "robust":
-        raw = sm.OLS(y, X).fit(cov_type="HC1")
-    elif cov == "ols":
-        raw = sm.OLS(y, X).fit()
-    else:
+    if cov not in COV_TYPES:
         raise ValueError(f"cov must be one of {COV_TYPES}")
+    raw = _fit_ols(y, X, cov, lags)
 
     return RegressionResult(
         name=str(name or returns.name or "asset"),
@@ -205,6 +212,62 @@ def fit_factor_model(
         periods_per_year=periods_per_year or infer_periods_per_year(data.index),
         cov_type=cov,
     )
+
+
+def _fit_ols(y: pd.Series, X: pd.DataFrame, cov: str, lags: Optional[int]):
+    """OLS with the chosen covariance.
+
+    "hac" is statsmodels' Newey-West estimator: Bartlett weights 1 - l/(L+1) for
+    l = 1..L, no small-sample degrees-of-freedom correction, and p-values from the
+    normal distribution. L defaults to ``newey_west_lags(T)``. "hc3" (MacKinnon-White
+    jackknife errors) is meant for short windows, where Newey-West is too narrow.
+    """
+    if cov == "hac":
+        maxlags = newey_west_lags(len(y)) if lags is None else lags
+        return sm.OLS(y, X).fit(cov_type="HAC", cov_kwds={"maxlags": maxlags})
+    if cov == "robust":
+        return sm.OLS(y, X).fit(cov_type="HC1")
+    if cov == "hc3":
+        return sm.OLS(y, X).fit(cov_type="HC3")
+    if cov == "ols":
+        return sm.OLS(y, X).fit()
+    raise ValueError(f"cov must be one of {COV_TYPES}")
+
+
+def compare_standard_errors(result: RegressionResult, extra_lags: Sequence[int] = (12,),
+                            level: float = 0.05) -> pd.DataFrame:
+    """t-statistics of the same point estimates under classical OLS, White (HC1) and Newey-West errors.
+
+    The coefficients (``result.params``) do not change, only their standard errors. Newey-West is shown with
+    the default lag rule and with each lag in ``extra_lags`` as a sensitivity check. The
+    last column says whether significance at ``level`` differs between OLS and the default
+    Newey-West errors.
+    """
+    y = pd.Series(result.raw.model.endog, index=result.resid.index)
+    X = pd.DataFrame(result.raw.model.exog, index=y.index, columns=result.params.index)
+    lags = newey_west_lags(len(y))
+    fits = {"OLS": _fit_ols(y, X, "ols", None), "White HC1": _fit_ols(y, X, "robust", None),
+            f"NW, {lags} lags": _fit_ols(y, X, "hac", lags)}
+    for extra in extra_lags:
+        if extra != lags:
+            fits[f"NW, {extra} lags"] = _fit_ols(y, X, "hac", extra)
+    out = pd.DataFrame(index=result.params.index)
+    for label, fit in fits.items():
+        out[f"t ({label})"] = fit.tvalues
+    ols_p, nw_p = fits["OLS"].pvalues, fits[f"NW, {lags} lags"].pvalues
+    out["p (OLS)"] = ols_p
+    out[f"p (NW, {lags} lags)"] = nw_p
+    out["significance changes"] = np.where((ols_p < level) != (nw_p < level), "yes", "")
+    return out
+
+
+def holm_adjust(pvalues: pd.Series) -> pd.Series:
+    """Holm (1979) step-down adjusted p-values: family-wise error control, valid under any dependence."""
+    p = pvalues.astype(float)
+    order = p.sort_values().index
+    m = len(p)
+    adjusted = (p[order] * (m - np.arange(m))).cummax().clip(upper=1.0)
+    return adjusted.reindex(p.index)
 
 
 def fit_many(returns: pd.DataFrame, factors: pd.DataFrame, model: str = "ff5", **kwargs) -> Dict[str, RegressionResult]:
@@ -260,13 +323,81 @@ def rolling_regression(
     model: str = "ff5",
     window: int = 36,
     excess: bool = False,
+    se: Optional[str] = None,
+    lags: Optional[int] = None,
 ) -> pd.DataFrame:
-    """Alpha, betas and R2 re-estimated over a rolling window of ``window`` periods."""
+    """Alpha, betas and R2 re-estimated over a rolling window of ``window`` periods.
+
+    Each row is dated at the last period of its window. With ``se`` ("hc3", "hac",
+    "robust" or "ols") the standard error of every coefficient in every window is added
+    as a column "se(<name>)". Use "hc3" for short windows: in a simulation with 36-month
+    windows of real FF5 factor data and six coefficients, nominal 95% Newey-West intervals
+    (3 lags) missed the true beta 13-14% of the time, HC3 intervals 4-5%
+    (scripts/window_se_simulation.py). These are
+    pointwise errors for one window at a time; the windows overlap, so neighbouring
+    estimates are strongly dependent.
+    """
     spec = get_model(model)
     data = _prepare(returns, factors, spec.factors, excess)
     if len(data) < window:
         raise ValueError(f"{len(data)} observations is fewer than the rolling window of {window}")
-    fitted = RollingOLS(data["excess_return"], _design(data, spec.factors), window=window).fit()
+    y, X = data["excess_return"], _design(data, spec.factors)
+    fitted = RollingOLS(y, X, window=window).fit()
     out = fitted.params.copy()
     out["R2"] = fitted.rsquared
-    return out.dropna(how="all")
+    out = out.dropna(how="all")
+    if se is not None:
+        se = se.lower()
+        errors = pd.DataFrame(
+            [_fit_ols(y.iloc[i - window:i], X.iloc[i - window:i], se, lags).bse.to_numpy()
+             for i in range(window, len(y) + 1)],
+            index=y.index[window - 1:], columns=[f"se({c})" for c in X.columns],
+        )
+        out = out.join(errors)
+    return out
+
+
+def stability_test(
+    returns: pd.Series,
+    factors: pd.DataFrame,
+    model: str = "ff5",
+    block: int = 36,
+    excess: bool = False,
+    se: str = "hc3",
+    lags: Optional[int] = None,
+) -> pd.DataFrame:
+    """Do the coefficients differ between non-overlapping blocks of ``block`` periods?
+
+    Rolling estimates always wiggle, so wiggles alone are not evidence that exposures
+    changed. This splits the sample into consecutive non-overlapping blocks (aligned to
+    the end of the sample; the oldest leftover periods are dropped), fits each block on
+    its own and, for every coefficient, runs a Wald test that all blocks share one value:
+    chi2 = sum_k (b_k - b_pooled)^2 / se_k^2, with b_pooled the inverse-variance weighted
+    mean. It is chi-squared with (blocks - 1) degrees of freedom if the block estimates
+    are independent. Standard errors within each block follow ``se`` and ``lags``.
+    The default, HC3, matters: with 36-period blocks, Newey-West errors are too small
+    and the test rejected a truly constant beta 23-35% of the time at the 5% level in
+    simulation, against 2-6% with HC3 and 6-9% with classical errors
+    (scripts/window_se_simulation.py).
+    """
+    spec = get_model(model)
+    data = _prepare(returns, factors, spec.factors, excess)
+    n_blocks = len(data) // block
+    if n_blocks < 2:
+        raise ValueError(f"{len(data)} observations give fewer than two blocks of {block}")
+    data = data.iloc[len(data) - n_blocks * block:]
+    y, X = data["excess_return"], _design(data, spec.factors)
+    fits = [_fit_ols(y.iloc[k * block:(k + 1) * block], X.iloc[k * block:(k + 1) * block], se.lower(), lags)
+            for k in range(n_blocks)]
+    est = pd.DataFrame([f.params for f in fits])
+    weights = 1.0 / pd.DataFrame([f.bse ** 2 for f in fits])
+    pooled = (weights * est).sum() / weights.sum()
+    chi2 = (weights * (est - pooled) ** 2).sum()
+    table = pd.DataFrame({
+        "lowest block": est.min(),
+        "highest block": est.max(),
+        "chi2": chi2,
+        "p-value": stats.chi2.sf(chi2, n_blocks - 1),
+    })
+    table.attrs.update(blocks=n_blocks, block=block, start=data.index[0], end=data.index[-1])
+    return table

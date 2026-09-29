@@ -30,7 +30,7 @@ import pandas as pd
 
 from .avellaneda_stoikov import AvellanedaStoikovParams
 from .book import LimitOrderBook
-from .flow import FlowConfig, OrderFlowGenerator
+from .flow import INFORMED_OWNER, FlowConfig, OrderFlowGenerator
 from .strategies import MakerState, QuotePolicy
 from .types import FloatArray, MarketConfig, Side
 
@@ -47,7 +47,7 @@ class FillModel(StrEnum):
     ``LINEAR``
         :math:`\lambda\Delta t`, the first-order approximation used in the original
         Avellaneda-Stoikov discretisation. It agrees with ``EXACT`` to
-        :math:`O(\Delta t^2)` but **overstates** the fill rate -- by about 10% at the
+        :math:`O(\Delta t^2)` but **overstates** the fill rate -- by about 12% at the
         paper's own parameters -- and exceeds 1 for tight quotes on a coarse grid.
         Provided so the published Table 1 can be reproduced exactly; not recommended.
     """
@@ -154,7 +154,7 @@ def simulate_reference(
         first-order :math:`\lambda\Delta t` the paper's discretisation implies. They agree to
         :math:`O(\Delta t^2)`, but at the paper's own parameters
         (:math:`\lambda \approx 45`, :math:`\Delta t = 0.005`) the linear form overstates the
-        fill rate by 10%, and it exceeds 1 outright for tight quotes on a coarse grid. Pass
+        fill rate by about 12%, and it exceeds 1 outright for tight quotes on a coarse grid. Pass
         ``fill_model="linear"`` to reproduce the published numbers.
 
         Quotes are evaluated against the mid *before* the move, so a fill never uses
@@ -427,6 +427,12 @@ def simulate_book(  # noqa: PLR0915  (one loop; splitting it would hide the orde
                     # first markout horizon blind to informed impact.
                     "mid": mid_before,
                     "size": trade.size,
+                    # Who took the maker's liquidity. Known only because this is a
+                    # simulation -- a real desk has to infer it -- but it is what lets the
+                    # markout be split into the informed and uninformed components.
+                    "counterparty": (
+                        "informed" if trade.taker_owner == INFORMED_OWNER else "uninformed"
+                    ),
                 }
             )
 

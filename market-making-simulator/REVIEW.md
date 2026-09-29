@@ -41,7 +41,7 @@ Switched to a humped Gamma profile, which is what real books look like.
 
 ### 7. The Monte Carlo fill probability used `lambda*dt` — **FIXED (and kept as an option)**
 The exact Poisson probability `1 - exp(-lambda*dt)` is the default. The linear form is
-retained because it is what reproduces the paper's published table, and the ~10% gap
+retained because it is what reproduces the paper's published table, and the ~12% gap
 between them is the explanation for a discrepancy that would otherwise look like a bug.
 
 ---
@@ -81,20 +81,20 @@ not quite "the average spread this strategy quoted".
 
 ### F. Sharpe is per session, and sessions are arbitrary
 The Sharpe numbers here (8-11 for A-S) are per simulated session, and a "session" is
-defined by `n_steps` and the arrival rate. Doubling the arrival rate roughly doubles the
-Sharpe, as the sensitivity sweep shows. So the *level* is not comparable to a real desk's
+defined by `n_steps` and the arrival rate. The sensitivity sweep shows the A-S Sharpe
+rising from 2.8 to 22.7 as the arrival rate goes from 20 to 600 (roughly as `A^0.6`). So the *level* is not comparable to a real desk's
 Sharpe; only the *ratio between strategies* is meaningful. The README says so, but it is a
 real limitation of any simulation study of this kind.
 
 ### G. The fill curve is not exponential, and the model assumes it is
-Measured R-squared on the log-linear fit is ~0.85. The tail is fatter than exponential
+Measured R-squared on the log-linear fit is ~0.86. The tail is fatter than exponential
 because market-order sizes are Pareto. The A-S solution is derived under the exponential
 assumption, so the "optimal" quotes are optimal for a market slightly different from the
 one they are used in. Quantified and reported rather than hidden, but not corrected.
 
 ### H. `std(final q) = 3.0` against the paper's 2.0
 Every other entry in the Table 1 reproduction matches within Monte Carlo error, including
-the symmetric strategy's inventory spread (8.2 against 8.4) and both profit volatilities.
+the symmetric strategy's inventory spread (8.3 against 8.4) and both profit volatilities.
 That the *symmetric* number matches while the inventory one does not argues the quoting
 logic is right and something about the paper's inventory measurement differs, but I could
 not identify what. It is reported rather than tuned away.
@@ -108,3 +108,18 @@ direction that matters -- but it is untested at non-zero values beyond a unit te
 ### J. Everything is one asset
 No cross-asset hedging, no correlated inventory. A real desk manages a portfolio of
 inventories and hedges the common factor, which changes the optimal skew substantially.
+
+### K. Markout uses information a desk does not have
+The adverse-selection split relies on knowing which takers were informed, which only a
+simulation can know. A desk would have to classify flow statistically (by client, by
+size, by subsequent markout), and misclassification would blur the split. Markouts are
+also measured against the *efficient* price, which the simulated maker observes directly;
+a real maker sees only the book mid, which is noisier and lags. Both make the measured
+adverse selection cleaner than a desk's would be.
+
+### L. Sensitivity is one parameter at a time
+Each sweep moves one parameter with the others at their base values, so interactions (for
+example, how the best `gamma` shifts with `sigma`) are not explored. The reference-engine
+sweeps use 500 sessions per point and the order-book informed-flow sweep only 100 (for run
+time), so the latter's per-session Sharpe standard errors are 0.2-0.9, and differences
+smaller than about two of them should not be read as findings.

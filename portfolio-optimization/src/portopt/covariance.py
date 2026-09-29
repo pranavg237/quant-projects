@@ -25,9 +25,11 @@ Two targets are implemented:
 * ``identity`` -- :math:`F = \bar\mu I` with :math:`\bar\mu = \mathrm{tr}(S)/N`. This is
   Ledoit-Wolf 2004, the version in ``sklearn``, and the tests check agreement with it.
 * ``constant_correlation`` -- every pairwise correlation replaced by the average pairwise
-  correlation, keeping the sample variances. Ledoit-Wolf 2003. This is usually the better
-  target for equities, because a common correlation is a much more plausible description of
-  a stock universe than "everything is uncorrelated".
+  correlation, keeping the sample variances. Ledoit-Wolf 2003, including its
+  :math:`\hat\rho` correction; the tests check it against an element-by-element
+  transcription of the paper's formulas and against an oracle intensity in simulation.
+  This is usually the better target for equities, because a common correlation is a much
+  more plausible description of a stock universe than "everything is uncorrelated".
 """
 
 from __future__ import annotations
@@ -114,6 +116,29 @@ def constant_correlation_target(sample: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(target, index=sample.index, columns=sample.columns)
 
 
+def _constant_correlation_rho(
+    centred: np.ndarray, sample_ml: np.ndarray, pi_matrix: np.ndarray
+) -> float:
+    r"""Ledoit-Wolf (2003) :math:`\hat\rho`: covariance between the target and the sample.
+
+    Args:
+        centred: Demeaned returns, ``T x N``.
+        sample_ml: Sample covariance with the ``1/T`` convention.
+        pi_matrix: Element-wise asymptotic variances :math:`\hat\pi_{ij}`.
+    """
+    t_obs, n_assets = centred.shape
+    variances = np.diag(sample_ml)
+    std = np.sqrt(variances)
+    correlation = sample_ml / np.outer(std, std)
+    mean_correlation = float((np.sum(correlation) - n_assets) / (n_assets * (n_assets - 1)))
+    # theta[i, j] = (1/T) sum_t [x_it^2 - s_ii][x_it x_jt - s_ij] = (1/T) sum_t x_it^3 x_jt
+    # - s_ii s_ij, the asymptotic covariance of sqrt(T) s_ii with sqrt(T) s_ij.
+    theta = (centred**3).T @ centred / t_obs - variances[:, None] * sample_ml
+    np.fill_diagonal(theta, 0.0)
+    ratio = np.outer(1.0 / std, std)  # ratio[i, j] = sqrt(s_jj / s_ii)
+    return float(np.trace(pi_matrix) + mean_correlation * np.sum(ratio * theta))
+
+
 def ledoit_wolf_shrinkage_intensity(
     returns: pd.DataFrame, target: str = "identity"
 ) -> tuple[float, pd.DataFrame, pd.DataFrame]:
@@ -134,8 +159,25 @@ def ledoit_wolf_shrinkage_intensity(
     to how much structure you would be throwing away. The :math:`\min` keeps
     :math:`\delta^* \le 1`.
 
-    For the constant-correlation target the same decomposition is used with :math:`F` in
-    place of :math:`mI`, which is the practical form of Ledoit-Wolf (2003).
+    For the constant-correlation target this is Ledoit and Wolf (2003, "Honey, I shrunk the
+    sample covariance matrix"), whose intensity is :math:`\delta^* = \kappa/T` with
+    :math:`\kappa = (\pi - \rho)/\gamma`:
+
+    .. math::
+        \pi = \sum_{ij} \frac{1}{T}\sum_t \big[(x_{it}-\bar x_i)(x_{jt}-\bar x_j) - s_{ij}\big]^2,
+        \qquad \gamma = \|F - S\|_F^2,
+
+    .. math::
+        \rho = \sum_i \pi_{ii} + \sum_{i \ne j} \bar r \sqrt{s_{jj}/s_{ii}}\;\vartheta_{ii,ij},
+        \quad
+        \vartheta_{ii,ij} = \frac{1}{T}\sum_t \big[(x_{it}-\bar x_i)^2 - s_{ii}\big]
+        \big[(x_{it}-\bar x_i)(x_{jt}-\bar x_j) - s_{ij}\big].
+
+    :math:`\pi` is the same noise term as :math:`T N \bar b^2` above. :math:`\rho` corrects
+    for the target being estimated from the *same* data: its diagonal is the sample variances
+    themselves, so part of the sample noise is shared with the target and shrinking towards
+    it removes less noise than :math:`\pi` alone suggests. Dropping :math:`\rho` (an earlier
+    version of this module did) roughly doubles :math:`\delta^*` on this project's data.
 
     Returns:
         ``(delta, sample, target)``.
@@ -163,10 +205,20 @@ def ledoit_wolf_shrinkage_intensity(
 
     d_squared = float(np.sum((sample_ml - target_matrix) ** 2) / n_assets)
     # b_bar^2: the average squared deviation of the per-observation outer products from S.
-    squared = (centred**2).T @ (centred**2) / t_obs
-    b_bar_squared = float(np.sum(squared - sample_ml**2) / (n_assets * t_obs))
-    b_squared = min(b_bar_squared, d_squared)
-    delta = 0.0 if d_squared <= 0 else float(np.clip(b_squared / d_squared, 0.0, 1.0))
+    # pi_matrix[i, j] is the asymptotic variance of sqrt(T) * s_ij (Ledoit-Wolf's pi_ij).
+    squared = centred**2
+    pi_matrix = squared.T @ squared / t_obs - sample_ml**2
+    b_bar_squared = float(np.sum(pi_matrix) / (n_assets * t_obs))
+    if d_squared <= 0:
+        delta = 0.0
+    elif target == "identity":
+        b_squared = min(b_bar_squared, d_squared)
+        delta = float(np.clip(b_squared / d_squared, 0.0, 1.0))
+    else:
+        rho = _constant_correlation_rho(centred, sample_ml, pi_matrix)
+        pi = float(np.sum(pi_matrix))
+        gamma = d_squared * n_assets
+        delta = float(np.clip((pi - rho) / gamma / t_obs, 0.0, 1.0))
 
     return (
         delta,

@@ -37,10 +37,13 @@ from .types import ExerciseStyle, FloatArray, OptionType
 __all__ = [
     "plot_binomial_convergence",
     "plot_exercise_boundary",
+    "plot_greeks_fd",
     "plot_greeks_panel",
     "plot_heston_fit",
     "plot_heston_fit_errors",
     "plot_mc_convergence",
+    "plot_parity_residuals",
+    "plot_smile_grid",
     "plot_smiles",
     "plot_surface_3d",
     "plot_surface_heatmap",
@@ -581,6 +584,157 @@ def plot_greeks_panel(
     axes[0, 0].legend(title="expiry", loc="upper left")
     fig.suptitle("Black-Scholes call Greeks", x=0.01, ha="left")
     return _finish(fig, f"K={strike:.0f}, r={rate:.0%}, sigma={sigma:.0%}")
+
+
+def plot_smile_grid(surface: pd.DataFrame, ncols: int = 4) -> Figure:
+    """Every expiry's smile on its own axes, with the bid-ask implied-vol band.
+
+    The overlay in :func:`plot_smiles` shows how the smile changes with expiry; this one
+    shows how well each smile is actually *known*. The shaded band runs from the vol
+    implied by the bid to the vol implied by the ask, so a wide band means the mid-price
+    vol could sit anywhere inside it. Puts (left of the forward) and calls (right) are
+    marked separately, so the switch at :math:`k = 0` -- where a wrong forward would show
+    up as a step -- is visible.
+    """
+    apply_house_style()
+    taus = sorted(surface["tau"].unique())
+    nrows = int(np.ceil(len(taus) / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(3.2 * ncols, 2.7 * nrows))
+    flat = np.atleast_1d(axes).ravel()
+    has_band = {"iv_bid", "iv_ask"}.issubset(surface.columns)
+    for ax, tau in zip(flat, taus, strict=False):
+        sl = surface.loc[surface["tau"] == tau].sort_values("log_moneyness")
+        k = sl["log_moneyness"].to_numpy(dtype=np.float64)
+        if has_band:
+            lo = 100.0 * sl["iv_bid"].to_numpy(dtype=np.float64)
+            hi = 100.0 * sl["iv_ask"].to_numpy(dtype=np.float64)
+            ax.fill_between(
+                k, lo, hi, color=CATEGORICAL[0], alpha=0.18, linewidth=0, label="bid-ask IV"
+            )
+        for side, color in (("put", CATEGORICAL[0]), ("call", CATEGORICAL[1])):
+            leg = sl.loc[sl["option_type"] == side]
+            ax.plot(
+                leg["log_moneyness"],
+                100.0 * leg["implied_vol"],
+                color=color,
+                marker="o",
+                markersize=2.2,
+                linewidth=0.9,
+                label=f"{side} mid",
+            )
+        ax.axvline(0.0, color=INK_MUTED, linewidth=0.8, linestyle=(0, (4, 4)), zorder=0)
+        ax.set_title(f"{tau * 365:.0f} days", fontsize=10)
+    for ax in flat[len(taus) :]:
+        ax.set_visible(False)
+    for ax in flat[::ncols]:
+        ax.set_ylabel("IV (%)")
+    for ax in flat[max(len(taus) - ncols, 0) : len(taus)]:
+        ax.set_xlabel("$k=\\ln(K/F)$")
+    flat[0].legend(loc="upper right", fontsize=7)
+    fig.suptitle("SPY smiles by expiry, with the bid-ask implied-vol band", x=0.01, ha="left")
+    return _finish(
+        fig,
+        "Shaded: bid-to-ask implied vol. Thinner than the line almost everywhere -- widest in"
+        " the short-dated deep put wing",
+    )
+
+
+def plot_parity_residuals(
+    residuals: pd.DataFrame, ncols: int = 4, k_range: tuple[float, float] = (-0.2, 0.2)
+) -> Figure:
+    r"""Put-call parity residuals per expiry, against the European and American theory.
+
+    Each vertical bar is one strike: the tradeable range of the synthetic forward
+    :math:`[C_{bid} - P_{ask},\ C_{ask} - P_{bid}]`, measured relative to European parity
+    with the pipeline's forward, :math:`D(F - K)`. A bar that misses zero is a European
+    parity violation beyond the spread. The line is what American exercise predicts for
+    the same quantity (early-exercise premia plus the shift to the American-adjusted
+    forward); a bar that misses the line is a violation even after allowing for it.
+    """
+    apply_house_style()
+    taus = sorted(residuals["tau"].unique())
+    nrows = int(np.ceil(len(taus) / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(3.2 * ncols, 2.7 * nrows))
+    flat = np.atleast_1d(axes).ravel()
+    for ax, tau in zip(flat, taus, strict=False):
+        g = residuals.loc[residuals["tau"] == tau].sort_values("log_moneyness")
+        g = g.loc[g["log_moneyness"].between(*k_range)]
+        k = g["log_moneyness"].to_numpy(dtype=np.float64)
+        theo = g["theo_european"].to_numpy(dtype=np.float64)
+        lo = g["lower"].to_numpy(dtype=np.float64) - theo
+        hi = g["upper"].to_numpy(dtype=np.float64) - theo
+        ax.vlines(k, lo, hi, color=CATEGORICAL[0], linewidth=1.1, alpha=0.8, label="bid-ask range")
+        american = (g["theo_american"] - g["theo_european"]).to_numpy(dtype=np.float64)
+        ax.plot(k, american, color=CATEGORICAL[1], linewidth=1.4, label="American prediction")
+        ax.axhline(0.0, color=INK_MUTED, linewidth=0.8, linestyle=(0, (4, 4)), zorder=0)
+        # Scale to the well-quoted strikes; stale deep-ITM quotes can be $100 off and
+        # would flatten everything else. They are counted in results/parity.md.
+        inside = g.loc[g["in_window"]]
+        span = np.concatenate(
+            [
+                (inside["lower"] - inside["theo_european"]).to_numpy(dtype=np.float64),
+                (inside["upper"] - inside["theo_european"]).to_numpy(dtype=np.float64),
+                american,
+            ]
+        )
+        if span.size:
+            lo_lim, hi_lim = np.nanpercentile(span, [2, 98])
+            pad = 0.15 * max(hi_lim - lo_lim, 0.2)
+            ax.set_ylim(lo_lim - pad, hi_lim + pad)
+        ax.set_title(f"{tau * 365:.0f} days", fontsize=10)
+    for ax in flat[len(taus) :]:
+        ax.set_visible(False)
+    for ax in flat[::ncols]:
+        ax.set_ylabel(r"$C-P-D(F-K)$  (\$)")
+    for ax in flat[max(len(taus) - ncols, 0) : len(taus)]:
+        ax.set_xlabel("$k=\\ln(K/F)$")
+    flat[0].legend(loc="lower left", fontsize=7)
+    fig.suptitle(
+        "Put-call parity: European theory misses on the high-strike side; American fits",
+        x=0.01,
+        ha="left",
+    )
+    return _finish(
+        fig, "Zero = European parity, pipeline forward. y-axis scaled to the fitted strikes"
+    )
+
+
+def plot_greeks_fd(
+    errors: pd.DataFrame,
+    sweeps: dict[str, pd.DataFrame],
+    default_step: dict[str, float],
+    tolerances: tuple[float, float] | None = None,
+) -> Figure:
+    """Finite-difference check of the Greeks: the step-size trade-off and the worst errors.
+
+    Left: relative error of a finite-difference Greek against its analytic value as the
+    step shrinks, at a one-day option -- round-off on the left, truncation on the right,
+    with the step actually used marked. Right: the worst relative error over the whole
+    grid at each maturity, first- and second-order Greeks separately.
+    """
+    apply_house_style()
+    fig, (left, right) = plt.subplots(1, 2, figsize=(11.0, 4.4))
+    for (name, sweep), color in zip(sweeps.items(), CATEGORICAL, strict=False):
+        left.loglog(sweep["step"], sweep["rel_error"], color=color, label=name)
+        chosen = default_step[name]
+        err = float(np.interp(np.log(chosen), np.log(sweep["step"]), sweep["rel_error"]))
+        left.plot([chosen], [err], marker="o", color=color, markersize=6)
+    left.set_xlabel("relative step (x natural scale)")
+    left.set_ylabel("relative error vs analytic")
+    left.set_title("Step size: round-off left, truncation right")
+    left.legend(loc="upper center", ncol=2)
+
+    worst = errors.groupby(["tau_days", "order"])["rel_error"].max().unstack("order")
+    for order, color, label in ((1, CATEGORICAL[0], "first-order"), (2, CATEGORICAL[1], "second")):
+        right.loglog(worst.index, worst[order], color=color, marker="o", label=label)
+    if tolerances is not None:
+        for tol, color in zip(tolerances, CATEGORICAL[:2], strict=True):
+            right.axhline(tol, color=color, linewidth=0.9, linestyle=(0, (4, 4)))
+    right.set_xlabel("days to expiry")
+    right.set_ylabel("worst relative error on the grid")
+    right.set_title("Worst case across moneyness, vol, calls and puts")
+    right.legend(loc="center right")
+    return _finish(fig, "Dots on the left: the step used. Dashed on the right: the test tolerances")
 
 
 def save_all(figures: dict[str, Figure], out_dir: Path) -> list[Path]:

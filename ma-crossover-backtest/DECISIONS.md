@@ -180,3 +180,52 @@ phases. Newest entries at the bottom.
     deliberately permits negative cash and gross exposure above 1 — that is a strategy
     constraint, not a bookkeeping one — but an unreported leverage is indistinguishable
     from none. Reporting it costs two lines and makes the permissive default safe.
+
+## Phase 8: Robustness and multiple testing
+
+46. **The deflated Sharpe ratio counts every configuration of every strategy (N = 63).**
+    The per-strategy grid (17 for the MA crossover) understates the search, because the
+    write-up reports the best of five strategies. 63 is still a lower bound: it cannot
+    count ideas that were never coded. The DSR is reported as a grid over the trial count
+    and the cross-trial Sharpe variance rather than as one number, because in this project
+    the variance assumption moves the answer at least as much as the count does.
+47. **The cross-trial variance of the 17 MA configurations is not used as the headline.**
+    Those configurations are near-copies, so their Sharpe ratios barely differ (variance
+    0.006). Plugging that into the DSR treats near-duplicates as if their tiny spread were
+    the noise in a Sharpe estimate, which is what produced the old DSR of 0.99. The honest
+    options are the paper's recipe (variance of all 63 trials) or the sampling variance of
+    one Sharpe estimate; both are shown.
+48. **The parameter heatmap is in-sample and is labelled that way on the figure itself.**
+    It exists to show whether good parameters form a plateau or a spike, not to pick
+    parameters. Nothing reads from it. It uses the vectorised backtest because the dense
+    grid would take the event-driven engine about 8 minutes (about 4 s a cell) against a
+    few seconds vectorised. The script cross-checks the 17 shared cells against the
+    engine's `grid.csv` and refuses to write if they disagree.
+49. **Heatmap cells are colored relative to buy-and-hold, not to zero.** The question the
+    figure answers is "does any region beat simply holding SPY?", so buy-and-hold's Sharpe
+    over the same dates is the diverging midpoint (white).
+
+## Phase 9: Frozen inputs
+
+50. **Every reported number is computed from a committed snapshot, read by default.**
+    Entries 12, 28 and 37 are superseded: raw downloads still go to the git-ignored
+    `data/cache/`, but `data/snapshot-2026-09-28/` is what the scripts read unless
+    `--live-data` is passed. The rule this serves is that every number in the README and
+    RESULTS.md must come back when someone runs the code, and a vendor that restates its
+    history makes that impossible without frozen inputs. Two same-day downloads gave two
+    different `mean_reversion` results, which settled it.
+51. **The snapshot holds what the pipeline reads, at full precision, and nothing else.**
+    Yahoo's raw Open, Close, Adj Close, Volume, Dividends and Stock Splits are kept exactly
+    (float64 text, read back with round-trip parsing), so the snapshot reproduces the
+    cache run bit for bit. High and Low are dropped because no code reads them. They load
+    as NaN, and `Context.history` refuses to serve them rather than handing a strategy
+    NaNs. Rounding prices to 8-9 significant digits was tried and saved only 1.5-2 MB, not
+    worth giving up exactness. History starts at the earliest date any committed script
+    loads (1998 for SPY, 2003 for the rest) and runs to the download date, because splits
+    after the analysis end still feed the as-traded price reconstruction. The total is
+    12.6 MB.
+52. **The loaders fail loudly instead of degrading.** A missing symbol, a hash mismatch, a
+    later end date or a start before the trim date raises. The alternatives are a silent
+    download, which brings back the drift, or a silently shorter series, which changes the
+    warm-up. Both would produce a number that looks fine and is wrong.
+

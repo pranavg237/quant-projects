@@ -15,7 +15,7 @@ from typing import Any, cast
 
 import pandas as pd
 
-from quantbt.data import PriceData
+from quantbt.data import DataError, PriceData
 from quantbt.execution import Order, OrderKind
 from quantbt.portfolio import Portfolio
 
@@ -46,6 +46,11 @@ class Context:
     ) -> pd.DataFrame:
         """The last ``bars`` rows of ``field_name`` ending at ``now`` (inclusive)."""
         frame = self.data.field(field_name)
+        if field_name in ("high", "low") and frame.isna().all().all():
+            raise DataError(
+                f"'{field_name}' is not available: the committed snapshot does not store "
+                "high/low prices. Run with --live-data or add them to the snapshot."
+            )
         stop = self.position_index + 1
         start = 0 if bars is None else max(0, stop - bars)
         cols = list(symbols) if symbols is not None else self.symbols

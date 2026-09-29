@@ -1,0 +1,64 @@
+strategy,params,sharpe
+ma_crossover,"short=10, long=50",0.435144
+ma_crossover,"short=10, long=100",0.645739
+ma_crossover,"short=10, long=150",0.565749
+ma_crossover,"short=10, long=200",0.675625
+ma_crossover,"short=10, long=250",0.532321
+ma_crossover,"short=20, long=50",0.429867
+ma_crossover,"short=20, long=100",0.465340
+ma_crossover,"short=20, long=150",0.496180
+ma_crossover,"short=20, long=200",0.623729
+ma_crossover,"short=20, long=250",0.438908
+ma_crossover,"short=50, long=100",0.463757
+ma_crossover,"short=50, long=150",0.599441
+ma_crossover,"short=50, long=200",0.539162
+ma_crossover,"short=50, long=250",0.573908
+ma_crossover,"short=100, long=150",0.513794
+ma_crossover,"short=100, long=200",0.518325
+ma_crossover,"short=100, long=250",0.551519
+tsmom,"lookback=63, skip=0, vol_target=0.08",0.032219
+tsmom,"lookback=63, skip=0, vol_target=0.12",0.044901
+tsmom,"lookback=63, skip=21, vol_target=0.08",0.041329
+tsmom,"lookback=63, skip=21, vol_target=0.12",0.049158
+tsmom,"lookback=126, skip=0, vol_target=0.08",0.118951
+tsmom,"lookback=126, skip=0, vol_target=0.12",0.126763
+tsmom,"lookback=126, skip=21, vol_target=0.08",0.245624
+tsmom,"lookback=126, skip=21, vol_target=0.12",0.256884
+tsmom,"lookback=252, skip=0, vol_target=0.08",0.359701
+tsmom,"lookback=252, skip=0, vol_target=0.12",0.365061
+tsmom,"lookback=252, skip=21, vol_target=0.08",0.326028
+tsmom,"lookback=252, skip=21, vol_target=0.12",0.328825
+xsmom,"lookback=126, skip=0, top_frac=0.2",0.128784
+xsmom,"lookback=126, skip=0, top_frac=0.3",0.060402
+xsmom,"lookback=126, skip=21, top_frac=0.2",0.068375
+xsmom,"lookback=126, skip=21, top_frac=0.3",0.007976
+xsmom,"lookback=252, skip=0, top_frac=0.2",0.093583
+xsmom,"lookback=252, skip=0, top_frac=0.3",0.072454
+xsmom,"lookback=252, skip=21, top_frac=0.2",0.095623
+xsmom,"lookback=252, skip=21, top_frac=0.3",0.044911
+mean_reversion,"window=10, entry_z=1.5, max_positions=3",0.364041
+mean_reversion,"window=10, entry_z=1.5, max_positions=5",0.465277
+mean_reversion,"window=10, entry_z=2, max_positions=3",0.320803
+mean_reversion,"window=10, entry_z=2, max_positions=5",0.440530
+mean_reversion,"window=10, entry_z=2.5, max_positions=3",0.060593
+mean_reversion,"window=10, entry_z=2.5, max_positions=5",0.068008
+mean_reversion,"window=20, entry_z=1.5, max_positions=3",0.371755
+mean_reversion,"window=20, entry_z=1.5, max_positions=5",0.457368
+mean_reversion,"window=20, entry_z=2, max_positions=3",0.445018
+mean_reversion,"window=20, entry_z=2, max_positions=5",0.506795
+mean_reversion,"window=20, entry_z=2.5, max_positions=3",0.491721
+mean_reversion,"window=20, entry_z=2.5, max_positions=5",0.425116
+mean_reversion,"window=40, entry_z=1.5, max_positions=3",0.444499
+mean_reversion,"window=40, entry_z=1.5, max_positions=5",0.421191
+mean_reversion,"window=40, entry_z=2, max_positions=3",0.382457
+mean_reversion,"window=40, entry_z=2, max_positions=5",0.411231
+mean_reversion,"window=40, entry_z=2.5, max_positions=3",0.342649
+mean_reversion,"window=40, entry_z=2.5, max_positions=5",0.348859
+pairs,"formation=126, entry_z=1.5, exit_z=0.25",-0.974703
+pairs,"formation=126, entry_z=1.5, exit_z=0.5",-1.033533
+pairs,"formation=126, entry_z=2, exit_z=0.25",-0.977456
+pairs,"formation=126, entry_z=2, exit_z=0.5",-1.063839
+pairs,"formation=252, entry_z=1.5, exit_z=0.25",0.071283
+pairs,"formation=252, entry_z=1.5, exit_z=0.5",0.035662
+pairs,"formation=252, entry_z=2, exit_z=0.25",0.209429
+pairs,"formation=252, entry_z=2, exit_z=0.5",0.204805

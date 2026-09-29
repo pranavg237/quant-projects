@@ -6,21 +6,30 @@ results were inflated by a same-bar fill, no transaction costs and no out-of-sam
 discipline. Those bugs, and their measured effect, are documented in
 [AUDIT.md](AUDIT.md).
 
-Five strategies run on it. Four lose to buying and holding the index, and
-[RESULTS.md](RESULTS.md) says so in the first paragraph.
+Five strategies run on it. Four lose to buying and holding the index. The fifth, the MA
+crossover, edges it on Sharpe (0.58 vs 0.53 over the same dates) by far less than the
+noise, and [RESULTS.md](RESULTS.md) says so in the first paragraph.
 
 ```bash
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m pytest              # 125 tests, 98% coverage, offline
+.venv/bin/python -m pytest              # 140 tests, 98% coverage, offline
 .venv/bin/ruff check . && .venv/bin/mypy    # both clean, mypy in strict mode
 .venv/bin/python scripts/run_ma_crossover.py
+.venv/bin/python scripts/ma_sensitivity.py     # parameter heatmap, ~10 s
+.venv/bin/python scripts/multiple_testing.py   # deflated Sharpe over all 63 trials, ~3 s
+.venv/bin/python scripts/run_strategies.py     # all five strategies, ~26 min
 ```
+
+Every script reads the committed data snapshot and runs offline; add `--live-data` to
+re-download instead.
 
 ## Results
 
 Out-of-sample walk-forward results, net of 5 bp slippage, 1 bp commission and short
 borrow fees. Parameters are re-chosen each year on the previous 5 years only. Data: Yahoo
-Finance daily bars through 2025-08-29, downloaded 2026-09-28. The benchmark is buy-and-hold
+Finance daily bars through 2025-08-29, downloaded 2026-09-28 and committed as a hash-checked
+snapshot in [data/snapshot-2026-09-28/](data/README.md), so every number here reproduces
+offline. The benchmark is buy-and-hold
 SPY over the same dates. `ma_crossover` starts in 2005, and the others start in 2010 after
 their first training window.
 
@@ -28,19 +37,43 @@ their first training window.
 |---|---|---|---|---|---|---|---|---|
 | SPY buy & hold (2010-2025) | 13.8% | 17.3% | **0.76** | 1.07 | -33.7% | 709 | 0.0 | 100% |
 | ma_crossover | 8.2% | 12.0% | **0.58** | 0.79 | -22.4% | 808 | 2.0 | 78% |
-| mean_reversion | 6.3% | 13.8% | **0.42** | 0.60 | -39.6% | 636 | 10.6 | 32% |
+| mean_reversion | 6.6% | 13.9% | **0.44** | 0.62 | -39.6% | 1,102 | 10.4 | 32% |
 | xsmom | 2.5% | 8.5% | **0.18** | 0.24 | -16.1% | 799 | 5.9 | 100% |
 | tsmom | 0.7% | 6.4% | **-0.06** | -0.08 | -19.9% | 2,051 | 3.8 | 91% |
 | pairs | 1.0% | 1.5% | **-0.17** | -0.24 | -3.8% | 2,291 | 4.7 | 14% |
 
 Turnover is one-way, as a multiple of capital per year.
 
-**None of the five strategies beats buy-and-hold SPY on a risk-adjusted basis, and none has
-a statistically significant Fama-French five-factor alpha** (every |t| < 2). The MA
+**No strategy shows a reliable edge over buy-and-hold SPY, and none has a statistically
+significant Fama-French five-factor alpha** (every |t| < 2). Four have lower Sharpe ratios
+than buy-and-hold. The MA crossover's 0.58 beats buy-and-hold's 0.53 over its own
+2005-2025 window (the table's SPY row covers 2010-2025, when SPY did better), but that gap
+sits well inside its bootstrap interval (0.21 to 1.01) and does not survive the
+multiple-testing correction below. The MA
 crossover's real contribution is a smaller drawdown than SPY over its own 2005-2025 window
 (-22% vs -55%), not extra return. [RESULTS.md](RESULTS.md) has the bootstrap intervals,
-probability of backtest overfitting and factor loadings, plus a reproducibility check
-that found one strategy moved after a data vendor re-adjustment.
+probability of backtest overfitting and factor loadings, plus a reproducibility check:
+`mean_reversion` flipped between two results on two same-day downloads, traced to a single
+exit decision whose z-score sat 4e-6 from its threshold.
+
+**The MA crossover's edge does not survive a correction for how much was tried.** Five
+strategies and 63 parameter configurations were tested in total. Its out-of-sample
+Sharpe of 0.58 has a probabilistic Sharpe ratio of 0.995 on its own, but a deflated
+Sharpe ratio of 0.08 once all 63 trials are counted with the paper's recipe (0.16 for
+the best in-sample configuration): the best of 63 pure-noise strategies would be expected
+to show a Sharpe of about 0.90. The answer depends on assumptions, and RESULTS.md shows
+the full range. Under any assumption it defends, it clears the usual 0.95 bar only if
+the whole project counts as about five independent tries.
+
+![MA crossover Sharpe by fast and slow window](reports/sensitivity/ma_sharpe_heatmap.png)
+
+The heatmap above is **in-sample** (every cell has seen all of 2005-2025) and is a
+robustness diagnostic, not a way of choosing parameters. It shows a broad, low plateau
+around buy-and-hold's Sharpe of 0.53: the middle half of the 116 cells lies between 0.52
+and 0.59. The best cell (10/75, 0.73) is an isolated spike whose neighbours average 0.52.
+The whole range is 1.5 standard errors of a single cell's Sharpe, so the data cannot tell
+these parameter choices apart. That is why the walk-forward picked 10 different settings in
+21 years.
 
 ## What it does
 
@@ -82,13 +115,18 @@ unlevered one.
 **Parameters are never chosen on the data they are scored on.** `walk_forward` searches
 the grid on a training window, then scores the winner on the following window only, and
 stitches those out-of-sample windows into the reported series. The in-sample-optimised
-result is reported next to it, and the gap is the overfitting penalty.
+result is reported next to it, and the gap is the overfitting penalty. A test in
+[tests/test_validation.py](tests/test_validation.py) replaces every price after one fold's
+training window with a different path and checks that the parameters chosen up to that
+fold do not change at all.
 
 **"It worked" is tested against luck.** The probabilistic Sharpe ratio asks whether the
 Sharpe is distinguishable from zero given the sample length, skew and kurtosis. The
 deflated version and the CSCV probability of backtest overfitting account for how many
-configurations were tried. All of these run on *excess* returns, because a strategy that
-sits in cash otherwise shows a high Sharpe on cash's near-zero volatility.
+configurations were tried. The deflated Sharpe counts every configuration of every
+strategy (63), not just one strategy's grid, and is tested against the worked example in
+Bailey & Lopez de Prado (2014). All of these run on *excess* returns, because a strategy
+that sits in cash otherwise shows a high Sharpe on cash's near-zero volatility.
 
 **Prices are adjusted, and the adjustment is not used to cheat.** P&L uses total-return
 prices. Level-based signals get split-adjusted prices, because the dividend
@@ -182,9 +220,10 @@ quantbt/
   validation/      walk-forward, bootstrap, overfitting diagnostics
   factors/         Ken French data and factor regressions
   report/          HTML tearsheets
-  research/        the pipeline that produces RESULTS.md
+  research/        the pipeline that produces RESULTS.md, the parameter-sensitivity
+                   surface and the family-wide deflated Sharpe ratio
 scripts/           runnable entry points
-tests/             125 tests, including one per bias
+tests/             140 tests, including one per bias
 ```
 
 The vectorised implementation exists to check the engine: `scripts/verify_port.py` runs
@@ -206,5 +245,6 @@ borrow is a single flat rate per strategy, not a per-name, time-varying one, and
 no hard-to-borrow or recall model. The universes are built from instruments that exist
 today, so the
 cross-sectional stock results are an upper bound. Yahoo Finance is the only data source
-and it silently revises history; results are tied to the snapshot recorded in
-`data/cache/MANIFEST.json`.
+and it silently revises history. Every reported number is computed from the committed
+snapshot in `data/snapshot-2026-09-28/`; `--live-data` re-downloads, and the results will
+then drift.

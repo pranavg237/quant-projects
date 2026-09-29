@@ -40,6 +40,7 @@ __all__ = [
     "sharpe_confidence_interval",
     "sharpe_difference_test",
     "summarise",
+    "trading_cost_table",
 ]
 
 #: An annual rate applied every period, or a per-period series aligned to the returns.
@@ -263,6 +264,42 @@ def summarise(results: dict[str, BacktestResult], risk_free: RiskFree = 0.0) -> 
     rows = [evaluate(result, risk_free).as_dict() for result in results.values()]
     frame = pd.DataFrame(rows)
     return frame.sort_values("sharpe", ascending=False).reset_index(drop=True)
+
+
+def trading_cost_table(
+    results: dict[str, BacktestResult], risk_free: RiskFree = 0.0
+) -> pd.DataFrame:
+    """Turnover and what it costs, per strategy: gross against net Sharpe.
+
+    Columns:
+        mean_turnover: Average one-way turnover per rebalance, **excluding** the initial
+            purchase from cash (which every strategy pays once and which says nothing about
+            how much it trades).
+        annual_turnover: One-way turnover per year, including the initial purchase -- the
+            same definition as :func:`evaluate`, so it reconciles with the cost drag.
+        cost_drag_bps / borrow_drag_bps: Return lost per year to trading costs and to
+            stock-loan fees, in basis points.
+        gross_sharpe / net_sharpe: Excess-return Sharpe before and after those costs.
+        sharpe_lost: ``gross_sharpe - net_sharpe``.
+    """
+    rows = []
+    for name, result in results.items():
+        metrics = evaluate(result, risk_free)
+        ongoing = result.turnover.iloc[1:]
+        rows.append(
+            {
+                "strategy": name,
+                "mean_turnover": float(ongoing.mean()) if len(ongoing) else 0.0,
+                "annual_turnover": metrics.annual_turnover,
+                "cost_drag_bps": metrics.annual_cost_drag * 10_000,
+                "borrow_drag_bps": metrics.annual_borrow_drag * 10_000,
+                "gross_sharpe": metrics.gross_sharpe,
+                "net_sharpe": metrics.sharpe,
+                "sharpe_lost": metrics.gross_sharpe - metrics.sharpe,
+            }
+        )
+    frame = pd.DataFrame(rows)
+    return frame.sort_values("annual_turnover", ascending=False).reset_index(drop=True)
 
 
 @dataclass(frozen=True)

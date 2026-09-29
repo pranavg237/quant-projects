@@ -7,10 +7,13 @@ import pytest
 
 from mmsim.avellaneda_stoikov import AvellanedaStoikovParams
 from mmsim.experiments import (
+    book_runner,
     build_policy_set,
     compare_policies_book,
     compare_policies_reference,
     paired_test,
+    policy_sensitivity_sweep,
+    reference_runner,
     sensitivity_sweep,
 )
 from mmsim.flow import FlowConfig
@@ -192,3 +195,50 @@ def test_symmetric_policy_appears_in_the_matched_set(
     policies = build_policy_set(stationary_params)
     assert isinstance(policies[1], SymmetricPolicy)
     assert policies[2].max_inventory == 5.0  # type: ignore[union-attr]
+
+
+def test_policy_sweep_long_format_with_standard_errors(
+    stationary_params: AvellanedaStoikovParams,
+) -> None:
+    world = AvellanedaStoikovParams(gamma=0.1, kappa=1.5, arrival_rate=140.0, sigma=2.0)
+
+    def build(value: float):
+        model = AvellanedaStoikovParams(
+            gamma=value,
+            kappa=1.5,
+            arrival_rate=140.0,
+            sigma=2.0,
+            horizon=stationary_params.horizon,
+            horizon_mode=stationary_params.horizon_mode,
+        )
+        return build_policy_set(model, inventory_limit=3.0), reference_runner(world, n_steps=100)
+
+    frame = policy_sensitivity_sweep([0.05, 0.5], build, "gamma", n_runs=40, n_bootstrap=200)
+    assert len(frame) == 2 * 3
+    assert set(frame["parameter"]) == {"gamma"}
+    assert list(frame["value"]) == [0.05] * 3 + [0.5] * 3
+    for column in ("mean_pnl_se", "std_pnl_se", "sharpe_se", "std_final_inventory_se"):
+        assert (frame[column] > 0).all()
+    # The mean-PnL error is exactly s / sqrt(n).
+    assert np.allclose(frame["mean_pnl_se"], frame["std_pnl"] / np.sqrt(40))
+    # Inventory control: at every gamma, A-S carries less final inventory than symmetric.
+    for _, block in frame.groupby("value"):
+        by_policy = block.set_index("policy")["std_final_inventory"]
+        assert by_policy["Avellaneda-Stoikov"] < by_policy["Symmetric"]
+
+
+def test_policy_sweep_drives_the_book_engine(
+    stationary_params: AvellanedaStoikovParams, market: MarketConfig
+) -> None:
+    """The same sweep runs order-book sessions, which is how informed flow is swept."""
+
+    def build(value: float):
+        flow = FlowConfig(informed_fraction=value)
+        return [SymmetricPolicy(half_spread=0.04)], book_runner(flow, market, n_steps=300)
+
+    frame = policy_sensitivity_sweep([0.0, 0.3], build, "informed_fraction", n_runs=6)
+    assert list(frame["value"]) == [0.0, 0.3]
+    assert (frame["mean_trades"] > 0).all()
+    # Common random numbers: the same seeds give the same sessions, so a rerun is identical.
+    again = policy_sensitivity_sweep([0.0, 0.3], build, "informed_fraction", n_runs=6)
+    assert frame.equals(again)

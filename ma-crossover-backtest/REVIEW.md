@@ -129,15 +129,24 @@ The one honest datapoint: Walgreens was taken private mid-project, its history v
 the data source, and a pair had to be dropped. That is the bias happening in real time, on a
 three-month horizon, in a single 70-name universe.
 
-### B. The deflated Sharpe ratio counts the wrong number of trials
+### B. The deflated Sharpe ratio counted the wrong number of trials (partly fixed)
 
-`deflated_sharpe_ratio` deflates by the size of the parameter grid — 17 configurations for
-`ma_crossover`. The number that belongs there is the number of configurations *ever tried*,
-across every strategy, every universe and every abandoned idea in the project's history.
-That is unknowable in general and certainly larger than 17. Every DSR in RESULTS.md is
-therefore an upper bound on significance. Nothing in the results survives even the
-understated version, so the conclusions hold a fortiori — but a strategy that passed at
-DSR 0.96 with a grid of 17 should not be believed.
+The research pipeline deflated each strategy only by its own parameter grid: 17
+configurations for `ma_crossover`, which gave its in-sample best a DSR of 0.99
+(`dsr_is` in `results.csv`, never shown in RESULTS.md). The number that belongs there is
+the number of configurations *ever tried*, across every strategy.
+
+`scripts/multiple_testing.py` now does that: N = 63, every configuration of all five
+grids, with the cross-trial variance of all 63 Sharpes. Under that count the MA
+crossover's DSR is 0.16 in-sample and 0.08 out of sample, and RESULTS.md shows how it
+moves under other reasonable assumptions (it clears 0.95 only at about five effective
+trials). The formula itself is now pinned to the worked example in Bailey & Lopez de Prado
+(2014) by a test.
+
+What is still not fixed: 63 counts coded grid points only. Ideas considered and never
+coded, and earlier versions of the code, are not in any file, so 63 remains a lower bound
+on the true count. The per-strategy `dsr_is` column is still written by the pipeline for
+continuity and should not be quoted.
 
 ### C. Pairs selection does not correct for multiple testing
 
@@ -190,7 +199,7 @@ will get a silently wrong answer.
 accumulate. `mean_reversion` and `pairs` only trade when the target *set* changes, so an
 open position drifts away from its nominal weight between signals. Both are defensible and
 both are documented, but they are not the same policy, and comparing turnover across the two
-groups compares slightly different things. `mean_reversion`'s 10.3x turnover would be higher
+groups compares slightly different things. `mean_reversion`'s 10.4x turnover would be higher
 still under the drift-correcting policy, which makes it the strategy most sensitive to the
 choice.
 
@@ -205,10 +214,19 @@ but it is a reproducibility trap.
 ### J. One data vendor, and it revises history
 
 Everything comes from Yahoo Finance, which restates splits, dividends and adjusted closes
-without notice, and which withdrew a symbol's entire history mid-project. `data/cache/MANIFEST.json`
-records the snapshot dates, which makes the results reproducible from the cache but not
+without notice, and which withdrew a symbol's entire history mid-project. The inputs are
+now frozen: `data/snapshot-2026-09-28/` holds every price and factor file the pipeline reads,
+with a sha256 per file, and the loaders read it by default and refuse to download. That makes
+every number reproducible offline, bit for bit across two full reruns. It does not make them
 independently verifiable. A second source (Stooq, Tiingo, a vendor file) reconciled against
 the first is the standard defence and is not implemented.
+
+The snapshot also exposed how fragile one result is. `mean_reversion` gave Sharpe 0.42 on
+one download and 0.44 on another, from a single exit decision whose z-score was +3.9e-6
+against a threshold of 0 (XLE, 2021-04-27). Noise at Yahoo's float32 precision (about 6e-8)
+is enough to flip it. A strategy whose reported Sharpe moves by 0.02 on a
+seventh-significant-digit change in one price is reporting its own noise floor, and the
+0.02 is a floor on how uncertain its number really is.
 
 ### K. Annualisation is not identical in every metric
 
@@ -236,7 +254,10 @@ Stated plainly, because a review that only lists problems is not a review.
   producing the same equity curve.
 - **Parameters are never chosen on scored data.** Walk-forward is the only place parameters
   are selected, and the in-sample-best is reported beside the out-of-sample result over the
-  same dates, so the overfitting penalty is visible rather than inferred.
+  same dates, so the overfitting penalty is visible rather than inferred. A test splices a
+  different price path in after one fold's training window and checks that every
+  parameter choice up to that fold is unchanged; moving the training window forward by
+  six months makes it fail.
 - **The reporting is in excess terms end to end.** An earlier version computed the summary
   Sharpe on excess returns and the overfitting diagnostics on raw ones, which made the
   mostly-in-cash `pairs` strategy show a PSR of 0.999 alongside a Sharpe of -0.14. That is

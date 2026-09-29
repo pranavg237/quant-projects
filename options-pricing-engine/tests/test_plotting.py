@@ -75,9 +75,40 @@ def test_surface_figures_render(synthetic_surface: pd.DataFrame) -> None:
         plotting.plot_term_structure(synthetic_surface),
         plotting.plot_surface_heatmap(synthetic_surface),
         plotting.plot_surface_3d(synthetic_surface),
+        plotting.plot_smile_grid(synthetic_surface),
     ):
         assert len(fig.axes) >= 1
         plt.close(fig)
+
+
+def test_smile_grid_has_one_visible_panel_per_expiry(synthetic_surface: pd.DataFrame) -> None:
+    fig = plotting.plot_smile_grid(synthetic_surface, ncols=4)
+    visible = [ax for ax in fig.axes if ax.get_visible()]
+    assert len(visible) == synthetic_surface["tau"].nunique()
+    plt.close(fig)
+
+
+def test_parity_and_greeks_fd_figures_render(
+    synthetic_snapshot, flat_rate_curve, synthetic_surface
+) -> None:
+    from optpricing import data as data_mod
+    from optpricing import greeks_check, parity
+
+    clean, _ = data_mod.clean_chain(synthetic_snapshot)
+    fwd = data_mod.implied_forward_curve(clean, synthetic_snapshot.spot, flat_rate_curve)
+    res = parity.run_parity_analysis(
+        synthetic_snapshot, clean, flat_rate_curve, fwd, synthetic_surface, steps=30
+    )
+    fig = plotting.plot_parity_residuals(res.residuals)
+    assert len([ax for ax in fig.axes if ax.get_visible()]) == fwd["tau"].nunique()
+    plt.close(fig)
+
+    points = greeks_check.default_grid(taus=(0.1, 1.0), sigmas=(0.2,))
+    errors = greeks_check.error_table(points)
+    sweeps = {"gamma": greeks_check.step_sweep(points[3], "gamma", multipliers=[1e-4, 1e-3])}
+    fig = plotting.plot_greeks_fd(errors, sweeps, {"gamma": 1e-3}, (1e-6, 5e-3))
+    assert len(fig.axes) == 2
+    plt.close(fig)
 
 
 def test_heston_fit_figures_render(synthetic_surface: pd.DataFrame) -> None:

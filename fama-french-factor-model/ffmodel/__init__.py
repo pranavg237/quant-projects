@@ -12,10 +12,14 @@ from .models import MODELS, FactorModel, get_model
 from .regression import (
     RegressionResult,
     compare_models,
+    compare_standard_errors,
     fit_factor_model,
     fit_many,
+    holm_adjust,
     rolling_regression,
+    stability_test,
     summarize,
 )
+from .snapshot import read_manifest, save_snapshot
 
 __version__ = "0.1.0"

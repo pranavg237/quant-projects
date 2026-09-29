@@ -168,11 +168,13 @@ turnover and hit rate are all missing.
 * Signals are generated at the close of bar `t` and filled at the open of bar `t+1`
   with configurable slippage and commission. A test asserts that the strategy's return
   on the signal bar is zero.
-* Costs default to 5 bps slippage plus a per-share commission and are always reported.
+* Costs default to 5 bps slippage plus a 1 bp commission on notional, and are always
+  reported.
 * Warm-up data is fetched before the evaluation window; the comparison is made over the
   same dates for strategy and benchmark.
-* Cash can earn a configurable risk-free rate (default: French `RF`, which is also used
-  for Sharpe).
+* Cash can earn a configurable risk-free rate. The single-strategy script defaults to 0%
+  (`--rf`) and uses the French `RF` series, for cash and the Sharpe hurdle, with
+  `--french-rf`; the multi-strategy pipeline always uses French `RF`.
 * A full metrics set is computed and printed.
 * Data is snapshotted to disk so results are reproducible.
 * The repository gets a package layout, `pyproject.toml`, tests, `ruff` and `mypy`.

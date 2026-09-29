@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from quantbt.data import DEFAULT_CACHE_DIR, normalize_index
+from quantbt.data import DEFAULT_CACHE_DIR, live_data_enabled, normalize_index, snapshot_file
 
 BASE_URL = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/"
 MISSING_VALUES = (-99.99, -999.0)
@@ -124,7 +124,16 @@ def fetch_dataset(
     refresh: bool = False,
     max_age_days: float = 30.0,
 ) -> list[FrenchTable]:
-    """Parsed tables of ``<name>_CSV.zip``, downloaded unless a fresh cached copy exists."""
+    """Parsed tables of ``<name>_CSV.zip``, downloaded unless a fresh cached copy exists.
+
+    By default the file is read from the committed snapshot (hash-checked, never
+    downloaded); live data is used only with ``--live-data``/``QUANTBT_LIVE_DATA=1`` or
+    an explicit ``cache_dir``/``refresh``.
+    """
+    if cache_dir is None and not refresh and not live_data_enabled():
+        with zipfile.ZipFile(snapshot_file(f"french/{name}_CSV.zip")) as zf:
+            member = next(n for n in zf.namelist() if n.lower().endswith(".csv"))
+            return parse_french_csv(zf.read(member).decode("latin-1"))
     cache = Path(cache_dir) if cache_dir is not None else DEFAULT_CACHE_DIR / "french"
     cache.mkdir(parents=True, exist_ok=True)
     path = cache / f"{name}_CSV.zip"

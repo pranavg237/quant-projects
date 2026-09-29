@@ -345,8 +345,10 @@ def dual_delta(
 ) -> FloatArray:
     r""":math:`\partial V/\partial K`. Call: :math:`-e^{-r\tau}N(d_2)`.
 
-    Minus this, discounted back, is the risk-neutral CDF of :math:`S_T` -- the quantity
-    a surface has to keep monotone for the implied density to stay non-negative.
+    Put: :math:`e^{-r\tau}N(-d_2)`. Undiscounted, the put's value is the risk-neutral
+    CDF :math:`\mathbb{Q}(S_T < K)` and minus the call's is :math:`\mathbb{Q}(S_T > K)`
+    -- which is why a surface has to keep call prices decreasing and convex in strike
+    for the implied density to stay non-negative.
     """
     opt = to_option_type(option_type)
     phi = opt.sign

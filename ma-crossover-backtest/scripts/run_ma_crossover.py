@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from quantbt import metrics
-from quantbt.data import load_yahoo
+from quantbt.data import add_live_data_flag, load_yahoo, use_live_data
 from quantbt.metrics import format_summary
 from quantbt.research.runner import load_rf
 from quantbt.vectorized import backtest_ma_crossover
@@ -38,7 +38,9 @@ def main() -> None:
         "(overrides --rf)",
     )
     parser.add_argument("--out", default="reports/ma_crossover.png")
+    add_live_data_flag(parser)
     args = parser.parse_args()
+    use_live_data(args.live_data)
 
     # Warm-up: pull enough history before --start so the long MA is defined on day one.
     warmup_start = pd.Timestamp(args.start) - pd.tseries.offsets.BDay(args.long + 10)

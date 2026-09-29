@@ -22,12 +22,26 @@ class FakeClient:
             for i, c in enumerate(closes)
         ]
         self.qty = qty
-        self.account = {"status": status, "equity": str(equity),
+        self.account = {"status": status, "equity": str(equity), "last_equity": str(equity),
                         "buying_power": str(buying_power)}
         self.orders = []
+        self.now = dt.datetime.combine(start + dt.timedelta(days=len(closes) - 1),
+                                       dt.time(22, 0), tzinfo=dt.timezone.utc)
 
     def get_account(self):
         return self.account
+
+    def get_clock(self):
+        return {"is_open": False, "next_open": None, "next_close": None}
+
+    def list_open_orders(self, symbol):
+        return []
+
+    def get_order_by_client_order_id(self, client_order_id):
+        return None
+
+    def get_order(self, order_id):
+        return {"id": order_id, "status": "accepted", "qty": "0", "filled_qty": "0"}
 
     def get_daily_bars(self, symbol, start):
         return self.bars
@@ -35,14 +49,14 @@ class FakeClient:
     def get_position(self, symbol):
         return Position(symbol, self.qty, self.qty * 100, 100) if self.qty else None
 
-    def submit_market_order(self, symbol, qty, side):
+    def submit_market_order(self, symbol, qty, side, client_order_id=None):
         self.orders.append((side, qty, symbol))
         return {"id": "fake", "status": "accepted"}
 
 
 def run(client, dry_run=False):
     run_once(client, "SPY", short_window=5, long_window=20, risk_fraction=0.2,
-             max_position_fraction=0.25, dry_run=dry_run)
+             max_position_fraction=0.25, dry_run=dry_run, now=client.now)
 
 
 class TestRunOnce(unittest.TestCase):

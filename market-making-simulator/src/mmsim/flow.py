@@ -48,7 +48,10 @@ import numpy as np
 from .book import LimitOrderBook
 from .types import MarketConfig, Side, Trade
 
-__all__ = ["FlowConfig", "OrderFlowGenerator"]
+__all__ = ["INFORMED_OWNER", "FlowConfig", "OrderFlowGenerator"]
+
+#: Owner tag carried by informed market orders, so a fill can be attributed to them.
+INFORMED_OWNER = "informed"
 
 
 @dataclass(frozen=True)
@@ -71,8 +74,8 @@ class FlowConfig:
         limit_depth_ticks: Mean distance of a noise limit order from the efficient price.
         depth_shape: Gamma shape parameter for that distance. ``1.0`` is an exponential
             (liquidity concentrated at the touch); values above 1 produce the humped
-            profile real books have. The default of 2.5 gives a log-linear fill-curve fit
-            with an R-squared around 0.92.
+            profile real books have. With the analysis defaults, 2.5 gives a log-linear
+            fill-curve fit with an R-squared of 0.865 (see the README).
         noise_size: Size of each noise limit order.
         volatility_ticks: Diffusive volatility of the efficient price, in ticks per
             sqrt(unit time). This is the part of price movement that is *not* caused by
@@ -208,7 +211,7 @@ class OrderFlowGenerator:
             side = Side.BID if self.rng.random() < 0.5 else Side.ASK
             size = self._draw_size()
             informed = self.rng.random() < cfg.informed_fraction
-            owner = "informed" if informed else "noise_taker"
+            owner = INFORMED_OWNER if informed else "noise_taker"
             _, executed = book.submit_market(side, size, timestamp, owner)
             trades.extend(executed)
             if informed and executed:

@@ -28,7 +28,7 @@ from scipy import stats
 from .avellaneda_stoikov import AvellanedaStoikovParams
 from .engine import FillModel, SimulationResult, simulate_book, simulate_reference
 from .flow import FlowConfig
-from .metrics import MakerMetrics, summarise_runs
+from .metrics import MakerMetrics, session_standard_errors, summarise_runs
 from .strategies import (
     AvellanedaStoikovPolicy,
     InventoryLimitPolicy,
@@ -40,10 +40,14 @@ from .types import MarketConfig
 
 __all__ = [
     "ComparisonResult",
+    "SessionRunner",
+    "book_runner",
     "build_policy_set",
     "compare_policies_book",
     "compare_policies_reference",
     "paired_test",
+    "policy_sensitivity_sweep",
+    "reference_runner",
     "sensitivity_sweep",
 ]
 
@@ -187,6 +191,97 @@ def compare_policies_book(
     return _assemble(runs)
 
 
+#: Runs one session of ``policy`` with the given seed.
+SessionRunner = Callable[[QuotePolicy, int], SimulationResult]
+
+
+def policy_sensitivity_sweep(
+    values: Sequence[float],
+    build: Callable[[float], tuple[Sequence[QuotePolicy], SessionRunner]],
+    parameter: str,
+    n_runs: int = 200,
+    base_seed: int = 4242,
+    n_bootstrap: int = 1_000,
+) -> pd.DataFrame:
+    """Sweep one parameter for several policies, with standard errors across sessions.
+
+    At each value, ``build`` returns the policies to compare and a function that runs one
+    session of a policy for a given seed. Taking a runner rather than a set of parameters
+    lets the same sweep drive either engine: the idealised reference world (for the
+    parameters of the Avellaneda-Stoikov model itself) or the full order book (for
+    properties of the order flow, such as the informed fraction, that the reference world
+    does not have).
+
+    Session ``i`` uses seed ``base_seed + i`` for every policy *and* every parameter value,
+    so policies are compared on common random numbers and the curves are smooth in the
+    parameter rather than jagged with independent sampling noise. The standard errors
+    reported are for each policy's statistic on its own; because of the common random
+    numbers, *differences* between policies at the same value are estimated more precisely
+    than those errors suggest.
+
+    Args:
+        values: Parameter values to sweep.
+        build: Maps a value to ``(policies, runner)``.
+        parameter: Name of the swept parameter.
+        n_runs: Independent sessions per policy per value.
+        base_seed: First seed.
+        n_bootstrap: Bootstrap resamples for the standard errors; see
+            :func:`~mmsim.metrics.session_standard_errors`.
+
+    Returns:
+        Long format, one row per ``(value, policy)``: ``parameter``, ``value``, the columns
+        of :class:`~mmsim.metrics.MakerMetrics`, and ``mean_pnl_se``, ``std_pnl_se``,
+        ``sharpe_se`` and ``std_final_inventory_se``. ``sharpe`` is per session and not
+        annualised.
+    """
+    rows: list[dict[str, float | str | int]] = []
+    for value in values:
+        policies, runner = build(float(value))
+        for policy in policies:
+            runs = [runner(policy, base_seed + i) for i in range(n_runs)]
+            summary: MakerMetrics = summarise_runs(runs)
+            errors = session_standard_errors(
+                np.array([r.final_pnl for r in runs]),
+                np.array([r.final_inventory for r in runs]),
+                n_bootstrap=n_bootstrap,
+                seed=base_seed,
+            )
+            row: dict[str, float | str | int] = {"parameter": parameter, "value": float(value)}
+            row.update(summary.as_dict())
+            row.update(errors)
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def reference_runner(
+    params: AvellanedaStoikovParams,
+    n_steps: int = 200,
+    fill_model: FillModel | str = FillModel.EXACT,
+) -> SessionRunner:
+    """A :data:`SessionRunner` for the idealised Avellaneda-Stoikov world ``params``."""
+
+    def run(policy: QuotePolicy, seed: int) -> SimulationResult:
+        return simulate_reference(policy, params, n_steps=n_steps, fill_model=fill_model, seed=seed)
+
+    return run
+
+
+def book_runner(
+    flow_config: FlowConfig,
+    market: MarketConfig | None = None,
+    n_steps: int = 3_000,
+    horizon: float = 1.0,
+) -> SessionRunner:
+    """A :data:`SessionRunner` for the full order-book world."""
+
+    def run(policy: QuotePolicy, seed: int) -> SimulationResult:
+        return simulate_book(
+            policy, flow_config, market, n_steps=n_steps, horizon=horizon, seed=seed
+        )
+
+    return run
+
+
 def sensitivity_sweep(
     values: Sequence[float],
     build: Callable[[float], tuple[QuotePolicy, AvellanedaStoikovParams]],
@@ -196,7 +291,7 @@ def sensitivity_sweep(
     fill_model: FillModel | str = FillModel.EXACT,
     base_seed: int = 4242,
 ) -> pd.DataFrame:
-    """Sweep one parameter in the reference engine and report metrics at each value.
+    """Single-policy sweep in the reference engine; a wrapper over :func:`policy_sensitivity_sweep`.
 
     Args:
         values: Parameter values to sweep.
@@ -207,26 +302,18 @@ def sensitivity_sweep(
         n_runs: Runs at each value.
         n_steps: Steps per run.
         fill_model: Fill discretisation.
-        base_seed: Common random numbers are reused across values as well as across
-            policies, so the curve is smooth in the parameter rather than jagged with
-            sampling noise.
+        base_seed: Common random numbers are reused across values.
 
     Returns:
-        One row per value, with the columns of :class:`~mmsim.metrics.MakerMetrics`.
+        One row per value: the swept value in a column named ``parameter``, then the
+        columns of :class:`~mmsim.metrics.MakerMetrics` and their standard errors.
     """
-    rows: list[dict[str, float | str | int]] = []
-    for value in values:
-        policy, params = build(float(value))
-        runs = [
-            simulate_reference(
-                policy, params, n_steps=n_steps, fill_model=fill_model, seed=base_seed + i
-            )
-            for i in range(n_runs)
-        ]
-        summary: MakerMetrics = summarise_runs(runs)
-        row = summary.as_dict()
-        row[parameter] = float(value)
-        rows.append(row)
-    frame = pd.DataFrame(rows)
-    columns = [parameter] + [c for c in frame.columns if c != parameter]
-    return frame[columns]
+
+    def build_one(value: float) -> tuple[list[QuotePolicy], SessionRunner]:
+        policy, params = build(value)
+        return [policy], reference_runner(params, n_steps=n_steps, fill_model=fill_model)
+
+    frame = policy_sensitivity_sweep(
+        values, build_one, parameter, n_runs=n_runs, base_seed=base_seed
+    )
+    return frame.drop(columns="parameter").rename(columns={"value": parameter})
