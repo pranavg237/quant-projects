@@ -17,7 +17,7 @@ Every pricer is cross-checked against an independently derived one, every chart 
 | **Heston** | Characteristic function ("little trap" branch), two independent quadratures agreeing to 1.6e-8 (max abs price difference), cross-checked against a full-truncation Euler Monte Carlo. |
 | **Real data** | 4,469 SPY quotes → 2,010-point surface across 12 expiries. Every quote de-Americanised (early-exercise premium removed on a lattice) and the forward solved from de-Americanised put-call parity; 0 calendar-arbitrage violations. |
 | **Put-call parity** | **44.5%** of the pairs the forward is fitted to break *European* parity by more than the bid-ask spread. Pricing the American early-exercise premium cuts that to **11.5%** and the scatter of the per-strike forwards 1.9–6.9x beyond six months — so SPY's parity "violations" are mostly American exercise, and plain European parity puts the forward too low by up to **86bp** at 21 months ([report](results/parity.md)). |
-| **American exercise** | Now built into the surface (the default; the old European-parity surface is `exercise="european"`). It closes the call/put vol gap at the forward (−0.24 at 73 days and −1.08 at 21 months before) to within ±0.03 vol points from 21 days to nine months, overshoots to +0.20/+0.37 at 15/21 months, and lowers 21-month ATM vol from 18.0% to 16.6% ([before/after](results/exercise_comparison.md)). |
+| **American exercise** | Now built into the surface (the default; the old European-parity surface is `exercise="european"`). It closes the call/put vol gap at the forward (−0.24 at 73 days and −1.08 at 21 months before) to within ±0.03 vol points from 21 days to nine months except +0.07 at 104 days (on 3–4 strikes; +0.06 before), overshoots to +0.20/+0.37 at 15/21 months, and lowers 21-month ATM vol from 18.0% to 16.6% ([before/after](results/exercise_comparison.md)). |
 | **Calibration** | Heston fits the corrected SPY surface to **2.26 vol points** RMSE with 5 parameters (2.51 before the correction), against **10.66** for a Black-Scholes model with one free volatility *per expiry* (12 parameters). Out-of-sample on held-out strikes: **2.14**. |
 | **Honest limitation** | That 2.26 is **1.10 vol points in the body** and **5.26 in the short-dated put wing** (5.92 before). The wing quotes barely moved; the new parameters fit the *old* wing just as well (5.26), so the gain is a better compromise across maturities, not better data. Heston still cannot generate enough short-dated skew. You need jumps. |
 
@@ -258,7 +258,7 @@ self-consistent version fits parity slightly *worse* at 15–21 months; see
 **Why European parity fails: American exercise.** SPY options are American. With rates
 near 4%, a deep in-the-money American put is worth about its intrinsic value $K - S$,
 while the European put is worth about $Ke^{-r\tau} - Se^{-q\tau}$ — roughly $rK\tau$ less,
-\$1.70 on a 10%-ITM put at three weeks. So $C - P$ falls faster in $K$ than $D(F-K)$ once
+about \$1.90 on a 10%-ITM put at three weeks. So $C - P$ falls faster in $K$ than $D(F-K)$ once
 the put is in the money, and the charts above bend down on the right, more the longer the expiry. That is not
 noise: pricing the early-exercise premium of each leg on a binomial tree (American minus
 European on the same lattice, at the surface vol, no parameter fitted to the residuals)
@@ -286,7 +286,7 @@ fit. Two things follow for the rest of this README:
   forward and de-Americanised quotes, iterated to a fixed point (below); every number in
   the calibration section is on that surface, and
   [`results/exercise_comparison.md`](results/exercise_comparison.md) has both.
-* **What is left in-sample is small** — median 5 cents beyond the spread, mostly in the 5- to
+* **What is left in-sample is small** — median 6 cents beyond the spread, mostly in the 5- to
   12-day expiries, where a few cents is what a slightly stale spot print or unsynchronised
   quotes would produce.
 
@@ -306,8 +306,6 @@ that are arbitrageable *on their own*, with no model and no forward:
 None of these can exist in a live market. The snapshot carries last-trade times but no quote
 times, so this is the closest the data gets to measuring staleness directly — and it is
 why the surface is built from out-of-the-money quotes only.
-
-### Heston calibration
 
 ### American exercise in the surface
 
@@ -340,7 +338,7 @@ What to take from it, honestly:
   recovers the forward to 1e-6 and the smile to 1e-7 while the old pipeline misses by
   1.6 vol points; with r = q = 0, where early exercise is never optimal, it changes nothing
   (premia < 1e-10); on a European chain with carry it makes recovery *worse*. On SPY it
-  closes the call/put gap to within ±0.03 vol points from 21 days to nine months.
+  closes the call/put gap to within ±0.03 vol points from 21 days to nine months except +0.07 at 104 days (on 3–4 strikes; +0.06 before).
 * **It overshoots at the long end.** +0.20 and +0.37 at 15 and 21 months, three strikes each,
   against a band of 0.07–0.09. The tree's continuous dividend yield is the leading suspect:
   SPY's discrete dividends give deep-ITM *calls* a premium this tree prices at zero, which
@@ -349,6 +347,8 @@ What to take from it, honestly:
   wing quotes moved by at most 0.018 vol points. The new parameters score 5.26 on the *old*
   wing too, and 2.28 overall on the old quotes: the lower, flatter long end lets the
   optimiser pick a larger vol-of-vol that the short wing likes. The body is unchanged.
+
+### Heston calibration
 
 Calibrated on 468 thinned quotes. All four multi-start seeds converge to the same optimum (RMSE spread 2.2612–2.2612 vol points), which is worth stating because Heston objectives are genuinely multimodal.
 
@@ -404,7 +404,7 @@ This is not a calibration failure, it is the model. Heston generates skew throug
 
 **The implied dividend yield comes out too low, and fixing American exercise makes it lower.** Backing $q$ out of the European-parity forward with Treasury discounting gives ~0.3% at long maturities, against SPY's actual ~1.1%. The American-adjusted forward the surface now uses is *higher*, so its implied $q$ is −0.13% to −0.19% beyond six months ([`results/exercise_comparison.md`](results/exercise_comparison.md)). Parity cannot say why: the forward is inferred from the same quotes, so only the carry $r - q$ is identified, and splitting it needs a dividend forecast and the dealers' funding rate, neither of which is in the data. The most likely culprit is funding — options are financed at OIS/repo-type rates, not Treasury yields — but that is a hypothesis, not a measurement. The European inversion is unaffected by the split (it is Black-76 in the forward), but **the early-exercise premium is not**: a put's premium depends on the interest earned on the strike, i.e. on $r$ itself, so the correction inherits the Treasury-rate assumption.
 
-**The call/put mismatch at the forward was mostly American exercise, not quote noise — and correcting for it overshoots at the long end.** An earlier version of this README said call and put vols meet at the forward with a ~0.5 vol point gap that "needs better quotes". Measured on the uncorrected surface (median over strikes within 1% of the forward) it is within ±0.26 vol points out to nine months and then widens to **−0.51 at 455 days and −1.08 at 637 days**. On the corrected surface it is within ±0.03 from 21 days to nine months but **+0.20 and +0.37** at 455 and 637 days ([`results/exercise_comparison.md`](results/exercise_comparison.md)). The first three expiries (≤ 12 days) sit at +0.07 to +0.20 either way, where the correction is under four cents.
+**The call/put mismatch at the forward was mostly American exercise, not quote noise — and correcting for it overshoots at the long end.** An earlier version of this README said call and put vols meet at the forward with a ~0.5 vol point gap that "needs better quotes". Measured on the uncorrected surface (median over strikes within 1% of the forward) it is within ±0.26 vol points out to nine months and then widens to **−0.51 at 455 days and −1.08 at 637 days**. On the corrected surface it is within ±0.03 from 21 days to nine months except +0.07 at 104 days (+0.06 before the correction, on 3–4 strikes), but **+0.20 and +0.37** at 455 and 637 days ([`results/exercise_comparison.md`](results/exercise_comparison.md)). The first three expiries (≤ 12 days) sit at +0.07 to +0.20 either way, where the correction is under four cents.
 
 ---
 

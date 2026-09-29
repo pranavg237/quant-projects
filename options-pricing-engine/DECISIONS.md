@@ -86,7 +86,7 @@ alone* (SE 0.0175) to **57x better than plain MC** (SE 0.0043; 57.4x in `results
 
 **Arithmetic Asian options use the discretely monitored geometric Asian as a control.**
 The geometric average is lognormal so it has a closed form; its payoff correlates with the
-arithmetic payoff at ~0.999, and the standard error drops ~575x. This is a far better
+arithmetic payoff at ~0.999, and the variance drops ~576x (the standard error ~24x). This is a far better
 demonstration of what a control variate is worth than the `S_T` control on a vanilla.
 
 **Estimating `beta` in-sample introduces an `O(1/n)` bias.** It is negligible at the path
@@ -169,7 +169,7 @@ actually trade against it at the quoted prices. Mid-price residuals are reported
 **American exercise is priced, not waved away.** The residuals on SPY fall with strike in a
 way noise does not: at 4% rates a deep-ITM American put is worth about intrinsic while a
 European one is worth about `r K tau` less. `early_exercise_premia` prices American minus
-European on the *same* CRR lattice, so the lattice's own error cancels, at the surface vol
+European on the *same* lattice (Leisen-Reimer by default; see below), so the lattice's own error cancels, at the surface vol
 for each strike. The adjusted forward then solves parity with that premium removed. Two
 things keep this honest: the adjustment has no parameter fitted to the residuals (the vol
 comes from the OTM surface), and a test applies it to a chain that really is European and

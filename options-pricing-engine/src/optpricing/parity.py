@@ -126,9 +126,9 @@ def early_exercise_premia(
 ) -> tuple[np.ndarray, np.ndarray]:
     """American-minus-European value of the call and the put at each strike.
 
-    Both legs are priced on the same CRR lattice, so the lattice's own discretisation
-    error (which is far larger than the premium for short expiries) cancels in the
-    difference. See :func:`optpricing.american.early_exercise_premium`.
+    Both legs are priced on the same lattice (Leisen-Reimer by default), so the
+    lattice's own discretisation error (which is far larger than the premium for short
+    expiries) cancels in the difference. See :func:`optpricing.american.early_exercise_premium`.
 
     Returns:
         ``(call_premium, put_premium)``, each the shape of ``strikes``.

@@ -12,7 +12,7 @@ produced it. Where a strategy loses to buying and holding the index, the README 
 | [**market-making-simulator**](./market-making-simulator) | A price-time-priority limit order book and matching engine, plus Avellaneda-Stoikov optimal quoting with informed order flow, markouts and a parameter-sensitivity study | Reproduces the paper's Table 1 (profit 64.98 vs 65.0). In the full book, inventory skew cuts PnL volatility 4x at statistically identical PnL. Informed-fill markouts match the model's prediction; A-S's edge under informed flow comes from how it unwinds, not from avoiding it |
 | [**ma-crossover-backtest**](./ma-crossover-backtest) | An event-driven backtester built to be hard to fool yourself with: next-bar fills, costs, walk-forward, bootstrap, deflated Sharpe over every configuration tried, PBO, a parameter-sensitivity heatmap, factor regressions | Five strategies, all out of sample and net of costs: **none shows a reliable edge over buy-and-hold SPY**, and none has a significant Fama-French alpha. Four have lower Sharpe ratios; the MA crossover's 0.58 vs 0.53 is inside the noise, and deflated for all 63 configurations tried its DSR is 0.08 |
 | [**portfolio-optimization**](./portfolio-optimization) | Markowitz, Ledoit-Wolf, risk parity, HRP and Black-Litterman, walk-forward tested on 15 ETFs, with per-method trading costs and an estimation-error study | No method's Sharpe differs significantly from 1/N (all p ≥ 0.20). Unconstrained leverage loses 95% in one month, and a cap fixes it |
-| [**fama-french-factor-model**](./fama-french-factor-model) | CAPM to FF6 regressions with Newey-West errors (checked against statsmodels), rolling betas with HC3 bands, attribution, GRS and Fama-MacBeth tests. All three examples run offline from dated data snapshots | Recovers textbook results: HML is redundant given the other FF5 factors (alpha t = 0.75), and GRS rejects every model on the 25 size/value portfolios. Of 30 tests of whether an exposure changed over time, only 2 reject at 5% |
+| [**fama-french-factor-model**](./fama-french-factor-model) | CAPM to FF6 regressions with Newey-West errors (checked against statsmodels), rolling betas with HC3 bands, attribution, GRS and Fama-MacBeth tests. All three examples run offline from dated data snapshots | Recovers textbook results: HML is redundant given the other FF6 factors (alpha t = 0.75), and GRS rejects every model on the 25 size/value portfolios. Of 30 tests of whether an exposure changed over time, only 2 reject at 5% |
 | [**alpaca-ma-crossover-bot**](./alpaca-ma-crossover-bot) | The 50/200 SPY crossover as a daily Alpaca paper-trading job, with pre-trade risk checks, a kill switch, duplicate-proof re-runs and JSON logs, tested against a simulated API | No live track record. Backtest 2005-2025: Sharpe 0.54 vs 0.53 for buy-and-hold, max drawdown -34% vs -55% |
 
 ## How the results are kept honest
@@ -25,7 +25,8 @@ produced it. Where a strategy loses to buying and holding the index, the README 
   evidence.
 - **Reproducible offline.** The market data behind every headline number is committed as
   dated snapshots, and the analysis scripts read them by default; ma-crossover and
-  fama-french also check the downloaded data files' hashes. An agent that had not seen the
+  fama-french also check the downloaded French and price files' hashes when they read them
+  (fama-french's Yahoo returns file is the one exception). An agent that had not seen the
   work re-ran every project from a clean clone and checked the README numbers (see
   [CHANGES.md](CHANGES.md)). Where a result is fragile, the README says so: one backtest's
   Sharpe moves by 0.02 when a single price changes in its seventh digit.
@@ -33,7 +34,7 @@ produced it. Where a strategy loses to buying and holding the index, the README 
   Five of the six projects also pass strict `mypy` and `ruff` in CI; fama-french is
   tested but not type-checked.
 
-[PLAN.md](PLAN.md) is the audit and plan behind two rounds of work, and
+[PLAN.md](PLAN.md) is the audit and plan behind three rounds of work, and
 [CHANGES.md](CHANGES.md) explains every change they led to.
 
 ## Running a project

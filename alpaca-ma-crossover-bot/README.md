@@ -164,7 +164,7 @@ broker. So the bot looks it up by `client_order_id` rather than sending it again
 - If not, the run exits with code 1, and the next scheduled run tries again with the same
   id.
 
-Read-only calls (account, bars, positions, lookups) are retried up to 3 times with
+Read-only calls (account, bars, positions, lookups) are attempted up to 3 times (2 retries) with
 exponential backoff on timeouts, connection errors, 429 and 5xx. Other 4xx errors (bad
 keys, insufficient buying power, an invalid order) are never retried, because repeating
 them can't help.
@@ -176,7 +176,7 @@ run against an HTTP-level fake of the Alpaca API.
 
 | Situation | What the bot does | Exit |
 |---|---|---|
-| API 5xx / 429 / timeout on a read | Retries 3× with backoff. If still failing, logs `run_failed` and places no order | 1 |
+| API 5xx / 429 / timeout on a read | Up to 3 attempts (2 retries) with backoff. If still failing, logs `run_failed` and places no order | 1 |
 | API 401/403/422 on a read | No retry, logs `run_failed`. A 404 on the position just means flat | 1 |
 | Timeout / 5xx on order submission | No retry. Looks the order up by `client_order_id`: carries on if found, else logs `order_not_placed` | 0 / 1 |
 | Broker rejects with 403 insufficient buying power | Logs `order_submit_error` with Alpaca's error code. No retry | 1 |

@@ -26,7 +26,9 @@ or turnover of its own to report. Its outputs are factor loadings, alphas and as
 test statistics. The worked examples use French data through July 2026 (`--end 2026-07`),
 and all three are built **offline from committed snapshots**. Each snapshot's `manifest.json`
 records the download time, URLs, SHA-256 hashes, file sizes and sample periods, and the
-commands below reproduce the reports byte for byte.
+commands below reproduce the reports byte for byte. The French files are checked against
+their hashes when read; the Yahoo `returns.csv` in `snapshot-2026-09-28` has no hash in
+its manifest and is not checked.
 
 - [example-analyze](reports/example-analyze/report.md) reads
   [data/snapshot-2026-09-28/](data/snapshot-2026-09-28/): the French monthly factor files
@@ -174,8 +176,9 @@ fm.table()                            # premia with FM and Shanken t-stats vs. f
   shortfall and the right sign for fund costs, though larger than SPY's roughly 0.09% expense
   ratio (see the interpretation below).
 - IWN (small-cap value ETF): SMB 0.82, HML 0.36. BRK-B: HML +0.43, SMB −0.36.
-- Spanning regressions: HML's alpha given the other FF5 factors is 0.9%/yr (t = 0.75). This
-  is the Fama-French (2015) finding that HML is redundant in the five-factor model.
+- Spanning regressions (`factors --model ff6`): HML's alpha given the other five FF6
+  factors (market, SMB, RMW, CMA and momentum) is 0.9%/yr (t = 0.75). This is consistent
+  with the Fama-French (2015) finding that HML is redundant in the five-factor model.
 - 25 size/book-to-market portfolios: GRS rejects every model (p-values from 7.4e-11 for CAPM
   to 3.7e-06 for FF6). The small-growth portfolio has the largest FF3 alpha, −5.6%/yr
   (t = −5.1). In Fama-MacBeth the market premium is insignificant once there is an intercept

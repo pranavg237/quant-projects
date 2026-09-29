@@ -1,7 +1,7 @@
 # Changes
 
 What changed, and why, in plain language. Each item says what was wrong, what I did about
-it, and what it changed. The plans behind both rounds are in [PLAN.md](PLAN.md).
+it, and what it changed. The plans behind all three rounds are in [PLAN.md](PLAN.md).
 
 - [Round 3](#round-3-closing-round-2s-open-items): close round 2's open items.
 - [Round 2](#round-2-from-correct-and-tested-to-shows-quant-judgment): deepen every project.
@@ -39,7 +39,8 @@ it, and what it changed. The plans behind both rounds are in [PLAN.md](PLAN.md).
   - on a genuinely European chain the correction makes things *worse*, as it should, so
     it isn't a free fit.
 - **What it fixed.** The call/put vol gap at the forward shrinks from as much as −1.08
-  vol points to within ±0.03 out to nine months. It overshoots to +0.20 and +0.37 at 15
+  vol points to within ±0.03 from 21 days to nine months, apart from +0.07 at 104 days
+  (on 3–4 strikes; it was +0.06 before). It overshoots to +0.20 and +0.37 at 15
   and 21 months. The likely reason, untested and stated in the README, is that the tree
   models dividends as a smooth yield rather than SPY's quarterly payments. The 21-month
   at-the-money vol falls from 18.0% to 16.6%. There, the at-the-money-forward put is about
@@ -68,7 +69,8 @@ size/book-to-market portfolios, exactly as downloaded on 2026-09-29, with SHA-25
 and sample periods (reports use Jul 1963 to Jul 2026). Before, these two downloaded live,
 and French's small revisions moved some figures in the last digit (e.g. the CAPM GRS
 p-value 7.5e-11 → 7.4e-11). Now two runs give byte-identical output with the network
-switched off, and every file read from a snapshot is checked against its hash. No
+switched off, and every French file read from a snapshot is checked against its hash
+(the older snapshot's Yahoo `returns.csv` has no hash yet). No
 conclusion changed. One README sentence was corrected: the Fama-MacBeth market premium is
 insignificant in every model, but under FF6 it's positive (+1.3%/yr), not negative.
 Tests 50 → 58.
@@ -78,9 +80,27 @@ Tests 50 → 58.
 The bot now has a `pyproject.toml` and passes `ruff` and strict `mypy` on its source
 modules. Responses from the API are typed as `dict[str, Any]` and cast at the client
 boundary. As in the three `src/`-layout projects, the tests themselves aren't type-checked.
-Three deliberate test exceptions carry a `noqa` with the reason (for example, a test that
+Two deliberate test exceptions carry a `noqa` with the reason (for example, a test that
 passes a timezone-naive datetime on purpose to check it's rejected). CI now runs lint and
 types for five of the six projects.
+
+## Round 3 verification
+
+A fresh agent re-ran the three changed projects from a clean clone with the network cut.
+All CI checks pass, the 938-test total matches, and every committed output regenerated
+byte-identically (only a timing field changed). It checked about 110 options numbers and
+every fama-french number. It found only document errors, all fixed:
+- the "±0.03 out to nine months" claim missed +0.07 at 104 days;
+- a median parity excess quoted as 5 cents that is 6;
+- a "575x" that is the Asian control variate's *variance* ratio (its standard error falls
+  about 24x);
+- a stale "CRR lattice" where the code uses Leisen-Reimer;
+- the Alpaca README's "retried up to 3 times", which is 3 attempts (2 retries);
+- the HML spanning figure (t = 0.75) labelled as "given the other FF5 factors" when it
+  comes from the FF6 regression, which includes momentum. The conclusion that HML is
+  redundant holds either way; the label is fixed;
+- an overstated hash guarantee: fama-french's older snapshot has an unhashed Yahoo
+  returns file. That is now stated rather than fixed.
 
 ---
 

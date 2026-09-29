@@ -71,7 +71,7 @@ deep-ITM American puts in the forward-fitting window pull the parity forward dow
 at a month and 86bp at 21 months. The surface now removes every quote's early-exercise
 premium and uses the de-Americanised parity forward (item B). On the surface itself the
 call/put gap at the forward goes from -0.24 / -0.26 / -0.51 / -1.08 vol points at 73 / 272
-/ 455 / 637 days to -0.01 / +0.03 / +0.20 / +0.37. So it is fixed out to nine months and
+/ 455 / 637 days to -0.01 / +0.03 / +0.20 / +0.37. So it is fixed out to nine months (within ±0.03, apart from +0.07 at 104 days on 3-4 strikes, which was +0.06 before) and
 over-corrected at 15-21 months, on three strikes per expiry, against a bid-ask band of
 0.07-0.09. The leading suspect is the tree's continuous dividend yield (below); it is not
 tested.
@@ -180,7 +180,7 @@ which is in the data. Funding is the leading hypothesis, stated as a hypothesis.
 72 quotes are offered below intrinsic (on American options, an instant arbitrage), 100
 adjacent-strike pairs are not monotone, and 128 call/put pairs breach the American bound
 `C - P <= S - K e^(-r tau)` -- nearly all deep in the money. They are what drive the
-out-of-sample parity violations (33% of pairs, unchanged by the American adjustment). The
+out-of-sample parity violations (33.1% of pairs before the American adjustment, 34.1% after). The
 surface avoids most of them by using OTM quotes only, but nothing filters them out of the
 forward fit or the butterfly check explicitly.
 
