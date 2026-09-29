@@ -112,7 +112,7 @@ def test_arbitrage_report_detects_a_planted_butterfly_violation(
 
 
 def test_spread_aware_tolerance_matters_on_real_quotes(
-    cached_spy_snapshot: data_mod.ChainSnapshot,
+    spy_surface: pd.DataFrame,
 ) -> None:
     """The finding: 26% of SPY strike triples look concave; 3% actually are.
 
@@ -121,9 +121,7 @@ def test_spread_aware_tolerance_matters_on_real_quotes(
     rounding. Netting off the bid-ask cost of the three legs leaves only the triples that
     could really be bought for less than nothing.
     """
-    clean, _ = data_mod.clean_chain(cached_spy_snapshot)
-    curve = data_mod.RateCurve([0.25, 30.0], [0.039, 0.05])
-    surf = surface_mod.build_surface(cached_spy_snapshot, clean, curve)
+    surf = spy_surface
     report = surface_mod.arbitrage_report(surf)
     assert report.butterfly_rate_zero_tol > 0.15
     assert report.butterfly_rate < report.butterfly_rate_zero_tol / 4.0
@@ -132,11 +130,9 @@ def test_spread_aware_tolerance_matters_on_real_quotes(
 
 
 def test_real_spy_term_structure_is_upward_sloping(
-    cached_spy_snapshot: data_mod.ChainSnapshot,
+    spy_surface: pd.DataFrame,
 ) -> None:
-    clean, _ = data_mod.clean_chain(cached_spy_snapshot)
-    curve = data_mod.RateCurve([0.25, 30.0], [0.039, 0.05])
-    surf = surface_mod.build_surface(cached_spy_snapshot, clean, curve)
+    surf = spy_surface
     term = surface_mod.atm_term_structure(surf)
     assert len(term) >= 8
     assert (term["atm_vol"] > 0.05).all()
@@ -147,7 +143,9 @@ def test_real_spy_term_structure_is_upward_sloping(
     assert term["atm_vol"].iloc[-1] > term["atm_vol"].iloc[0]
 
 
-def test_real_spy_smile_has_a_put_skew(cached_spy_snapshot: data_mod.ChainSnapshot) -> None:
+def test_real_spy_smile_has_a_put_skew(
+    spy_surface: pd.DataFrame,
+) -> None:
     """A 5%-moneyness risk reversal is positive at every expiry with coverage.
 
     Skew is measured by *interpolating* the smile to k = -0.05 and k = +0.05 rather than
@@ -156,9 +154,7 @@ def test_real_spy_smile_has_a_put_skew(cached_spy_snapshot: data_mod.ChainSnapsh
     call quotes are nickel options where the $0.01 tick is a fifth of the price, so their
     implied vols dominate any average they appear in.
     """
-    clean, _ = data_mod.clean_chain(cached_spy_snapshot)
-    curve = data_mod.RateCurve([0.25, 30.0], [0.039, 0.05])
-    surf = surface_mod.build_surface(cached_spy_snapshot, clean, curve)
+    surf = spy_surface
 
     checked = 0
     for expiry in sorted(surf["expiry"].unique()):
@@ -171,20 +167,23 @@ def test_real_spy_smile_has_a_put_skew(cached_spy_snapshot: data_mod.ChainSnapsh
         checked += 1
         put_5, atm_0, call_5 = np.interp([-0.05, 0.0, 0.05], k, vol)
         assert put_5 > atm_0 > call_5
-        assert put_5 - call_5 > 0.02  # a meaningful risk reversal, not a marginal one
+        # A meaningful risk reversal, not a marginal one. On the de-Americanised surface
+        # it falls from ~7 vol points at three weeks to ~2 at 21 months (the early-exercise
+        # premium comes off the near-the-money puts most); 2.5 before the correction.
+        assert put_5 - call_5 > 0.015
     assert checked >= 6
 
 
-def test_real_spy_call_wing_turns_up(cached_spy_snapshot: data_mod.ChainSnapshot) -> None:
+def test_real_spy_call_wing_turns_up(
+    spy_surface: pd.DataFrame,
+) -> None:
     """The smile bottoms out on the call side, not at the forward -- a real feature.
 
     This is why the skew test above interpolates at a fixed moneyness instead of averaging
     "everything beyond k = +0.1": past the trough the call wing rises back above the
     at-the-money level, and a wide window would report the wrong sign.
     """
-    clean, _ = data_mod.clean_chain(cached_spy_snapshot)
-    curve = data_mod.RateCurve([0.25, 30.0], [0.039, 0.05])
-    surf = surface_mod.build_surface(cached_spy_snapshot, clean, curve)
+    surf = spy_surface
     smile = surface_mod.smile_slice(surf, sorted(surf["expiry"].unique())[-1])
     wide = smile.loc[smile["log_moneyness"].between(-0.05, 0.5)]
     trough_k = float(wide.loc[wide["implied_vol"].idxmin(), "log_moneyness"])
@@ -282,7 +281,9 @@ def test_keeping_both_legs_gives_matching_vols(
     without it the surface has a visible kink where the two legs meet.
     """
     clean, _ = data_mod.clean_chain(synthetic_snapshot)
-    both = surface_mod.build_surface(synthetic_snapshot, clean, flat_rate_curve, otm_only=False)
+    both = surface_mod.build_surface(
+        synthetic_snapshot, clean, flat_rate_curve, otm_only=False, exercise="european"
+    )
     pivot = both.pivot_table(
         index=["tau", "strike"], columns="option_type", values="implied_vol"
     ).dropna()

@@ -64,6 +64,7 @@ __all__ = [
     "implied_forward_curve",
     "load_chain",
     "load_rate_curve",
+    "parity_pairs",
     "year_fraction",
 ]
 
@@ -478,6 +479,21 @@ def load_rate_curve(
     return RateCurve(tenors, rates)
 
 
+def parity_pairs(group: pd.DataFrame, spot: float, moneyness_window: float = 0.10) -> pd.DataFrame:
+    """Strikes of one expiry with both a call and a put mid, within the forward window.
+
+    Returns a frame indexed by strike with ``call`` and ``put`` mid columns (empty if the
+    expiry lacks either leg). Shared by :func:`implied_forward_curve` and the
+    American-adjusted forward so the two always fit the same pairs.
+    """
+    wide = group.pivot_table(index="strike", columns="option_type", values="mid", aggfunc="mean")
+    if not {"call", "put"}.issubset(wide.columns):
+        return pd.DataFrame(columns=["call", "put"], dtype=np.float64)
+    pairs = wide[["call", "put"]].dropna()
+    lo, hi = spot * (1.0 - moneyness_window), spot * (1.0 + moneyness_window)
+    return pairs.loc[(pairs.index >= lo) & (pairs.index <= hi)]
+
+
 def implied_forward_curve(
     quotes: pd.DataFrame,
     spot: float,
@@ -519,14 +535,7 @@ def implied_forward_curve(
     rows: list[dict[str, object]] = []
     for expiry, group in quotes.groupby("expiry", sort=True):
         tau = float(group["tau"].iloc[0])
-        wide = group.pivot_table(
-            index="strike", columns="option_type", values="mid", aggfunc="mean"
-        )
-        if not {"call", "put"}.issubset(wide.columns):
-            continue
-        pairs = wide.dropna()
-        lo, hi = spot * (1.0 - moneyness_window), spot * (1.0 + moneyness_window)
-        pairs = pairs.loc[(pairs.index >= lo) & (pairs.index <= hi)]
+        pairs = parity_pairs(group, spot, moneyness_window)
         if len(pairs) < min_pairs:
             continue
 

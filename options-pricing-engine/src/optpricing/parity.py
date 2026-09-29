@@ -4,9 +4,10 @@ For European options on an asset with forward :math:`F` and discount factor :mat
 
 .. math:: C(K) - P(K) = D\,(F - K).
 
-**The circularity.** The surface pipeline does not know :math:`F`: it *infers* it from
+**The circularity.** The pipeline does not know :math:`F`: it *infers* it from
 this very relation (:func:`optpricing.data.implied_forward_curve` takes the median of
-:math:`K + (C-P)/D` over strikes within 10% of spot). Checking parity against that
+:math:`K + (C-P)/D` over strikes within 10% of spot; the default American surface does the
+same with the early-exercise premia removed). Checking parity against that
 forward cannot test the *level* of parity -- the median residual inside the window is
 zero by construction. What it can test is the **shape**: one forward per expiry must
 explain every strike, so the residuals must be flat in :math:`K`, and they must sit inside
@@ -29,6 +30,11 @@ European on the same lattice, so the discretisation error cancels) and
 
 .. math:: \hat F_i = K_i + \big(C_i - P_i - (e^C_i - e^P_i)\big)/D.
 
+The same premium and forward are what :func:`optpricing.surface.build_surface` uses by
+default (the lattice code lives in :mod:`optpricing.american`). Given that surface,
+:func:`american_adjusted_forward` reproduces the surface's own forward, which is the
+self-consistency the surface's outer iteration converges to.
+
 The tree uses a continuous dividend yield. SPY pays discrete quarterly dividends, which
 give deep in-the-money *calls* an exercise premium just before each ex-date; a
 continuous yield cannot represent that, so the call premium is understated here.
@@ -37,14 +43,15 @@ continuous yield cannot represent that, so the call premium is understated here.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 
 import numpy as np
 import pandas as pd
 
-from . import binomial
+from . import american
 from . import implied_vol as iv
 from .data import ChainSnapshot, RateCurve
-from .types import ExerciseStyle, OptionType, to_float
+from .types import OptionType, to_float
 
 __all__ = [
     "ParityResult",
@@ -121,19 +128,16 @@ def early_exercise_premia(
 
     Both legs are priced on the same CRR lattice, so the lattice's own discretisation
     error (which is far larger than the premium for short expiries) cancels in the
-    difference.
+    difference. See :func:`optpricing.american.early_exercise_premium`.
 
     Returns:
         ``(call_premium, put_premium)``, each the shape of ``strikes``.
     """
-    call = np.empty(len(strikes))
-    put = np.empty(len(strikes))
-    for i, (k, vol) in enumerate(zip(strikes, vols, strict=True)):
-        for out, side in ((call, OptionType.CALL), (put, OptionType.PUT)):
-            args = (spot, float(k), tau, rate, float(vol), side)
-            american = binomial.price(*args, ExerciseStyle.AMERICAN, steps, "crr", dividend_yield)
-            european = binomial.price(*args, ExerciseStyle.EUROPEAN, steps, "crr", dividend_yield)
-            out[i] = max(american - european, 0.0)
+    k = np.asarray(strikes, dtype=np.float64)
+    v = np.asarray(vols, dtype=np.float64)
+    args = (spot, k, tau, rate, dividend_yield, v)
+    call = american.early_exercise_premium(*args, OptionType.CALL, steps)
+    put = american.early_exercise_premium(*args, OptionType.PUT, steps)
     return call, put
 
 
@@ -144,26 +148,30 @@ def american_adjusted_forward(
     forward_curve: pd.DataFrame,
     surface: pd.DataFrame,
     moneyness_window: float = 0.10,
-    iterations: int = 3,
+    iterations: int = 20,
     steps: int = 200,
+    tol: float = 1e-7,
 ) -> pd.DataFrame:
     """Re-solve parity for the forward with the early-exercise premia removed.
 
     Uses the same pairs as :func:`optpricing.data.implied_forward_curve` (both legs clean,
     strike within ``moneyness_window`` of spot) and the same median estimator, so the only
-    difference from the pipeline's forward is the American adjustment. The premia depend
-    on the dividend yield, which depends on the forward, so the two are iterated;
-    three passes move the forward by well under a cent.
+    difference from the European-parity forward is the American adjustment. The premia
+    depend on the dividend yield, which depends on the forward, so the two are iterated
+    (:func:`optpricing.american.american_forward`) until the forward moves by less than
+    ``tol`` (relative) or ``iterations`` passes are spent.
 
     Args:
         pairs: Output of :func:`matched_pairs` (with ``in_clean`` populated).
         spot: Underlying price.
         rate_curve: Discount curve (the same one the pipeline uses).
-        forward_curve: The pipeline's unadjusted forward curve, used as the start point.
+        forward_curve: The European-parity forward curve, used as the start point and as
+            the baseline the shift is measured from.
         surface: Implied-vol surface supplying the vol for each strike's tree.
         moneyness_window: Strike window for the forward fit, as a fraction of spot.
-        iterations: Fixed-point passes.
+        iterations: Maximum fixed-point passes.
         steps: Tree steps.
+        tol: Relative tolerance on the forward.
 
     Returns:
         One row per expiry: ``expiry, tau, forward_raw, forward_adjusted,
@@ -186,14 +194,21 @@ def american_adjusted_forward(
         strikes = g["strike"].to_numpy(dtype=np.float64)
         y = (g["call_mid"] - g["put_mid"]).to_numpy(dtype=np.float64)
         per_strike_raw = strikes + y / disc
-        forward = float(f["forward"])
-        per_strike = per_strike_raw
-        for _ in range(iterations):
-            q = rate - np.log(forward / spot) / tau
-            vols = _vol_at(surface, f["expiry"], np.log(strikes / forward))
-            ee_c, ee_p = early_exercise_premia(spot, strikes, tau, rate, q, vols, steps)
-            per_strike = strikes + (y - (ee_c - ee_p)) / disc
-            forward = float(np.median(per_strike))
+        sol = american.american_forward(
+            strikes,
+            g["call_mid"].to_numpy(dtype=np.float64),
+            g["put_mid"].to_numpy(dtype=np.float64),
+            spot,
+            tau,
+            rate,
+            disc,
+            partial(_vol_at, surface, f["expiry"]),
+            float(f["forward"]),
+            steps=steps,
+            tol=tol,
+            max_iter=iterations,
+        )
+        forward, per_strike = sol.forward, sol.per_strike
         rows.append(
             {
                 "expiry": f["expiry"],
@@ -225,7 +240,7 @@ def parity_residuals(
 
     Columns added:
 
-    * ``theo_european`` -- :math:`D(F-K)` with the pipeline's forward.
+    * ``theo_european`` -- :math:`D(F-K)` with the European-parity forward.
     * ``residual`` -- :math:`C_{mid} - P_{mid} -` ``theo_european``.
     * ``lower`` / ``upper`` -- the tradeable range of the synthetic,
       :math:`C_{bid} - P_{ask}` and :math:`C_{ask} - P_{bid}`.
@@ -321,12 +336,12 @@ def summarise_residuals(res: pd.DataFrame) -> pd.DataFrame:
 def violation_distribution(res: pd.DataFrame) -> pd.DataFrame:
     """How many pairs violate parity beyond the spread, and by how much, in dollars.
 
-    One row per (theory, sample): theory is the European relation with the pipeline's
-    forward or the American-adjusted one; the sample is the strikes used to fit the
+    One row per (theory, sample): theory is the European relation with the
+    European-parity forward, or the American-adjusted one; the sample is the strikes used to fit the
     forward (in-window) or the rest (out-of-window).
     """
     rows: list[dict[str, object]] = []
-    for label, suffix in (("European, pipeline forward", ""), ("American-adjusted", "_american")):
+    for label, suffix in (("European parity", ""), ("American-adjusted", "_american")):
         for sample, mask in (("in-window", res["in_window"]), ("out-of-window", ~res["in_window"])):
             g = res.loc[mask]
             excess = g.loc[g[f"violation{suffix}"], f"excess{suffix}"]
@@ -353,7 +368,7 @@ def call_put_vol_gap(
 
     Under European parity with the right forward, a call and a put on the same strike
     must imply the same vol, so this gap is a direct read on the forward. It is computed
-    twice: with the pipeline's forward on the raw mids, and with the American-adjusted
+    twice: with the European-parity forward on the raw mids, and with the American-adjusted
     forward on *de-Americanised* mids (each leg minus its early-exercise premium).
     Needs the ``_american`` columns from :func:`parity_residuals`.
     """
@@ -363,7 +378,7 @@ def call_put_vol_gap(
         rate = float(rate_curve.rate(tau)[0])
         row: dict[str, object] = {"expiry": expiry, "days": tau * 365.0}
         for label, fcol, adjust in (
-            ("pipeline", "forward", False),
+            ("european", "forward", False),
             ("american", "forward_adjusted", True),
         ):
             fwd = float(g[fcol].iloc[0])

@@ -68,7 +68,7 @@ def test_the_american_adjustment_is_falsifiable(european_result) -> None:
 
 def test_european_chain_has_no_call_put_vol_gap(european_result) -> None:
     gap = european_result.vol_gap
-    assert gap["gap_pipeline"].abs().max() < 1e-4
+    assert gap["gap_european"].abs().max() < 1e-4
 
 
 def test_monotonicity_and_upper_bound_hold_on_clean_quotes(european_result) -> None:
@@ -159,7 +159,7 @@ def test_de_americanised_vols_meet_at_the_forward(american_chain) -> None:
     _, _, result = american_chain
     gap = result.vol_gap
     assert (gap["gap_american"].abs() < 0.05).all()
-    assert (gap["gap_pipeline"].abs() > gap["gap_american"].abs()).all()
+    assert (gap["gap_european"].abs() > gap["gap_american"].abs()).all()
 
 
 def test_early_exercise_premia_are_put_only_without_dividends() -> None:
