@@ -25,10 +25,11 @@ import pytest
 from scipy import integrate, optimize
 from scipy.stats import norm
 
-from conftest import NY, reference_vol
+from conftest import NY, SPY_TEST_CURVE, reference_vol
 from optpricing import american, binomial, parity
 from optpricing import blackscholes as bs
 from optpricing import data as data_mod
+from optpricing import dividends as dv
 from optpricing import surface as surface_mod
 from optpricing.dividends import DividendSchedule
 from optpricing.types import ExerciseStyle, OptionType
@@ -378,3 +379,28 @@ def test_parity_module_reproduces_the_discrete_surface_forward(
     # Every in-window pair is priced to within its spread once the premia are right.
     inside = result.residuals.loc[result.residuals["in_window"]]
     assert not inside["violation_american"].any()
+
+
+# --- the committed SPY snapshot ---------------------------------------------------------
+
+
+def test_spy_discrete_surface_with_the_committed_dividends(cached_spy_snapshot, spy_build) -> None:
+    """The real path: committed projection -> discrete surface, against the continuous one."""
+    schedule, frame, _ = dv.load_committed_schedule(cached_spy_snapshot.asof)
+    assert len(schedule) == len(frame) >= 7
+    clean, _ = data_mod.clean_chain(cached_spy_snapshot)
+    disc = surface_mod.build_surface_detailed(
+        cached_spy_snapshot, clean, SPY_TEST_CURVE, dividends=schedule
+    )
+    assert disc.converged and disc.unconverged_quotes == 0
+    f = disc.forwards.merge(spy_build.forwards, on="expiry", suffixes=("", "_cont"))
+    no_divs = f["pv_dividends"] == 0.0
+    # Before the first ex-date the two lattices are the same lattice (the forwards agree to
+    # the outer loop's tolerance: the two runs stop after different numbers of passes).
+    assert no_divs.sum() >= 5
+    assert np.allclose(f.loc[no_divs, "forward"], f.loc[no_divs, "forward_cont"], rtol=1e-6)
+    # After it, the calls' pre-ex-date premium pulls the parity forward down.
+    assert (f.loc[~no_divs, "forward"] < f.loc[~no_divs, "forward_cont"]).all()
+    calls = disc.surface.loc[disc.surface["option_type"] == "call"]
+    assert calls.loc[calls["tau"] < float(schedule.times[0]), "ee_premium"].max() == 0.0
+    assert calls.loc[calls["tau"] > 1.5, "ee_premium"].max() > 0.1

@@ -369,6 +369,7 @@
   ],
   "surface": {
     "exercise": "american",
+    "dividends": "continuous",
     "n_quotes": 2010,
     "n_expiries": 12,
     "atm_term_structure": [
@@ -512,7 +513,9 @@
         "forward": 759.9749943467654,
         "dividend_yield": 0.029313906871275983,
         "forward_shift_bp": 0.13909751105600776,
-        "forward_iterations": 6
+        "forward_iterations": 6,
+        "pv_dividends": 0.0,
+        "residual_yield": 0.029313906871275983
       },
       {
         "expiry": "2026-09-25",
@@ -524,7 +527,9 @@
         "forward": 760.1927977977593,
         "dividend_yield": 0.017483346707634153,
         "forward_shift_bp": 0.3386995519760738,
-        "forward_iterations": 7
+        "forward_iterations": 7,
+        "pv_dividends": 0.0,
+        "residual_yield": 0.017483346707634153
       },
       {
         "expiry": "2026-09-30",
@@ -536,7 +541,9 @@
         "forward": 760.4447680083963,
         "dividend_yield": 0.016390697726677977,
         "forward_shift_bp": 0.4268874058621641,
-        "forward_iterations": 7
+        "forward_iterations": 7,
+        "pv_dividends": 0.0,
+        "residual_yield": 0.016390697726677977
       },
       {
         "expiry": "2026-10-09",
@@ -548,7 +555,9 @@
         "forward": 761.5625214370828,
         "dividend_yield": 0.0007060698473052712,
         "forward_shift_bp": 1.8170091621061424,
-        "forward_iterations": 9
+        "forward_iterations": 9,
+        "pv_dividends": 0.0,
+        "residual_yield": 0.0007060698473052712
       },
       {
         "expiry": "2026-10-16",
@@ -560,7 +569,9 @@
         "forward": 762.1602143082424,
         "dividend_yield": 5.976309798782359e-05,
         "forward_shift_bp": 2.062301763554597,
-        "forward_iterations": 9
+        "forward_iterations": 9,
+        "pv_dividends": 0.0,
+        "residual_yield": 5.976309798782359e-05
       },
       {
         "expiry": "2026-10-30",
@@ -572,7 +583,9 @@
         "forward": 763.4854663224103,
         "dividend_yield": -0.002044963214945121,
         "forward_shift_bp": 2.3922068134774044,
-        "forward_iterations": 9
+        "forward_iterations": 9,
+        "pv_dividends": 0.0,
+        "residual_yield": -0.002044963214945121
       },
       {
         "expiry": "2026-11-30",
@@ -584,7 +597,9 @@
         "forward": 766.2886422257747,
         "dividend_yield": -0.002932707424180829,
         "forward_shift_bp": 5.140909733982735,
-        "forward_iterations": 9
+        "forward_iterations": 9,
+        "pv_dividends": 0.0,
+        "residual_yield": -0.002932707424180829
       },
       {
         "expiry": "2026-12-31",
@@ -596,7 +611,9 @@
         "forward": 767.6279424054935,
         "dividend_yield": 0.0034908614995076553,
         "forward_shift_bp": 10.89103061592711,
-        "forward_iterations": 10
+        "forward_iterations": 10,
+        "pv_dividends": 0.0,
+        "residual_yield": 0.0034908614995076553
       },
       {
         "expiry": "2027-03-19",
@@ -608,7 +625,9 @@
         "forward": 775.5655937220454,
         "dividend_yield": -0.0015080696758075565,
         "forward_shift_bp": 19.89087059544037,
-        "forward_iterations": 15
+        "forward_iterations": 15,
+        "pv_dividends": 0.0,
+        "residual_yield": -0.0015080696758075565
       },
       {
         "expiry": "2027-06-17",
@@ -620,7 +639,9 @@
         "forward": 783.9225531625412,
         "dividend_yield": -0.0019020546706089853,
         "forward_shift_bp": 34.81884465789564,
-        "forward_iterations": 14
+        "forward_iterations": 14,
+        "pv_dividends": 0.0,
+        "residual_yield": -0.0019020546706089853
       },
       {
         "expiry": "2027-12-17",
@@ -632,7 +653,9 @@
         "forward": 801.004800153598,
         "dividend_yield": -0.001502481302706124,
         "forward_shift_bp": 58.50091998166107,
-        "forward_iterations": 9
+        "forward_iterations": 9,
+        "pv_dividends": 0.0,
+        "residual_yield": -0.001502481302706124
       },
       {
         "expiry": "2028-06-16",
@@ -644,7 +667,9 @@
         "forward": 819.1002112094773,
         "dividend_yield": -0.0013441159746204953,
         "forward_shift_bp": 85.79561579068474,
-        "forward_iterations": 10
+        "forward_iterations": 10,
+        "pv_dividends": 0.0,
+        "residual_yield": -0.0013441159746204953
       }
     ],
     "de_americanisation": {
@@ -743,7 +768,7 @@
           "strikes": 4
         }
       ],
-      "american": [
+      "continuous": [
         {
           "expiry": "2026-09-23",
           "days": 5.2017670722337686,
@@ -815,6 +840,80 @@
           "days": 637.2017670722337,
           "gap_vol_points": 0.3668955802273416,
           "strikes": 3
+        }
+      ],
+      "discrete": [
+        {
+          "expiry": "2026-09-23",
+          "days": 5.2017670722337686,
+          "gap_vol_points": 0.07123020349270315,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-09-25",
+          "days": 7.201767072233761,
+          "gap_vol_points": 0.14592473871043038,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-09-30",
+          "days": 12.201767072233762,
+          "gap_vol_points": 0.2019402603981861,
+          "strikes": 16
+        },
+        {
+          "expiry": "2026-10-09",
+          "days": 21.201767072233782,
+          "gap_vol_points": 0.024934842633696913,
+          "strikes": 16
+        },
+        {
+          "expiry": "2026-10-16",
+          "days": 28.201767072233775,
+          "gap_vol_points": 0.019981838136727548,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-10-30",
+          "days": 42.20176707223379,
+          "gap_vol_points": -0.008222911180835735,
+          "strikes": 16
+        },
+        {
+          "expiry": "2026-11-30",
+          "days": 73.2017670722338,
+          "gap_vol_points": -0.011071763265699253,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-12-31",
+          "days": 104.20176707223379,
+          "gap_vol_points": 0.0991200249349844,
+          "strikes": 3
+        },
+        {
+          "expiry": "2027-03-19",
+          "days": 182.2017670722338,
+          "gap_vol_points": 0.01088071590510109,
+          "strikes": 3
+        },
+        {
+          "expiry": "2027-06-17",
+          "days": 272.20176707223385,
+          "gap_vol_points": 0.01937622393394789,
+          "strikes": 4
+        },
+        {
+          "expiry": "2027-12-17",
+          "days": 455.20176707223374,
+          "gap_vol_points": 0.16712733332033547,
+          "strikes": 3
+        },
+        {
+          "expiry": "2028-06-16",
+          "days": 637.2017670722337,
+          "gap_vol_points": 0.2141059693127556,
+          "strikes": 4
         }
       ]
     }
@@ -1034,6 +1133,7 @@
         "forward_shift_bp": 0.13909031442604913,
         "dividend_yield_raw": 0.030289925938089678,
         "dividend_yield_adjusted": 0.029313957368227214,
+        "residual_yield": 0.029313957368227214,
         "dispersion_raw": 0.39827104116466217,
         "dispersion_adjusted": 0.4039910859629572
       },
@@ -1046,6 +1146,7 @@
         "forward_shift_bp": 0.3385325493443503,
         "dividend_yield_raw": 0.0191999149010582,
         "dividend_yield_adjusted": 0.017484193081805318,
+        "residual_yield": 0.017484193081805318,
         "dispersion_raw": 0.20861763509924458,
         "dispersion_adjusted": 0.17179851753235198
       },
@@ -1058,6 +1159,7 @@
         "forward_shift_bp": 0.42688648569599863,
         "dividend_yield_raw": 0.01766764865158874,
         "dividend_yield_adjusted": 0.0163907004791182,
+        "residual_yield": 0.0163907004791182,
         "dispersion_raw": 0.3691450519203272,
         "dispersion_adjusted": 0.25222662701946774
       },
@@ -1070,6 +1172,7 @@
         "forward_shift_bp": 1.8170261347560945,
         "dividend_yield_raw": 0.003833866207039842,
         "dividend_yield_adjusted": 0.0007060406332730987,
+        "residual_yield": 0.0007060406332730987,
         "dispersion_raw": 1.248359912931619,
         "dispersion_adjusted": 0.2445668241448402
       },
@@ -1082,6 +1185,7 @@
         "forward_shift_bp": 2.062403860416673,
         "dividend_yield_raw": 0.002728611945556181,
         "dividend_yield_adjusted": 5.963098686861262e-05,
+        "residual_yield": 5.963098686861262e-05,
         "dispersion_raw": 1.0009640838627547,
         "dispersion_adjusted": 0.21683023094578857
       },
@@ -1094,6 +1198,7 @@
         "forward_shift_bp": 2.392181495056711,
         "dividend_yield_raw": 2.3791545141399473e-05,
         "dividend_yield_adjusted": -0.002044941322464619,
+        "residual_yield": -0.002044941322464619,
         "dispersion_raw": 0.7685926420490432,
         "dispersion_adjusted": 0.22395779464841326
       },
@@ -1106,6 +1211,7 @@
         "forward_shift_bp": 5.14090626984709,
         "dividend_yield_raw": -0.00036999621543943456,
         "dividend_yield_adjusted": -0.0029327056977748386,
+        "residual_yield": -0.0029327056977748386,
         "dispersion_raw": 1.5596755440137713,
         "dispersion_adjusted": 0.7308337593116221
       },
@@ -1118,6 +1224,7 @@
         "forward_shift_bp": 10.891023932277921,
         "dividend_yield_raw": 0.007303717213374056,
         "dividend_yield_adjusted": 0.003490863838121437,
+        "residual_yield": 0.003490863838121437,
         "dispersion_raw": 0.9237123978699628,
         "dispersion_adjusted": 0.8717292830576753
       },
@@ -1130,6 +1237,7 @@
         "forward_shift_bp": 19.891485016438892,
         "dividend_yield_raw": 0.002472658333374303,
         "dividend_yield_adjusted": -0.001508192516802398,
+        "residual_yield": -0.001508192516802398,
         "dispersion_raw": 2.834000308389136,
         "dispersion_adjusted": 0.41129100251168893
       },
@@ -1142,6 +1250,7 @@
         "forward_shift_bp": 34.81880211043675,
         "dividend_yield_raw": 0.0027587541987291325,
         "dividend_yield_adjusted": -0.0019020489851435604,
+        "residual_yield": -0.0019020489851435604,
         "dispersion_raw": 2.6492466682282156,
         "dispersion_adjusted": 0.8358928124250724
       },
@@ -1154,6 +1263,7 @@
         "forward_shift_bp": 58.500872590785406,
         "dividend_yield_raw": 0.0031747018351541423,
         "dividend_yield_adjusted": -0.001502477524806714,
+        "residual_yield": -0.001502477524806714,
         "dispersion_raw": 3.538530280562213,
         "dispersion_adjusted": 1.630169345360855
       },
@@ -1166,6 +1276,7 @@
         "forward_shift_bp": 85.79554448388205,
         "dividend_yield_raw": 0.0035494402940441996,
         "dividend_yield_adjusted": -0.0013441119247913635,
+        "residual_yield": -0.0013441119247913635,
         "dispersion_raw": 4.180588213528836,
         "dispersion_adjusted": 2.1794770042037044
       }
@@ -1560,7 +1671,7 @@
       2.26116081877797,
       2.261163196472973
     ],
-    "seconds": 109.49360418319702,
+    "seconds": 122.52794623374939,
     "body_rmse_vol_points": 1.0996751208614497,
     "short_dated_put_wing_rmse_vol_points": 5.261499652053653,
     "per_expiry_flat_vols": [
@@ -1654,6 +1765,829 @@
     "asof": "2026-09-18T11:09:27.324959-04:00",
     "spot": 759.8699951171875
   },
+  "dividends": {
+    "manifest": {
+      "ticker": "SPY",
+      "source": "Yahoo Finance via yfinance: Ticker(\"SPY\").dividends",
+      "downloaded_at_utc": "2026-09-29T05:42:04+00:00",
+      "yfinance_version": "1.7.0",
+      "files": {
+        "SPY_dividends_2026-09-29.csv": {
+          "sha256": "7ebe1c0ff98c4ee98f9c9637e7624c89ef56d5b9c1c24a23464cac7e8bbdfa06",
+          "rows": 136,
+          "content": "raw download: ex-date (09:30 New York) and cash amount per share"
+        },
+        "SPY_dividend_projection_2026-09-18.csv": {
+          "sha256": "5bb72729cb4b0bbe62df21598d4f2b1754ec29cafc5e8e525e98c7b9c7f0b74f",
+          "rows": 7,
+          "content": "projected ex-dates and amounts after the option snapshot"
+        }
+      },
+      "projection": {
+        "file": "SPY_dividend_projection_2026-09-18.csv",
+        "asof": "2026-09-18T11:09:27.324959-04:00",
+        "option_snapshot": "SPY_2026-09-18.csv",
+        "until": "2028-06-16",
+        "rule": "repeat the last four quarterly amounts known at asof, each on the same quarter of later years, no growth; ex-date = third Friday of Mar/Jun/Sep/Dec, or the business day before when it is Good Friday or Juneteenth (observed, from 2022)",
+        "last_known_ex_dates": [
+          "2025-12-19",
+          "2026-03-20",
+          "2026-06-18",
+          "2026-09-18"
+        ],
+        "trailing_year_growth": 0.0453542872897712
+      },
+      "ex_date_rule_check": {
+        "since": 2000,
+        "dividends": 108,
+        "matched": 107,
+        "mismatches": [
+          {
+            "ex_date": "2004-11-15",
+            "rule_date": "None"
+          }
+        ]
+      }
+    },
+    "projection": [
+      {
+        "ex_date": "2026-12-18",
+        "ex_time": "2026-12-18 09:30:00-05:00",
+        "amount": 1.993,
+        "basis_ex_date": "2025-12-19"
+      },
+      {
+        "ex_date": "2027-03-19",
+        "ex_time": "2027-03-19 09:30:00-04:00",
+        "amount": 1.797,
+        "basis_ex_date": "2026-03-20"
+      },
+      {
+        "ex_date": "2027-06-17",
+        "ex_time": "2027-06-17 09:30:00-04:00",
+        "amount": 1.904,
+        "basis_ex_date": "2026-06-18"
+      },
+      {
+        "ex_date": "2027-09-17",
+        "ex_time": "2027-09-17 09:30:00-04:00",
+        "amount": 1.889,
+        "basis_ex_date": "2026-09-18"
+      },
+      {
+        "ex_date": "2027-12-17",
+        "ex_time": "2027-12-17 09:30:00-05:00",
+        "amount": 1.993,
+        "basis_ex_date": "2025-12-19"
+      },
+      {
+        "ex_date": "2028-03-17",
+        "ex_time": "2028-03-17 09:30:00-04:00",
+        "amount": 1.797,
+        "basis_ex_date": "2026-03-20"
+      },
+      {
+        "ex_date": "2028-06-16",
+        "ex_time": "2028-06-16 09:30:00-04:00",
+        "amount": 1.904,
+        "basis_ex_date": "2026-06-18"
+      }
+    ],
+    "forwards": {
+      "continuous": [
+        {
+          "expiry": "2026-09-23",
+          "tau": 0.0142514166362569,
+          "forward_european": 759.9644234307863,
+          "dividend_yield_european": 0.030289925938085972,
+          "discount": 0.99944421883154,
+          "rate": 0.0390091515989158,
+          "forward": 759.9749943467654,
+          "dividend_yield": 0.029313906871275983,
+          "forward_shift_bp": 0.13909751105600776,
+          "forward_iterations": 6,
+          "pv_dividends": 0.0,
+          "residual_yield": 0.029313906871275983
+        },
+        {
+          "expiry": "2026-09-25",
+          "tau": 0.0197308686910514,
+          "forward_european": 760.1670509738002,
+          "dividend_yield_european": 0.019199914901057352,
+          "discount": 0.9992306116831464,
+          "rate": 0.03900915159891866,
+          "forward": 760.1927977977593,
+          "dividend_yield": 0.017483346707634153,
+          "forward_shift_bp": 0.3386995519760738,
+          "forward_iterations": 7,
+          "pv_dividends": 0.0,
+          "residual_yield": 0.017483346707634153
+        },
+        {
+          "expiry": "2026-09-30",
+          "tau": 0.0334294988280377,
+          "forward_european": 760.4123069646857,
+          "dividend_yield_european": 0.017667648651590092,
+          "discount": 0.9986967935243877,
+          "rate": 0.039009151598920856,
+          "forward": 760.4447680083963,
+          "dividend_yield": 0.016390697726677977,
+          "forward_shift_bp": 0.4268874058621641,
+          "forward_iterations": 7,
+          "pv_dividends": 0.0,
+          "residual_yield": 0.016390697726677977
+        },
+        {
+          "expiry": "2026-10-09",
+          "tau": 0.0580870330746131,
+          "forward_european": 761.4241699677747,
+          "dividend_yield_european": 0.003833866207040168,
+          "discount": 0.9977366393929679,
+          "rate": 0.03900915159891983,
+          "forward": 761.5625214370828,
+          "dividend_yield": 0.0007060698473052712,
+          "forward_shift_bp": 1.8170091621061424,
+          "forward_iterations": 9,
+          "pv_dividends": 0.0,
+          "residual_yield": 0.0007060698473052712
+        },
+        {
+          "expiry": "2026-10-16",
+          "tau": 0.0772651152663939,
+          "forward_european": 762.0030662814997,
+          "dividend_yield_european": 0.0027286119455561114,
+          "discount": 0.9969904910836334,
+          "rate": 0.039009151598919434,
+          "forward": 762.1602143082424,
+          "dividend_yield": 5.976309798782359e-05,
+          "forward_shift_bp": 2.062301763554597,
+          "forward_iterations": 9,
+          "pv_dividends": 0.0,
+          "residual_yield": 5.976309798782359e-05
+        },
+        {
+          "expiry": "2026-10-30",
+          "tau": 0.1156212796499556,
+          "forward_european": 763.3028684901353,
+          "dividend_yield_european": 2.3791545141309267e-05,
+          "discount": 0.9954998680484348,
+          "rate": 0.03900915159891941,
+          "forward": 763.4854663224103,
+          "dividend_yield": -0.002044963214945121,
+          "forward_shift_bp": 2.3922068134774044,
+          "forward_iterations": 9,
+          "pv_dividends": 0.0,
+          "residual_yield": -0.002044963214945121
+        },
+        {
+          "expiry": "2026-11-30",
+          "tau": 0.2005527864992707,
+          "forward_european": 765.8949025697918,
+          "dividend_yield_european": -0.0003699962154391362,
+          "discount": 0.9922071290451722,
+          "rate": 0.0390091515989198,
+          "forward": 766.2886422257747,
+          "dividend_yield": -0.002932707424180829,
+          "forward_shift_bp": 5.140909733982735,
+          "forward_iterations": 9,
+          "pv_dividends": 0.0,
+          "residual_yield": -0.002932707424180829
+        },
+        {
+          "expiry": "2026-12-31",
+          "tau": 0.2854842933485857,
+          "forward_european": 766.7928259910993,
+          "dividend_yield_european": 0.007303717213374167,
+          "discount": 0.9889075872640698,
+          "rate": 0.03907182485161849,
+          "forward": 767.6279424054935,
+          "dividend_yield": 0.0034908614995076553,
+          "forward_shift_bp": 10.89103061592711,
+          "forward_iterations": 10,
+          "pv_dividends": 0.0,
+          "residual_yield": 0.0034908614995076553
+        },
+        {
+          "expiry": "2027-03-19",
+          "tau": 0.499182923485572,
+          "forward_european": 774.0259886442823,
+          "dividend_yield_european": 0.002472658333374282,
+          "discount": 0.9805002294723741,
+          "rate": 0.03944926475485692,
+          "forward": 775.5655937220454,
+          "dividend_yield": -0.0015080696758075565,
+          "forward_shift_bp": 19.89087059544037,
+          "forward_iterations": 15,
+          "pv_dividends": 0.0,
+          "residual_yield": -0.0015080696758075565
+        },
+        {
+          "expiry": "2027-06-17",
+          "tau": 0.7457582659513255,
+          "forward_european": 781.2024963259479,
+          "dividend_yield_european": 0.002758754198729174,
+          "discount": 0.970693612435626,
+          "rate": 0.039884772335516856,
+          "forward": 783.9225531625412,
+          "dividend_yield": -0.0019020546706089853,
+          "forward_shift_bp": 34.81884465789564,
+          "forward_iterations": 14,
+          "pv_dividends": 0.0,
+          "residual_yield": -0.0019020546706089853
+        },
+        {
+          "expiry": "2027-12-17",
+          "tau": 1.247128128965024,
+          "forward_european": 796.3461021933857,
+          "dividend_yield_european": 0.0031747018351541145,
+          "discount": 0.9504252210137702,
+          "rate": 0.04077030441619187,
+          "forward": 801.004800153598,
+          "dividend_yield": -0.001502481302706124,
+          "forward_shift_bp": 58.50091998166107,
+          "forward_iterations": 9,
+          "pv_dividends": 0.0,
+          "residual_yield": -0.001502481302706124
+        },
+        {
+          "expiry": "2028-06-16",
+          "tau": 1.745758265951325,
+          "forward_european": 812.1324706670284,
+          "dividend_yield_european": 0.003549440294044179,
+          "discount": 0.9298680606090756,
+          "rate": 0.04165099752374852,
+          "forward": 819.1002112094773,
+          "dividend_yield": -0.0013441159746204953,
+          "forward_shift_bp": 85.79561579068474,
+          "forward_iterations": 10,
+          "pv_dividends": 0.0,
+          "residual_yield": -0.0013441159746204953
+        }
+      ],
+      "discrete": [
+        {
+          "expiry": "2026-09-23",
+          "tau": 0.0142514166362569,
+          "forward_european": 759.9644234307863,
+          "dividend_yield_european": 0.030289925938085972,
+          "discount": 0.99944421883154,
+          "rate": 0.0390091515989158,
+          "forward": 759.9749943255576,
+          "dividend_yield": 0.029313908829384373,
+          "forward_shift_bp": 0.13909723199478918,
+          "forward_iterations": 5,
+          "pv_dividends": 0.0,
+          "residual_yield": 0.029313908829384373
+        },
+        {
+          "expiry": "2026-09-25",
+          "tau": 0.0197308686910514,
+          "forward_european": 760.1670509738002,
+          "dividend_yield_european": 0.019199914901057352,
+          "discount": 0.9992306116831464,
+          "rate": 0.03900915159891866,
+          "forward": 760.1927935558062,
+          "dividend_yield": 0.017483629518384416,
+          "forward_shift_bp": 0.3386437490693339,
+          "forward_iterations": 6,
+          "pv_dividends": 0.0,
+          "residual_yield": 0.017483629518384416
+        },
+        {
+          "expiry": "2026-09-30",
+          "tau": 0.0334294988280377,
+          "forward_european": 760.4123069646857,
+          "dividend_yield_european": 0.017667648651590092,
+          "discount": 0.9986967935243877,
+          "rate": 0.039009151598920856,
+          "forward": 760.444768008393,
+          "dividend_yield": 0.01639069772680408,
+          "forward_shift_bp": 0.4268874058177552,
+          "forward_iterations": 6,
+          "pv_dividends": 0.0,
+          "residual_yield": 0.01639069772680408
+        },
+        {
+          "expiry": "2026-10-09",
+          "tau": 0.0580870330746131,
+          "forward_european": 761.4241699677747,
+          "dividend_yield_european": 0.003833866207040168,
+          "discount": 0.9977366393929679,
+          "rate": 0.03900915159891983,
+          "forward": 761.5624985006277,
+          "dividend_yield": 0.0007065883386931371,
+          "forward_shift_bp": 1.8167079311237622,
+          "forward_iterations": 8,
+          "pv_dividends": 0.0,
+          "residual_yield": 0.0007065883386931371
+        },
+        {
+          "expiry": "2026-10-16",
+          "tau": 0.0772651152663939,
+          "forward_european": 762.0030662814997,
+          "dividend_yield_european": 0.0027286119455561114,
+          "discount": 0.9969904910836334,
+          "rate": 0.039009151598919434,
+          "forward": 762.1601551759529,
+          "dividend_yield": 6.0767239635460546e-05,
+          "forward_shift_bp": 2.0615257523792785,
+          "forward_iterations": 8,
+          "pv_dividends": 0.0,
+          "residual_yield": 6.0767239635460546e-05
+        },
+        {
+          "expiry": "2026-10-30",
+          "tau": 0.1156212796499556,
+          "forward_european": 763.3028684901353,
+          "dividend_yield_european": 2.3791545141309267e-05,
+          "discount": 0.9954998680484348,
+          "rate": 0.03900915159891941,
+          "forward": 763.4854639001595,
+          "dividend_yield": -0.002044935775168802,
+          "forward_shift_bp": 2.3921750796684904,
+          "forward_iterations": 8,
+          "pv_dividends": 0.0,
+          "residual_yield": -0.002044935775168802
+        },
+        {
+          "expiry": "2026-11-30",
+          "tau": 0.2005527864992707,
+          "forward_european": 765.8949025697918,
+          "dividend_yield_european": -0.0003699962154391362,
+          "discount": 0.9922071290451722,
+          "rate": 0.0390091515989198,
+          "forward": 766.2886419970968,
+          "dividend_yield": -0.002932705936180037,
+          "forward_shift_bp": 5.140906748222207,
+          "forward_iterations": 8,
+          "pv_dividends": 0.0,
+          "residual_yield": -0.002932705936180037
+        },
+        {
+          "expiry": "2026-12-31",
+          "tau": 0.2854842933485857,
+          "forward_european": 766.7928259910993,
+          "dividend_yield_european": 0.007303717213374167,
+          "discount": 0.9889075872640698,
+          "rate": 0.03907182485161849,
+          "forward": 767.0769108210548,
+          "dividend_yield": 0.0060062172763378704,
+          "forward_shift_bp": 3.7048446506826593,
+          "forward_iterations": 7,
+          "pv_dividends": 1.9736858402992938,
+          "residual_yield": -0.003103840672671533
+        },
+        {
+          "expiry": "2027-03-19",
+          "tau": 0.499182923485572,
+          "forward_european": 774.0259886442823,
+          "dividend_yield_european": 0.002472658333374282,
+          "discount": 0.9805002294723741,
+          "rate": 0.03944926475485692,
+          "forward": 774.0972064651744,
+          "dividend_yield": 0.002288346406569379,
+          "forward_shift_bp": 0.9200959907929018,
+          "forward_iterations": 11,
+          "pv_dividends": 3.735510666919023,
+          "residual_yield": -0.007584006024494654
+        },
+        {
+          "expiry": "2027-06-17",
+          "tau": 0.7457582659513255,
+          "forward_european": 781.2024963259479,
+          "dividend_yield_european": 0.002758754198729174,
+          "discount": 0.970693612435626,
+          "rate": 0.039884772335516856,
+          "forward": 782.3257979122568,
+          "dividend_yield": 0.0008320163798453545,
+          "forward_shift_bp": 14.379134623760947,
+          "forward_iterations": 13,
+          "pv_dividends": 5.5831693527505974,
+          "residual_yield": -0.009056789059170414
+        },
+        {
+          "expiry": "2027-12-17",
+          "tau": 1.247128128965024,
+          "forward_european": 796.3461021933857,
+          "dividend_yield_european": 0.0031747018351541145,
+          "discount": 0.9504252210137702,
+          "rate": 0.04077030441619187,
+          "forward": 799.1144811006528,
+          "dividend_yield": 0.0003920503958657687,
+          "forward_shift_bp": 34.76351425143021,
+          "forward_iterations": 8,
+          "pv_dividends": 9.288733800589416,
+          "residual_yield": -0.009470158511203447
+        },
+        {
+          "expiry": "2028-06-16",
+          "tau": 1.745758265951325,
+          "forward_european": 812.1324706670284,
+          "dividend_yield_european": 0.003549440294044179,
+          "discount": 0.9298680606090756,
+          "rate": 0.04165099752374852,
+          "forward": 817.0314691028478,
+          "dividend_yield": 0.0001044364592636543,
+          "forward_shift_bp": 60.32265194120035,
+          "forward_iterations": 9,
+          "pv_dividends": 12.741636940275967,
+          "residual_yield": -0.009582103761105576
+        }
+      ]
+    },
+    "call_put_gap": {
+      "european": [
+        {
+          "expiry": "2026-09-23",
+          "days": 5.2017670722337686,
+          "gap_vol_points": 0.08655722694377033,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-09-25",
+          "days": 7.201767072233761,
+          "gap_vol_points": 0.1594613499526526,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-09-30",
+          "days": 12.201767072233762,
+          "gap_vol_points": 0.1613964294354918,
+          "strikes": 16
+        },
+        {
+          "expiry": "2026-10-09",
+          "days": 21.201767072233782,
+          "gap_vol_points": 0.011837881142269524,
+          "strikes": 16
+        },
+        {
+          "expiry": "2026-10-16",
+          "days": 28.201767072233775,
+          "gap_vol_points": -0.04282108175183569,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-10-30",
+          "days": 42.20176707223379,
+          "gap_vol_points": -0.1436750992613367,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-11-30",
+          "days": 73.2017670722338,
+          "gap_vol_points": -0.24197319408993112,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-12-31",
+          "days": 104.20176707223379,
+          "gap_vol_points": 0.06019181765756498,
+          "strikes": 3
+        },
+        {
+          "expiry": "2027-03-19",
+          "days": 182.2017670722338,
+          "gap_vol_points": -0.2549885606569241,
+          "strikes": 3
+        },
+        {
+          "expiry": "2027-06-17",
+          "days": 272.20176707223385,
+          "gap_vol_points": -0.2562540955640874,
+          "strikes": 3
+        },
+        {
+          "expiry": "2027-12-17",
+          "days": 455.20176707223374,
+          "gap_vol_points": -0.5053453203585384,
+          "strikes": 3
+        },
+        {
+          "expiry": "2028-06-16",
+          "days": 637.2017670722337,
+          "gap_vol_points": -1.084808155598671,
+          "strikes": 4
+        }
+      ],
+      "continuous": [
+        {
+          "expiry": "2026-09-23",
+          "days": 5.2017670722337686,
+          "gap_vol_points": 0.0712301344197544,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-09-25",
+          "days": 7.201767072233761,
+          "gap_vol_points": 0.14591547929556914,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-09-30",
+          "days": 12.201767072233762,
+          "gap_vol_points": 0.20194026039243862,
+          "strikes": 16
+        },
+        {
+          "expiry": "2026-10-09",
+          "days": 21.201767072233782,
+          "gap_vol_points": 0.024905139629648188,
+          "strikes": 16
+        },
+        {
+          "expiry": "2026-10-16",
+          "days": 28.201767072233775,
+          "gap_vol_points": 0.019920982015779465,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-10-30",
+          "days": 42.20176707223379,
+          "gap_vol_points": -0.008224969619925748,
+          "strikes": 16
+        },
+        {
+          "expiry": "2026-11-30",
+          "days": 73.2017670722338,
+          "gap_vol_points": -0.011071908107765371,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-12-31",
+          "days": 104.20176707223379,
+          "gap_vol_points": 0.06719389624215005,
+          "strikes": 4
+        },
+        {
+          "expiry": "2027-03-19",
+          "days": 182.2017670722338,
+          "gap_vol_points": 0.006922197865230628,
+          "strikes": 3
+        },
+        {
+          "expiry": "2027-06-17",
+          "days": 272.20176707223385,
+          "gap_vol_points": 0.02528678572171761,
+          "strikes": 3
+        },
+        {
+          "expiry": "2027-12-17",
+          "days": 455.20176707223374,
+          "gap_vol_points": 0.20047141815927316,
+          "strikes": 3
+        },
+        {
+          "expiry": "2028-06-16",
+          "days": 637.2017670722337,
+          "gap_vol_points": 0.3668955802273416,
+          "strikes": 3
+        }
+      ],
+      "discrete": [
+        {
+          "expiry": "2026-09-23",
+          "days": 5.2017670722337686,
+          "gap_vol_points": 0.07123020349270315,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-09-25",
+          "days": 7.201767072233761,
+          "gap_vol_points": 0.14592473871043038,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-09-30",
+          "days": 12.201767072233762,
+          "gap_vol_points": 0.2019402603981861,
+          "strikes": 16
+        },
+        {
+          "expiry": "2026-10-09",
+          "days": 21.201767072233782,
+          "gap_vol_points": 0.024934842633696913,
+          "strikes": 16
+        },
+        {
+          "expiry": "2026-10-16",
+          "days": 28.201767072233775,
+          "gap_vol_points": 0.019981838136727548,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-10-30",
+          "days": 42.20176707223379,
+          "gap_vol_points": -0.008222911180835735,
+          "strikes": 16
+        },
+        {
+          "expiry": "2026-11-30",
+          "days": 73.2017670722338,
+          "gap_vol_points": -0.011071763265699253,
+          "strikes": 15
+        },
+        {
+          "expiry": "2026-12-31",
+          "days": 104.20176707223379,
+          "gap_vol_points": 0.0991200249349844,
+          "strikes": 3
+        },
+        {
+          "expiry": "2027-03-19",
+          "days": 182.2017670722338,
+          "gap_vol_points": 0.01088071590510109,
+          "strikes": 3
+        },
+        {
+          "expiry": "2027-06-17",
+          "days": 272.20176707223385,
+          "gap_vol_points": 0.01937622393394789,
+          "strikes": 4
+        },
+        {
+          "expiry": "2027-12-17",
+          "days": 455.20176707223374,
+          "gap_vol_points": 0.16712733332033547,
+          "strikes": 3
+        },
+        {
+          "expiry": "2028-06-16",
+          "days": 637.2017670722337,
+          "gap_vol_points": 0.2141059693127556,
+          "strikes": 4
+        }
+      ]
+    },
+    "doubled_steps_check": {
+      "continuous": {
+        "max_vol_diff_points": 0.009928115451932062,
+        "median_vol_diff_points": 0.0010314951792406157,
+        "max_forward_diff_bp": 0.182204486900428
+      },
+      "discrete": {
+        "max_vol_diff_points": 0.007957402772643118,
+        "median_vol_diff_points": 0.0007158999301121183,
+        "max_forward_diff_bp": 0.21998577735882208
+      }
+    },
+    "discrete_sensitivity": [
+      {
+        "variant": "as projected",
+        "gap 104d": 0.0991200249349844,
+        "gap 182d": 0.01088071590510109,
+        "gap 272d": 0.01937622393394789,
+        "gap 455d": 0.16712733332033547,
+        "gap 637d": 0.2141059693127556,
+        "shift_bp last": 60.32265194120035,
+        "funding basis bp last": 95.82103761105576
+      },
+      {
+        "variant": "dividends x 0.9",
+        "gap 104d": 0.0679826784662968,
+        "gap 182d": 0.011156947185811394,
+        "gap 272d": 0.01972475756628206,
+        "gap 455d": 0.16929391182586018,
+        "gap 637d": 0.2189866749535932,
+        "shift_bp last": 62.730493047151725,
+        "funding basis bp last": 87.43127103428276
+      },
+      {
+        "variant": "dividends x 1.1",
+        "gap 104d": 0.12801535396544939,
+        "gap 182d": 0.015453105509211085,
+        "gap 272d": 0.019018098645516568,
+        "gap 455d": 0.16524008229943377,
+        "gap 637d": 0.2093261148640571,
+        "shift_bp last": 57.95430532464785,
+        "funding basis bp last": 104.24962891905199
+      },
+      {
+        "variant": "rates - 25bp",
+        "gap 104d": 0.12536327254329405,
+        "gap 182d": 0.01473336139465875,
+        "gap 272d": 0.033692960321012044,
+        "gap 455d": 0.18683096194752613,
+        "gap 637d": 0.1609566215250352,
+        "shift_bp last": 59.26561158941412,
+        "funding basis bp last": 118.55080031617268
+      },
+      {
+        "variant": "rates + 25bp",
+        "gap 104d": 0.07313453929783664,
+        "gap 182d": 0.01676699995526998,
+        "gap 272d": 0.010579694668161332,
+        "gap 455d": 0.14721898995865845,
+        "gap 637d": 0.18120952394748147,
+        "shift_bp last": 62.16997761051335,
+        "funding basis bp last": 73.10997089195415
+      },
+      {
+        "variant": "401-step lattice",
+        "gap 104d": 0.10367311252821587,
+        "gap 182d": 0.012210106958004951,
+        "gap 272d": 0.021777295100978977,
+        "gap 455d": 0.17074368433753484,
+        "gap 637d": 0.21858350989702457,
+        "shift_bp last": 60.54396473110568,
+        "funding basis bp last": 95.94704781647528
+      }
+    ],
+    "parity_distribution": {
+      "continuous": [
+        {
+          "theory": "European parity",
+          "sample": "in-window",
+          "pairs": 897,
+          "violations": 399,
+          "violation_rate": 0.44481605351170567,
+          "median_excess": 0.135365128244473,
+          "p90_excess": 2.36607684995129,
+          "max_excess": 7.988502375128164,
+          "median_abs_residual": 0.35989696667737725
+        },
+        {
+          "theory": "European parity",
+          "sample": "out-of-window",
+          "pairs": 837,
+          "violations": 277,
+          "violation_rate": 0.3309438470728793,
+          "median_excess": 6.812639834065351,
+          "p90_excess": 44.08714636395293,
+          "max_excess": 186.62548302846386,
+          "median_abs_residual": 0.8322261757099625
+        },
+        {
+          "theory": "American-adjusted",
+          "sample": "in-window",
+          "pairs": 897,
+          "violations": 103,
+          "violation_rate": 0.11482720178372352,
+          "median_excess": 0.06034854874305484,
+          "p90_excess": 0.8363223055300955,
+          "max_excess": 7.83159197705961,
+          "median_abs_residual": 0.12958751247265354
+        },
+        {
+          "theory": "American-adjusted",
+          "sample": "out-of-window",
+          "pairs": 837,
+          "violations": 285,
+          "violation_rate": 0.34050179211469533,
+          "median_excess": 2.981469239709554,
+          "p90_excess": 28.55379339738758,
+          "max_excess": 99.90589754859906,
+          "median_abs_residual": 0.7388588005271117
+        }
+      ],
+      "discrete": [
+        {
+          "theory": "European parity",
+          "sample": "in-window",
+          "pairs": 897,
+          "violations": 399,
+          "violation_rate": 0.44481605351170567,
+          "median_excess": 0.135365128244473,
+          "p90_excess": 2.36607684995129,
+          "max_excess": 7.988502375128164,
+          "median_abs_residual": 0.35989696667737725
+        },
+        {
+          "theory": "European parity",
+          "sample": "out-of-window",
+          "pairs": 837,
+          "violations": 277,
+          "violation_rate": 0.3309438470728793,
+          "median_excess": 6.812639834065351,
+          "p90_excess": 44.08714636395293,
+          "max_excess": 186.62548302846386,
+          "median_abs_residual": 0.8322261757099625
+        },
+        {
+          "theory": "American-adjusted",
+          "sample": "in-window",
+          "pairs": 897,
+          "violations": 102,
+          "violation_rate": 0.11371237458193979,
+          "median_excess": 0.05364129525586944,
+          "p90_excess": 0.5839216262044844,
+          "max_excess": 7.831591986061696,
+          "median_abs_residual": 0.12820295998560738
+        },
+        {
+          "theory": "American-adjusted",
+          "sample": "out-of-window",
+          "pairs": 837,
+          "violations": 296,
+          "violation_rate": 0.3536439665471924,
+          "median_excess": 2.746129615480953,
+          "p90_excess": 27.79761274514334,
+          "max_excess": 99.94381163841143,
+          "median_abs_residual": 0.852503836935
+        }
+      ]
+    }
+  },
   "exercise_cross_scores": [
     {
       "quotes": "european",
@@ -1664,28 +2598,63 @@
     },
     {
       "quotes": "european",
-      "parameters": "american",
+      "parameters": "continuous",
       "rmse_all": 2.2786762781607814,
       "rmse_body": 1.156728767251347,
       "rmse_short_put_wing": 5.259148281825919
     },
     {
-      "quotes": "american",
+      "quotes": "european",
+      "parameters": "discrete",
+      "rmse_all": 2.3107233474157662,
+      "rmse_body": 1.1455813267705834,
+      "rmse_short_put_wing": 5.360225750271627
+    },
+    {
+      "quotes": "continuous",
       "parameters": "european",
       "rmse_all": 2.5231028664189488,
       "rmse_body": 1.135761722285372,
       "rmse_short_put_wing": 5.927375310855849
     },
     {
-      "quotes": "american",
-      "parameters": "american",
+      "quotes": "continuous",
+      "parameters": "continuous",
       "rmse_all": 2.2611517965045054,
       "rmse_body": 1.0996751208614497,
       "rmse_short_put_wing": 5.261499652053653
+    },
+    {
+      "quotes": "continuous",
+      "parameters": "discrete",
+      "rmse_all": 2.297806279816014,
+      "rmse_body": 1.0998848583861451,
+      "rmse_short_put_wing": 5.3626306678403095
+    },
+    {
+      "quotes": "discrete",
+      "parameters": "european",
+      "rmse_all": 2.5194632357040483,
+      "rmse_body": 1.1246591079924122,
+      "rmse_short_put_wing": 5.92737316550283
+    },
+    {
+      "quotes": "discrete",
+      "parameters": "continuous",
+      "rmse_all": 2.261782875274741,
+      "rmse_body": 1.0996315099640543,
+      "rmse_short_put_wing": 5.261497609479622
+    },
+    {
+      "quotes": "discrete",
+      "parameters": "discrete",
+      "rmse_all": 2.297775924019653,
+      "rmse_body": 1.0985873885604658,
+      "rmse_short_put_wing": 5.362628607962038
     }
   ],
   "exercise_comparison": {
-    "american": {
+    "continuous": {
       "heston_params": {
         "v0": 0.013853881310116592,
         "kappa": 6.293900949422647,
@@ -1813,6 +2782,71 @@
         "butterfly_violations_zero_tol": 517,
         "worst_calendar_drop": 0.0,
         "worst_butterfly": -3.870665171629528
+      }
+    },
+    "discrete": {
+      "heston_params": {
+        "v0": 0.013788023051288702,
+        "kappa": 6.189468180017231,
+        "theta": 0.04562324721205899,
+        "xi": 2.059002618777816,
+        "rho": -0.6679472657015234
+      },
+      "heston_rmse_vol_points": 2.297775924019653,
+      "body_rmse_vol_points": 1.0985873885604658,
+      "short_dated_put_wing_rmse_vol_points": 5.362628607962038,
+      "model_comparison": [
+        {
+          "model": "Black-Scholes, one vol",
+          "free_parameters": 1,
+          "rmse_vol_points": 11.326112604153776,
+          "mae_vol_points": 8.71385262077826,
+          "max_abs_vol_points": 35.69897649827368
+        },
+        {
+          "model": "Black-Scholes, one vol per expiry",
+          "free_parameters": 12,
+          "rmse_vol_points": 10.65209648351246,
+          "mae_vol_points": 8.327635014520054,
+          "max_abs_vol_points": 32.118612128774835
+        },
+        {
+          "model": "Heston",
+          "free_parameters": 5,
+          "rmse_vol_points": 2.297775924019653,
+          "mae_vol_points": 1.3036466844972023,
+          "max_abs_vol_points": 10.118945708102633
+        }
+      ],
+      "holdout": [
+        {
+          "model": "Heston",
+          "in_sample_rmse": 2.3424831237580537,
+          "out_of_sample_rmse": 2.18283790702633,
+          "degradation": 0.9318478689931374
+        },
+        {
+          "model": "Black-Scholes, one vol",
+          "in_sample_rmse": 11.528117165802092,
+          "out_of_sample_rmse": 11.041114786782732,
+          "degradation": 0.9577552542175715
+        },
+        {
+          "model": "Black-Scholes, one vol per expiry",
+          "in_sample_rmse": 10.8494265526669,
+          "out_of_sample_rmse": 10.358076188393845,
+          "degradation": 0.9547118585588031
+        }
+      ],
+      "n_quotes": 2011,
+      "arbitrage": {
+        "calendar_violations": 0,
+        "calendar_checks": 228,
+        "butterfly_violations": 40,
+        "butterfly_checks": 1987,
+        "butterfly_violations_zero_tol": 777,
+        "worst_calendar_drop": 0.0,
+        "worst_butterfly": -3.8398008596307163
       }
     }
   },
