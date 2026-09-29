@@ -56,6 +56,7 @@ from . import american
 from . import blackscholes as bs
 from . import implied_vol as iv
 from .data import ChainSnapshot, RateCurve, implied_forward_curve, parity_pairs
+from .dividends import DividendSchedule
 from .types import ExerciseStyle, FloatArray, OptionType, to_exercise_style, to_float
 
 __all__ = [
@@ -90,6 +91,9 @@ class SurfaceBuild:
         unconverged_quotes: Quotes whose per-quote fixed point did not meet tolerance.
         dropped_by_correction: Quotes invertible as quoted but not once the premium is
             removed (the corrected price fell to the European no-arbitrage floor).
+        dividend_model: ``"continuous"`` (the lattice carries a continuous yield) or
+            ``"discrete"`` (cash dividends, escrowed-dividend model). Irrelevant, and
+            ``"continuous"``, for European exercise.
     """
 
     surface: pd.DataFrame
@@ -102,6 +106,7 @@ class SurfaceBuild:
     max_contraction: float
     unconverged_quotes: int
     dropped_by_correction: int
+    dividend_model: str = "continuous"
 
 
 _SURFACE_COLUMNS = [
@@ -141,6 +146,7 @@ def build_surface(
     max_vol: float = 3.0,
     exercise: ExerciseStyle | str = ExerciseStyle.AMERICAN,
     tree_steps: int = 201,
+    dividends: DividendSchedule | None = None,
 ) -> pd.DataFrame:
     """Turn cleaned quotes into a tidy implied-volatility surface.
 
@@ -159,7 +165,13 @@ def build_surface(
             quote's early-exercise premium and fits the forward to de-Americanised parity;
             ``"european"`` inverts the quotes as they are, with the plain parity forward
             -- the pre-correction pipeline, kept so the comparison is reproducible.
-        tree_steps: CRR steps for the early-exercise premium.
+        tree_steps: Lattice steps for the early-exercise premium.
+        dividends: Cash dividends (times from ``snapshot.asof``). With them the premia
+            come from the escrowed-dividend lattice
+            (:func:`optpricing.american.lattice_prices`) and the parity forward's carry
+            is split into the dividends plus a continuous residual; without them
+            (default) the lattice carries the parity-implied continuous yield. Ignored
+            for European exercise.
 
     Returns:
         Tidy frame with one row per surviving contract and columns
@@ -183,6 +195,7 @@ def build_surface(
         max_vol=max_vol,
         exercise=exercise,
         tree_steps=tree_steps,
+        dividends=dividends,
     ).surface
 
 
@@ -199,6 +212,7 @@ def build_surface_detailed(
     forward_tol: float = 1e-7,
     max_forward_iter: int = 10,
     forwards: pd.DataFrame | None = None,
+    dividends: DividendSchedule | None = None,
 ) -> SurfaceBuild:
     r""":func:`build_surface`, plus the forward curve and convergence diagnostics.
 
@@ -223,6 +237,8 @@ def build_surface_detailed(
     """
     style = to_exercise_style(exercise)
     spot = snapshot.spot
+    if style is ExerciseStyle.EUROPEAN:
+        dividends = None
     curve = implied_forward_curve(quotes, spot, rate_curve)
     if curve.empty:
         raise ValueError(
@@ -245,11 +261,11 @@ def build_surface_detailed(
     while True:
         outer += 1
         surf, stats = _invert_quotes(
-            spot, quotes, curve, style, otm_only, max_abs_log_moneyness, tree_steps
+            spot, quotes, curve, style, otm_only, max_abs_log_moneyness, tree_steps, dividends
         )
         if style is ExerciseStyle.EUROPEAN or outer > max_forward_iter:
             break  # European, reused forwards, or the pass cap
-        new_curve, iters = _american_forward_curve(quotes, spot, curve, surf, tree_steps)
+        new_curve, iters = _american_forward_curve(quotes, spot, curve, surf, tree_steps, dividends)
         change = float(np.max(np.abs(new_curve["forward"] / curve["forward"] - 1.0)))
         history.append(change)
         for expiry, n in iters.items():
@@ -287,6 +303,18 @@ def build_surface_detailed(
         fwd_table["forward"] / fwd_table["forward_european"] - 1.0
     )
     fwd_table["forward_iterations"] = fwd_table["expiry"].map(forward_iterations)
+    # How the carry splits: PV of the cash dividends before expiry, and the continuous
+    # residual r - ln(F / (S - PV)) / tau the lattice carries on top of them. Minus the
+    # residual is the funding rate over the discount rate (0 PV for the continuous model).
+    pv = [
+        dividends.present_value(float(t), float(r)) if dividends is not None else 0.0
+        for t, r in zip(fwd_table["tau"], fwd_table["rate"], strict=True)
+    ]
+    fwd_table["pv_dividends"] = pv
+    fwd_table["residual_yield"] = (
+        fwd_table["rate"]
+        - np.log(fwd_table["forward"] / (spot - fwd_table["pv_dividends"])) / fwd_table["tau"]
+    )
     return SurfaceBuild(
         surface=surf,
         forwards=fwd_table,
@@ -298,6 +326,7 @@ def build_surface_detailed(
         max_contraction=float(stats["max_contraction"]),
         unconverged_quotes=int(stats["unconverged"]),
         dropped_by_correction=int(stats["dropped"]),
+        dividend_model="discrete" if dividends is not None else "continuous",
     )
 
 
@@ -309,6 +338,7 @@ def _invert_quotes(
     otm_only: bool,
     max_abs_log_moneyness: float,
     tree_steps: int,
+    dividends: DividendSchedule | None = None,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
     """Attach the forward, pick the legs, remove premia (if American) and invert."""
     df = quotes.merge(
@@ -345,8 +375,16 @@ def _invert_quotes(
         if style is ExerciseStyle.EUROPEAN:
             vol[pos] = np.asarray(iv.implied_vol(mids, spot, strikes, tau, rate, side, q))
             continue
-        res = american.deamericanise(mids, spot, strikes, tau, rate, q, side, tree_steps)
-        raw = np.asarray(iv.implied_vol(mids, spot, strikes, tau, rate, side, q))
+        if dividends is not None:
+            # Same forward, carry split into cash dividends plus a residual yield.
+            s_star = american.escrowed_spot(spot, tau, rate, dividends.within(tau))
+            q = rate - float(np.log(float(g["forward"].iloc[0]) / s_star)) / tau
+        res = american.deamericanise(
+            mids, spot, strikes, tau, rate, q, side, tree_steps, dividends=dividends
+        )
+        raw = np.asarray(
+            iv.implied_vol(mids, spot, strikes, tau, rate, side, float(g["dividend_yield"].iloc[0]))
+        )
         vol[pos] = res.vol
         premium[pos] = np.where(np.isfinite(res.premium), res.premium, 0.0)
         finite = np.isfinite(res.vol)
@@ -404,6 +442,7 @@ def _american_forward_curve(
     curve: pd.DataFrame,
     surf: pd.DataFrame,
     tree_steps: int,
+    dividends: DividendSchedule | None = None,
 ) -> tuple[pd.DataFrame, dict[object, int]]:
     """Re-solve every expiry's parity forward with the premia priced at ``surf``'s vols."""
     out = curve.copy()
@@ -435,6 +474,7 @@ def _american_forward_curve(
             vol_at,
             float(row["forward"]),
             steps=tree_steps,
+            dividends=dividends,
         )
         out.loc[i, "forward"] = sol.forward
         out.loc[i, "dividend_yield"] = rate - np.log(sol.forward / spot) / tau
