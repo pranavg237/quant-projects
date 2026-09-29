@@ -1,0 +1,43 @@
+{
+  "ticker": "SPY",
+  "source": "Yahoo Finance via yfinance: Ticker(\"SPY\").dividends",
+  "downloaded_at_utc": "2026-09-29T05:42:04+00:00",
+  "yfinance_version": "1.7.0",
+  "files": {
+    "SPY_dividends_2026-09-29.csv": {
+      "sha256": "7ebe1c0ff98c4ee98f9c9637e7624c89ef56d5b9c1c24a23464cac7e8bbdfa06",
+      "rows": 136,
+      "content": "raw download: ex-date (09:30 New York) and cash amount per share"
+    },
+    "SPY_dividend_projection_2026-09-18.csv": {
+      "sha256": "5bb72729cb4b0bbe62df21598d4f2b1754ec29cafc5e8e525e98c7b9c7f0b74f",
+      "rows": 7,
+      "content": "projected ex-dates and amounts after the option snapshot"
+    }
+  },
+  "projection": {
+    "file": "SPY_dividend_projection_2026-09-18.csv",
+    "asof": "2026-09-18T11:09:27.324959-04:00",
+    "option_snapshot": "SPY_2026-09-18.csv",
+    "until": "2028-06-16",
+    "rule": "repeat the last four quarterly amounts known at asof, each on the same quarter of later years, no growth; ex-date = third Friday of Mar/Jun/Sep/Dec, or the business day before when it is Good Friday or Juneteenth (observed, from 2022)",
+    "last_known_ex_dates": [
+      "2025-12-19",
+      "2026-03-20",
+      "2026-06-18",
+      "2026-09-18"
+    ],
+    "trailing_year_growth": 0.0453542872897712
+  },
+  "ex_date_rule_check": {
+    "since": 2000,
+    "dividends": 108,
+    "matched": 107,
+    "mismatches": [
+      {
+        "ex_date": "2004-11-15",
+        "rule_date": "None"
+      }
+    ]
+  }
+}
