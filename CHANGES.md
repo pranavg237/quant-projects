@@ -3,9 +3,86 @@
 What changed, and why, in plain language. Each item says what was wrong, what I did about
 it, and what it changed. The plans behind both rounds are in [PLAN.md](PLAN.md).
 
+- [Round 3](#round-3-closing-round-2s-open-items): close round 2's open items.
 - [Round 2](#round-2-from-correct-and-tested-to-shows-quant-judgment): deepen every project.
 - [Round 1](#round-1-make-everything-run-test-and-report-honestly): make everything run,
   test and report honestly.
+
+# Round 3: closing round 2's open items
+
+## The short version
+
+- **The options surface now removes American early exercise** from every quote and from
+  the forward. Heston's fit improves from 2.51 to 2.26 vol points RMSE, but I checked why,
+  and most of that is a different compromise across maturities, not better data.
+- **Every fama-french example now runs offline** from committed, hash-checked snapshots.
+- **The Alpaca bot passes ruff and strict mypy**, and CI now checks it like the others.
+- **Tests: 904 → 938.**
+
+## options-pricing-engine: American exercise removed from the volatility surface
+
+- **What changed.** SPY options can be exercised early (they're American), but the
+  models here assume they can't (European). Round 2 showed this puts the forward too low
+  and creates a call/put vol mismatch, but only measured it. Now every quote has its
+  early-exercise value priced on a binomial tree (Leisen-Reimer) and subtracted before the
+  vol is backed out, and the forward is refitted from the corrected prices. The old
+  surface is kept behind a flag (`--exercise european`), and every run calibrates both, so
+  the before/after in `results/exercise_comparison.md` reproduces.
+- **The circularity, and how it's solved.** The early-exercise value depends on the vol,
+  which is what we're solving for. So each quote is solved as a fixed point: guess a vol,
+  price the premium at that vol, subtract it, back out a new vol, repeat. Each round
+  shrinks the error about tenfold, so every quote settles within 8 rounds. The forward
+  and the surface depend on each other in the same way and settle in 5 rounds. Controls:
+  - a synthetic American chain is recovered almost exactly (vols to 1e-7);
+  - with zero rates and zero dividends, where early exercise is never worth it, the
+    correction is zero;
+  - on a genuinely European chain the correction makes things *worse*, as it should, so
+    it isn't a free fit.
+- **What it fixed.** The call/put vol gap at the forward shrinks from as much as −1.08
+  vol points to within ±0.03 out to nine months. It overshoots to +0.20 and +0.37 at 15
+  and 21 months. The likely reason, untested and stated in the README, is that the tree
+  models dividends as a smooth yield rather than SPY's quarterly payments. The 21-month
+  at-the-money vol falls from 18.0% to 16.6%. There, the at-the-money-forward put is about
+  8% in the money against spot and worth about $12 more as an American option.
+- **Two results I checked because they looked too good or too bad.**
+  - Heston's error fell from 2.51 to 2.26 vol points (short-dated put wing 5.92 → 5.26,
+    holdout 2.38 → 2.14), although the wing quotes barely moved. Scoring each fit's
+    parameters on the other surface's quotes showed the new parameters fit the *old* wing
+    just as well. So the gain is a different compromise across maturities (vol-of-vol
+    1.96 → 2.08), not better data.
+  - Zero-tolerance butterfly "arbitrages" jumped from 517 to 746. The first guess, a
+    jagged tree price, was wrong: switching to a smoother lattice didn't change it. The
+    real cause is runs of identical penny-rounded quotes whose butterfly is exactly zero;
+    removing a premium that rises with strike tips them negative by millionths of a
+    dollar. At a tenth of a cent tolerance the counts are 497 and 501, and violations
+    large enough to trade on fell from 57 to 41.
+- **Honest cost.** Checked self-consistently, parity fits slightly *worse* at the long
+  end (in-window violations 10.6% → 11.5%). The correction also depends on the Treasury
+  rate assumption.
+
+## fama-french-factor-model: all three examples offline
+
+The factor and 25-portfolio examples now run offline from a new snapshot
+(`data/snapshot-2026-09-29`, 581 kB): Ken French's monthly factor files and the 25
+size/book-to-market portfolios, exactly as downloaded on 2026-09-29, with SHA-256 hashes
+and sample periods (reports use Jul 1963 to Jul 2026). Before, these two downloaded live,
+and French's small revisions moved some figures in the last digit (e.g. the CAPM GRS
+p-value 7.5e-11 → 7.4e-11). Now two runs give byte-identical output with the network
+switched off, and every file read from a snapshot is checked against its hash. No
+conclusion changed. One README sentence was corrected: the Fama-MacBeth market premium is
+insignificant in every model, but under FF6 it's positive (+1.3%/yr), not negative.
+Tests 50 → 58.
+
+## alpaca-ma-crossover-bot: lint and strict types in CI
+
+The bot now has a `pyproject.toml` and passes `ruff` and strict `mypy` on its source
+modules. Responses from the API are typed as `dict[str, Any]` and cast at the client
+boundary. As in the three `src/`-layout projects, the tests themselves aren't type-checked.
+Three deliberate test exceptions carry a `noqa` with the reason (for example, a test that
+passes a timezone-naive datetime on purpose to check it's rejected). CI now runs lint and
+types for five of the six projects.
+
+---
 
 # Round 2: from "correct and tested" to "shows quant judgment"
 
