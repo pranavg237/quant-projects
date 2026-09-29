@@ -18,27 +18,40 @@ factor models, using the official factor data from Kenneth French's data library
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt   # installs ffmodel and the `ffmodel` command
-.venv/bin/python -m pytest                  # 50 offline tests
+.venv/bin/python -m pytest                  # 58 offline tests
 ```
 
 This is an analysis tool, not a trading strategy, so there is no Sharpe ratio, drawdown
 or turnover of its own to report. Its outputs are factor loadings, alphas and asset-pricing
-test statistics. The worked examples use French data through July 2026 (`--end 2026-07`).
+test statistics. The worked examples use French data through July 2026 (`--end 2026-07`),
+and all three are built **offline from committed snapshots**. Each snapshot's `manifest.json`
+records the download time, URLs, SHA-256 hashes, file sizes and sample periods, and the
+commands below reproduce the reports byte for byte.
 
-- [example-analyze](reports/example-analyze/report.md) is built **offline from a committed
-  snapshot**, [data/snapshot-2026-09-28/](data/snapshot-2026-09-28/): the French monthly
-  factor files exactly as downloaded, and Yahoo monthly returns for SPY, IWN, BRK-B and AAPL
-  (Jan 2005 to Jul 2026). Both were downloaded on 2026-09-28; `manifest.json` records the time,
-  URLs, SHA-256 hashes and sample periods. Its command (below) reproduces the report exactly.
-  The snapshot exists because Yahoo revises adjusted prices: a fresh download on the same day
-  moved a few printed t-stats in the second decimal (SPY's t(alpha) went from −1.99 to −1.98).
+- [example-analyze](reports/example-analyze/report.md) reads
+  [data/snapshot-2026-09-28/](data/snapshot-2026-09-28/): the French monthly factor files
+  exactly as downloaded, and Yahoo monthly returns for SPY, IWN, BRK-B and AAPL
+  (Jan 2005 to Jul 2026), all downloaded on 2026-09-28. The snapshot exists because Yahoo
+  revises adjusted prices: a fresh download on the same day moved a few printed t-stats in
+  the second decimal (SPY's t(alpha) went from −1.99 to −1.98).
 - [example-25-portfolios](reports/example-25-portfolios/report.md) and
-  [example-factors](reports/example-factors/report.md) still download live French data, so
-  they reproduce only while French leaves that history unrevised.
+  [example-factors](reports/example-factors/report.md) read
+  [data/snapshot-2026-09-29/](data/snapshot-2026-09-29/): the French monthly 3-factor,
+  5-factor (2x3) and momentum files and the 25 size/book-to-market portfolios
+  (`25_Portfolios_5x5`), exactly as downloaded on 2026-09-29 at 02:10 UTC. The files run to
+  Aug 2026 (factors from Jul 1926, Jul 1963 for the five-factor file; portfolios from Jul
+  1926); both reports use Jul 1963 to Jul 2026, 757 months. The three factor files are
+  byte-identical to the 2026-09-28 ones. This snapshot exists because French revises
+  history in the last digit: these reports used to download live data, and regenerating them
+  moved, for example, the CAPM GRS p-value from 7.5e-11 to 7.4e-11 and the Carhart
+  Fama-MacBeth momentum premium from 23.67% to 23.49% a year. No test's conclusion changed.
+  The snapshot is 581 kB (580,870 bytes), 549 kB of it the portfolio file.
 
 French data is cached in `~/.cache/ffmodel` (override with `FFMODEL_CACHE`) and re-downloaded
-when it is more than 7 days old or when you pass `--refresh`. `--data-dir DIR` reads it from a
-snapshot instead and never downloads.
+when it is more than 7 days old or when you pass `--refresh`. `--data-dir DIR` (accepted by
+`analyze`, `test-portfolios` and `factors`) reads it from a snapshot instead and never
+downloads; a file whose SHA-256 differs from its manifest entry is refused, and a file missing
+from the snapshot is an error, not a download.
 
 ## Command line
 
@@ -48,10 +61,16 @@ ffmodel analyze --csv data/snapshot-2026-09-28/returns.csv --data-dir data/snaps
     --start 2005-01 --end 2026-07 --model ff5 --compare --rolling 36 --weights SPY=0.6,IWN=0.4 \
     --out reports/example-analyze
 
-# The same analysis on live data, and saving a new dated snapshot (both need network)
+# Reproduce reports/example-25-portfolios and reports/example-factors (no network, about 4 s and 2 s)
+ffmodel test-portfolios --dataset 25_Portfolios_5x5 --start 1963-07 --end 2026-07 --compare \
+    --data-dir data/snapshot-2026-09-29 --out reports/example-25-portfolios
+ffmodel factors --model ff6 --end 2026-07 --data-dir data/snapshot-2026-09-29 --out reports/example-factors
+
+# The same analysis on live data, and saving new dated snapshots (need network)
 ffmodel analyze --tickers SPY IWN BRK-B AAPL --start 2005-01 --model ff5 \
     --compare --rolling 36 --weights SPY=0.6,IWN=0.4
 ffmodel snapshot --tickers SPY IWN BRK-B AAPL --start 2005-01 --end 2026-07 --out data/snapshot-YYYY-MM-DD
+ffmodel snapshot --portfolios 25_Portfolios_5x5 --out data/snapshot-YYYY-MM-DD   # French files only
 
 # Your own returns (first column dates, one column per asset)
 ffmodel analyze --csv my_fund.csv --percent --model ff3
@@ -66,14 +85,15 @@ ffmodel factors --model ff6
 ```
 
 (`python -m ffmodel ...` works too.) Common options: `--freq monthly|daily`, `--start`,
-`--end`, `--out DIR` (default `reports/<command>-<timestamp>`), `--no-report`, `--refresh`.
+`--end`, `--out DIR` (default `reports/<command>-<timestamp>`), `--no-report`, `--refresh`,
+`--data-dir DIR`.
 Run `ffmodel <command> -h` for the rest (`--cov hac|robust|ols`, `--lags`, `--excess`,
 `--weighting value|equal`, `--fm-lags`, ...).
 
 Worked examples are in [reports/](reports/):
-[example-analyze](reports/example-analyze/report.md) (from the snapshot),
-[example-25-portfolios](reports/example-25-portfolios/report.md),
-[example-factors](reports/example-factors/report.md) (live data).
+[example-analyze](reports/example-analyze/report.md) (snapshot 2026-09-28),
+[example-25-portfolios](reports/example-25-portfolios/report.md) and
+[example-factors](reports/example-factors/report.md) (snapshot 2026-09-29).
 
 ## Library
 
@@ -148,7 +168,7 @@ fm.table()                            # premia with FM and Shanken t-stats vs. f
 - **Yahoo prices** are split- and dividend-adjusted closes. Monthly returns use month-end
   prices, and a trailing partial month is dropped.
 
-## Sanity checks against known results (Jul 1963 – Jul 2026)
+## Sanity checks against known results (Jul 1963 – Jul 2026, French data downloaded 2026-09-29)
 
 - SPY on FF5 (2005–2026): market beta 0.99, R² 0.997, alpha −0.36%/yr. That is a small
   shortfall and the right sign for fund costs, though larger than SPY's roughly 0.09% expense
@@ -156,9 +176,11 @@ fm.table()                            # premia with FM and Shanken t-stats vs. f
 - IWN (small-cap value ETF): SMB 0.82, HML 0.36. BRK-B: HML +0.43, SMB −0.36.
 - Spanning regressions: HML's alpha given the other FF5 factors is 0.9%/yr (t = 0.75). This
   is the Fama-French (2015) finding that HML is redundant in the five-factor model.
-- 25 size/book-to-market portfolios: GRS rejects every model. The small-growth portfolio has
-  the largest FF3 alpha, −5.6%/yr (t = −5.1). In Fama-MacBeth the market premium is negative
-  and insignificant once there is an intercept, the classic flat security market line.
+- 25 size/book-to-market portfolios: GRS rejects every model (p-values from 7.4e-11 for CAPM
+  to 3.7e-06 for FF6). The small-growth portfolio has the largest FF3 alpha, −5.6%/yr
+  (t = −5.1). In Fama-MacBeth the market premium is insignificant once there is an intercept
+  (t from −1.79 to 0.31 across the five models; negative in four, +1.3%/yr under FF6), the
+  classic flat security market line.
 
 ## Interpreting the example
 
@@ -266,8 +288,10 @@ estimation noise. BRK-B's market beta is the one change that is also economicall
 - Full-sample Newey-West t-stats are slightly liberal at T = 259 (simulated 95% intervals miss
   6.5–7.2% of the time), so a p-value just under 0.05 is weaker evidence than it looks.
 - The block stability test treats the blocks as independent and tests each coefficient
-  separately, not all of them jointly. Only the `analyze` example has an offline snapshot; the
-  snapshot holds monthly data only.
+  separately, not all of them jointly.
+- The snapshots hold monthly data only, and only the 25 size/book-to-market portfolios among
+  the test-portfolio sets; other `--dataset` choices (such as `10_Industry_Portfolios`) need
+  the network or a new snapshot.
 
 ## Layout
 
@@ -283,7 +307,7 @@ ffmodel/
   report.py         charts and Markdown/CSV report
   snapshot.py       save / read dated data snapshots for offline runs
   cli.py            command-line interface
-data/               dated input snapshots (French factor zips, Yahoo returns, manifest.json)
+data/               dated input snapshots (French zips as downloaded, Yahoo returns, manifest.json)
 scripts/            window_se_simulation.py: which standard errors to trust in short windows
 tests/              offline tests (synthetic data with known parameters)
 ```
