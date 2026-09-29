@@ -139,6 +139,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         returns = download_returns(args.tickers, args.start, args.end, args.freq)
         source = "Yahoo Finance (split- and dividend-adjusted closes)"
     else:
+        snapshot.verify_returns_file(args.csv)
         returns = load_returns_csv(args.csv, prices=args.prices, percent=args.percent, frequency=args.freq)
         returns = returns.loc[args.start:args.end]
         source = args.csv

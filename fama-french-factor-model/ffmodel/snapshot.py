@@ -3,8 +3,8 @@
 A snapshot directory holds French library files exactly as downloaded
 (``<name>_CSV.zip``: the factor files and any test-portfolio sets asked for), the
 asset returns as ``returns.csv`` if tickers were given, and a ``manifest.json``
-recording when and from where everything was downloaded, each French file's SHA-256
-and its sample period. Pass the directory as ``data_dir`` (``--data-dir`` on the
+recording when and from where everything was downloaded, each file's SHA-256 (the
+French zips and ``returns.csv``) and its sample period. Pass the directory as ``data_dir`` (``--data-dir`` on the
 command line) and ``returns.csv`` as the returns CSV to reproduce a report without
 touching the network. Reading a file from a snapshot checks its hash against the
 manifest.
@@ -67,6 +67,7 @@ def save_snapshot(
             "first": f"{returns.index[0]:%Y-%m-%d}",
             "last": f"{returns.index[-1]:%Y-%m-%d}",
             "periods": len(returns),
+            "sha256": hashlib.sha256((directory / RETURNS_FILE).read_bytes()).hexdigest(),
         }
     (directory / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
@@ -97,13 +98,33 @@ def read_manifest(directory: Union[str, Path]) -> Optional[Dict]:
 
 
 def verify_snapshot(directory: Union[str, Path]) -> Dict[str, bool]:
-    """Check every French file listed in the manifest against its SHA-256: {file name: matches}."""
+    """Check every file the manifest hashes against its SHA-256: {file name: matches}."""
     directory = Path(directory)
     manifest = read_manifest(directory)
     if manifest is None:
         raise RuntimeError(f"{directory} has no {MANIFEST}")
+    hashed = dict(manifest["french_library"])
+    returns = manifest.get("returns")
+    if returns and "sha256" in returns:
+        hashed[returns["file"]] = returns
     return {
         name: (directory / name).exists()
         and hashlib.sha256((directory / name).read_bytes()).hexdigest() == entry["sha256"]
-        for name, entry in manifest["french_library"].items()
+        for name, entry in hashed.items()
     }
+
+
+def verify_returns_file(path: Union[str, Path]) -> None:
+    """Raise if ``path`` is a snapshot's returns file and no longer matches its manifest hash.
+
+    A CSV outside a snapshot, or a manifest that records no hash for it, is not checked.
+    """
+    path = Path(path)
+    manifest = read_manifest(path.parent)
+    returns = (manifest or {}).get("returns")
+    if not returns or returns.get("file") != path.name or "sha256" not in returns:
+        return
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if digest != returns["sha256"]:
+        raise RuntimeError(f"{path} does not match the SHA-256 in its manifest "
+                           f"(file {digest}, manifest {returns['sha256']})")

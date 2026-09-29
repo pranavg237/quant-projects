@@ -25,8 +25,7 @@ produced it. Where a strategy loses to buying and holding the index, the README 
   evidence.
 - **Reproducible offline.** The market data behind every headline number is committed as
   dated snapshots, and the analysis scripts read them by default; ma-crossover and
-  fama-french also check the downloaded French and price files' hashes when they read them
-  (fama-french's Yahoo returns file is the one exception). An agent that had not seen the
+  fama-french also check every data file's hash when they read it. An agent that had not seen the
   work re-ran every project from a clean clone and checked the README numbers (see
   [CHANGES.md](CHANGES.md)). Where a result is fragile, the README says so: one backtest's
   Sharpe moves by 0.02 when a single price changes in its seventh digit.

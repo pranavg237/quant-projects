@@ -18,7 +18,7 @@ factor models, using the official factor data from Kenneth French's data library
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt   # installs ffmodel and the `ffmodel` command
-.venv/bin/python -m pytest                  # 58 offline tests
+.venv/bin/python -m pytest                  # 61 offline tests
 ```
 
 This is an analysis tool, not a trading strategy, so there is no Sharpe ratio, drawdown
@@ -26,9 +26,9 @@ or turnover of its own to report. Its outputs are factor loadings, alphas and as
 test statistics. The worked examples use French data through July 2026 (`--end 2026-07`),
 and all three are built **offline from committed snapshots**. Each snapshot's `manifest.json`
 records the download time, URLs, SHA-256 hashes, file sizes and sample periods, and the
-commands below reproduce the reports byte for byte. The French files are checked against
-their hashes when read; the Yahoo `returns.csv` in `snapshot-2026-09-28` has no hash in
-its manifest and is not checked.
+commands below reproduce the reports byte for byte. Every file is checked against its hash
+when read, including the Yahoo `returns.csv` (its hash was added to the 2026-09-28
+manifest after the fact, from the file as committed with the snapshot).
 
 - [example-analyze](reports/example-analyze/report.md) reads
   [data/snapshot-2026-09-28/](data/snapshot-2026-09-28/): the French monthly factor files
