@@ -73,8 +73,10 @@ premium and uses the de-Americanised parity forward (item B). On the surface its
 call/put gap at the forward goes from -0.24 / -0.26 / -0.51 / -1.08 vol points at 73 / 272
 / 455 / 637 days to -0.01 / +0.03 / +0.20 / +0.37. So it is fixed out to nine months (within ±0.03, apart from +0.07 at 104 days on 3-4 strikes, which was +0.06 before) and
 over-corrected at 15-21 months, on three strikes per expiry, against a bid-ask band of
-0.07-0.09. The leading suspect is the tree's continuous dividend yield (below); it is not
-tested.
+0.07-0.09. The leading suspect was the tree's continuous dividend yield. That is now
+tested (item L): SPY's cash dividends on an escrowed-dividend lattice cut the overshoot to
++0.17 / +0.21, and the rest does not move with the dividends, the lattice or +/-25bp on
+rates.
 
 ---
 
@@ -118,12 +120,12 @@ de-Americanised vols, which is what self-consistency requires, fits parity sligh
 from 10.6% to 11.5%, and the long-dated forward scatter from 1.38/1.76 to 1.63/2.18 at
 15/21 months.
 
-Still open: the lattice uses a continuous dividend yield, and the implied yield here is
-not positive, so every call premium is zero. SPY's discrete dividends give deep-ITM calls a
-pre-ex-date premium the model cannot see, which would pull the forward back down. That is
-the leading suspect for the long-dated overshoot in item 8. The premium also depends on
-`r` itself, not just the carry, so it inherits the Treasury-for-funding assumption (H).
-The pipeline would still be materially wrong on a single stock around a dividend.
+The default lattice uses a continuous dividend yield, and the implied yield here is not
+positive, so every call premium is zero. Discrete dividends are now available and tested
+(item L) but are not the default. The premium also depends on `r` itself, not just the
+carry, so it inherits the Treasury-for-funding assumption (H), which is now the leading
+suspect for what is left of the overshoot. On a single stock around a large dividend, use
+the discrete lattice.
 
 ### C. No confidence intervals on the calibrated parameters — **FIXED, with a caveat**
 Now computed from the Jacobian at the optimum. The relative standard errors are small
@@ -160,9 +162,11 @@ the calibrated parameters they would get a biased answer, and only a docstring w
 An Andersen QE scheme would fix it properly.
 
 ### G. No performance work
-The calibration takes ~105-110 seconds for four seeds over 468 quotes (109.5 s in the
+The calibration takes ~115-125 seconds for four seeds over 468 quotes (122.5 s in the
 committed run, `results/results.json` `heston.seconds`), and the pipeline now runs it
-twice (both surfaces) plus the holdout, so a full run is ~9 minutes. Most of that is 512-node
+three times (European, continuous-yield and discrete-dividend surfaces) plus the holdouts,
+and rebuilds the discrete surface five more times for its sensitivity table, so a full run
+is ~16.5 minutes (989 s measured, single-threaded BLAS). Most of that is 512-node
 Gauss-Legendre quadrature evaluated inside `least_squares`' finite-difference Jacobian.
 Analytic gradients of the characteristic function, or the COS method instead of direct
 inversion, would be 10-50x faster. Irrelevant for one surface; a blocker for calibrating
@@ -173,8 +177,12 @@ A few basis points at these maturities, far inside the bid-ask. The first versio
 item called it "visibly the reason" the implied dividend yield comes out at ~0.3% against
 SPY's actual ~1.1%. That was asserted, not measured, and the American adjustment, now in
 the surface, makes the gap wider (implied q -0.13% to -0.19% beyond six months). Parity only identifies the
-carry `r - q`; splitting it needs a dividend forecast and the funding rate, neither of
-which is in the data. Funding is the leading hypothesis, stated as a hypothesis.
+carry `r - q`; splitting it needs a dividend forecast and the funding rate. The dividend
+forecast is now in the data (item L), and with it the parity forward grows the spot net
+of dividends at 76-96bp over Treasury from six to 21 months; a +/-10% dividend error moves
+that by +/-8bp. So the carry gap is a funding basis, measured, not a dividend error.
+Whether options are *discounted* at that rate too is not identified by parity, and it is
+the leading suspect for the remaining overshoot in item 8.
 
 ### K. Stale quotes in the snapshot
 72 quotes are offered below intrinsic (on American options, an instant arbitrage), 100
@@ -183,6 +191,45 @@ adjacent-strike pairs are not monotone, and 128 call/put pairs breach the Americ
 out-of-sample parity violations (33.1% of pairs before the American adjustment, 34.1% after). The
 surface avoids most of them by using OTM quotes only, but nothing filters them out of the
 forward fit or the butterfly check explicitly.
+
+### L. Discrete dividends and the long-dated overshoot — **TESTED; explains part of it; not the default**
+The hypothesis in item 8 was specific enough to test: the implied continuous yield is not
+positive, so the lattice prices every call premium at zero, while SPY's quarterly cash
+dividends give deep-ITM calls a real exercise value just before each ex-date. Done
+properly that needed three things the repo did not have.
+
+*Data.* SPY's dividend history is downloaded from Yahoo and committed with a manifest
+(source, download time, sha256; the loader refuses a changed file). The projection repeats
+the last four quarterly amounts known at the snapshot on SPY's ex-date rule, which
+reproduces 107 of 108 ex-dates since 2000. Nothing after the snapshot is used.
+
+*Model.* The escrowed-dividend lattice (Hull; the Roll-Geske-Whaley model): tree on the
+spot minus the PV of the dividends, dividends added back for the exercise decision. Its
+known bias -- the vol belongs to the escrowed part, so long-dated options with several
+dividends are underpriced against a lognormal stock -- is mostly absorbed into a fitted
+implied vol. One implementation finding: SPY goes ex on its quarterly expiry days, 6.5
+hours before the close, and a 201-step lattice over 21 months has 3-day steps, so the
+"exercise just before the ex-date" decision would be taken up to three days early. The
+lattice now stops at an ex-date that falls inside its last step and prices the stub in
+closed form. The first version of that had a bug -- it compounded *every* dividend to the
+final node instead of only the last one, making 21-month call premia several times too
+large -- caught by a convergence check against a 6,401-step reference before any surface
+was built; a test now pins the stub to that reference within 2%.
+
+*Result* (`results/exercise_comparison.md`, three surfaces in one run). The call/put
+overshoot at 15 / 21 months goes from +0.20 / +0.37 to +0.17 / +0.21; the 21-month
+forward comes down 25bp; the long-dated per-strike forward scatter narrows (2.18 -> 1.93
+at 21 months). But the remainder does not move with the dividend amounts (x0.9, x1.1), a
+401-step lattice, or the Treasury curve +/-25bp -- so those are ruled out as its cause --
+and the change is not an improvement everywhere: 104 days widens from +0.07 to +0.10,
+Heston RMSE is 2.30 against 2.26 (the continuous surface's parameters score 2.26 on the
+discrete quotes too, so the difference is the optimiser's compromise, not the data), and
+parity violations are 102 vs 103 in-window and 296 vs 285 out of sample. The evidence does
+not justify changing every downstream number, so the discrete lattice is an option
+(`dividends=`, `--dividends discrete`) and the default is unchanged. What is left of the
+overshoot most plausibly sits in the rate the early-exercise premium uses (H): the forward
+implies funding about 95bp over Treasury at 15-21 months, and parity cannot say whether
+the options are discounted at it.
 
 ### I. `surface_grid` interpolates linearly in total variance
 Linear interpolation in `k` is safe and monotone-preserving but not smooth, so the 3-D
