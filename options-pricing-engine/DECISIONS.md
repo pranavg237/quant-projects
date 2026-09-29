@@ -52,7 +52,8 @@ prices directly rather than calling `dual_delta`.)
 **Three parameterisations: CRR, Jarrow-Rudd, Leisen-Reimer.** CRR is the reference
 everyone knows and shows the classic `O(1/n)` sawtooth convergence. Leisen-Reimer inverts
 the Peizer-Pratt normal approximation so the tree is centred on the strike; it converges
-`O(1/n^2)` with no oscillation and reaches 1e-5 in ~100 steps where CRR needs ~10^5.
+`O(1/n^2)` with no oscillation: at 101 steps its error on the benchmark call is 3.4e-5,
+against 8.8e-4 for CRR at 2,001 steps (`results/results.json`).
 Having both in the repo makes the convergence chart in the README actually interesting
 rather than a formality.
 
@@ -81,7 +82,7 @@ standard error by up to `sqrt(2)` and is a very common bug in teaching code.
 This was a real bug in the first version: fitting `beta` on the legs minimises the
 variance of an estimator we do not report. Fixing it changed the combined
 antithetic+control variance reduction on the benchmark case from *worse than the control
-alone* (SE 0.0175) to **58x better than plain MC** (SE 0.0043). Numbers are in the README.
+alone* (SE 0.0175) to **57x better than plain MC** (SE 0.0043; 57.4x in `results/results.json`). Numbers are in the README.
 
 **Arithmetic Asian options use the discretely monitored geometric Asian as a control.**
 The geometric average is lognormal so it has a closed form; its payoff correlates with the
@@ -103,13 +104,19 @@ implementation keeps a bracket at all times, takes a Newton step when it lands i
 bracket and is at least halving the interval, and bisects otherwise. It cannot diverge.
 
 **Manaster-Koehler seed.** `sigma_0 = sqrt(2|ln(F/K)|/tau)` is the vol that maximises vega
-for the given moneyness, i.e. the best-conditioned starting point. On a synthetic smile
-this gives ~95% Newton steps and a worst case of 14 iterations.
+for the given moneyness, i.e. the best-conditioned starting point. On the round-trip
+stress grid in `results/validation.md` no quote with vega >= 1e-6 needs more than 16
+iterations.
 
-**Convergence is on the price residual, so the *vol* accuracy is vega-dependent.** For
-deep-OTM short-dated strikes a 1e-10 price tolerance can still leave ~1e-6 of vol error.
-That is inherent to the inversion, not a solver defect, and the `ImpliedVolResult`
-diagnostics expose it.
+**Convergence is required in volatility space, not just on the price residual.** A 1e-10
+price tolerance alone leaves `tol / vega` of vol error -- 4.7e-5 for a five-day 10%-OTM
+call at 15% vol. So a quote only counts as converged when the price residual is below
+`tol` *and* the implied vol uncertainty `|residual| / vega` is below `vol_tol = 1e-9`, or
+when the bracket itself is narrower than `vol_tol`. What remains is round-off in the
+*price*: a price is only known to about `eps * price`, which is `eps * price / vega` of vol.
+For a deep in-the-money 3-year call with vega 2e-8 that floor is 5e-7, and the round-trip
+grid in `results/validation.md` hits it; with vega >= 1e-6 the worst error is 2.5e-10.
+The `ImpliedVolResult` diagnostics expose iterations and convergence per quote.
 
 ---
 

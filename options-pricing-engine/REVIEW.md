@@ -17,10 +17,13 @@ antithetic and control variates came out *worse* than the control alone (SE 0.01
 reduction. A reviewer who only checked that the price was right would have missed it.
 
 ### 2. Implied vol converged on price, not volatility — **FIXED**
-A price tolerance of 1e-10 sounds strict. On a five-day 10%-OTM call with vega ~1e-6 it
-leaves 1e-4 of *volatility* error. Adding a bracket-width criterion took the worst case
-from 5e-5 to 1.7e-11. The original would not have been visibly wrong on any chart; it
-would just have quietly added noise to the wings of every surface.
+A price tolerance of 1e-10 sounds strict. On a five-day 10%-OTM call at 15% vol (vega
+2.1e-6) it leaves 4.7e-5 of *volatility* error. The solver now also requires the vol
+uncertainty or the bracket width to be below 1e-9; on the round-trip stress grid in
+`results/validation.md` the worst vol error is 2.5e-10 for quotes with vega >= 1e-6 (the
+before/after figures quoted in an earlier version of this item were not reproducible from
+a committed output and have been dropped). The original would not have been visibly wrong
+on any chart; it would just have quietly added noise to the wings of every surface.
 
 ### 3. The forward curve was extracted by a badly conditioned regression — **FIXED**
 Fitting `C - P = D(F - K)` for both `D` and `F` gave implied rates of +42% and −33% on
@@ -106,7 +109,7 @@ on a multimodal objective.
 ### D. Model comparison is in-sample — **FIXED**
 Now cross-validated: fit on alternate strikes within each expiry, score on the rest.
 Heston goes 2.55 in-sample to 2.38 out-of-sample (ratio 0.93); both Black-Scholes
-benchmarks sit at 0.96. Nothing overfits, which is what five parameters against 234
+benchmarks sit at 0.96 and 0.95. Nothing overfits, which is what five parameters against 234
 training quotes should do — but it is now measured rather than assumed. Note this tests
 interpolation across strikes, **not** extrapolation in maturity, which is the harder
 question and is still untested (and is really item A in disguise).
@@ -127,7 +130,8 @@ the calibrated parameters they would get a biased answer, and only a docstring w
 An Andersen QE scheme would fix it properly.
 
 ### G. No performance work
-The calibration takes ~90 seconds for four seeds over 468 quotes. Most of that is 512-node
+The calibration takes ~105-110 seconds for four seeds over 468 quotes (106.8 s in the
+committed run, `results/results.json` `heston.seconds`). Most of that is 512-node
 Gauss-Legendre quadrature evaluated inside `least_squares`' finite-difference Jacobian.
 Analytic gradients of the characteristic function, or the COS method instead of direct
 inversion, would be 10-50x faster. Irrelevant for one surface; a blocker for calibrating

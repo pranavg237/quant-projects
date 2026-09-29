@@ -337,7 +337,7 @@ def clean_chain(
 
     Args:
         snapshot: Raw chain.
-        max_relative_spread: Widest half-spread-to-mid ratio accepted.
+        max_relative_spread: Widest full spread-to-mid ratio, ``(ask - bid) / mid``, accepted.
         min_price: Minimum mid price in currency units.
         require_activity: Require non-zero volume or open interest.
         min_tau: Minimum year fraction.
