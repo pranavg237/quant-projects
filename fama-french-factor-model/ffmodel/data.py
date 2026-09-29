@@ -7,7 +7,9 @@ the ``load_*`` helpers pick the right one and convert percent to decimals.
 """
 from __future__ import annotations
 
+import hashlib
 import io
+import json
 import os
 import re
 import time
@@ -112,12 +114,14 @@ def fetch_dataset(
     """Return the parsed tables of ``<name>_CSV.zip``, downloading it if the cache is stale.
 
     With ``data_dir`` (a saved snapshot, see ``save_snapshot``) the file is read from that
-    directory and nothing is downloaded, so results are reproducible offline.
+    directory and nothing is downloaded, so results are reproducible offline. If the
+    directory has a ``manifest.json`` that lists the file, the file's SHA-256 must match it.
     """
     if data_dir is not None:
         path = Path(data_dir) / f"{name}_CSV.zip"
         if not path.exists():
             raise RuntimeError(f"{name}_CSV.zip is not in the data snapshot {data_dir}")
+        verify_snapshot_file(path)
         return _read_zip(path)
     path = Path(cache_dir or CACHE_DIR) / f"{name}_CSV.zip"
     stale = not path.exists() or time.time() - path.stat().st_mtime > CACHE_MAX_AGE_DAYS * 86400
@@ -129,6 +133,27 @@ def fetch_dataset(
                 raise RuntimeError(f"Could not download {name!r} from the French data library: {exc}") from exc
             warnings.warn(f"Could not refresh {name!r} ({exc}); using the cached copy.")
     return _read_zip(path)
+
+
+def verify_snapshot_file(path: Path) -> None:
+    """Raise if ``path`` is listed in its directory's ``manifest.json`` with a different SHA-256."""
+    manifest = path.parent / "manifest.json"
+    if not manifest.exists():
+        return
+    entry = json.loads(manifest.read_text()).get("french_library", {}).get(path.name)
+    if entry is None:
+        return
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if digest != entry["sha256"]:
+        raise RuntimeError(f"{path} does not match the SHA-256 in its manifest "
+                           f"(file {digest}, manifest {entry['sha256']})")
+
+
+def portfolio_file_name(dataset: str, frequency: str = "monthly") -> str:
+    """The French library file name (without ``_CSV.zip``) of a test-portfolio set at ``frequency``."""
+    if frequency == "daily" and not dataset.lower().endswith("_daily"):
+        return dataset + "_Daily"
+    return dataset
 
 
 def _read_zip(path: Path) -> List[FrenchTable]:
@@ -190,9 +215,7 @@ def load_portfolios(
     _check_frequency(frequency)
     if weighting not in ("value", "equal"):
         raise ValueError("weighting must be 'value' or 'equal'")
-    name = dataset
-    if frequency == "daily" and not name.lower().endswith("_daily"):
-        name += "_Daily"
+    name = portfolio_file_name(dataset, frequency)
     table = _select(fetch_dataset(name, refresh=refresh, data_dir=data_dir), frequency, (f"{weighting} weight", "return"))
     return table.data.loc[start:end] / 100.0
 
