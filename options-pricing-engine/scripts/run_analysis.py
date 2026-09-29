@@ -524,6 +524,42 @@ def _cross_scores(fits: dict[str, dict[str, Any]], spot: float) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _butterfly_tolerance_table(builds: dict[str, surface.SurfaceBuild]) -> pd.DataFrame:
+    """Mid-price butterfly violations at several dollar tolerances, per surface.
+
+    The zero-tolerance count is sensitive to how exactly-flat runs of tick-quantised mids
+    (a deep-wing put quoted at $0.055 on ten consecutive strikes) are treated: their
+    butterfly is 0 to round-off, and removing a premium that rises with strike tips them
+    negative by millionths of a dollar. Counting at a hundredth and a tenth of a cent
+    shows whether a change is that or real.
+    """
+    rows = []
+    for mode, build in builds.items():
+        flies: list[np.ndarray] = []
+        for tau, g in build.surface.groupby("tau"):
+            sl = g.sort_values("strike")
+            k = sl["strike"].to_numpy(dtype=np.float64)
+            c = np.asarray(
+                blackscholes.price(
+                    sl["forward"].to_numpy(dtype=np.float64),
+                    k,
+                    float(tau),  # type: ignore[arg-type]
+                    0.0,
+                    sl["implied_vol"].to_numpy(dtype=np.float64),
+                    OptionType.CALL,
+                    0.0,
+                )
+            )
+            lam = (k[2:] - k[1:-1]) / (k[2:] - k[:-2])
+            flies.append(lam * c[:-2] + (1.0 - lam) * c[2:] - c[1:-1])
+        fly = np.concatenate(flies)
+        row: dict[str, Any] = {"surface": mode, "triples": fly.size}
+        for label, tol in (("< -1e-12", 1e-12), ("< -$0.0001", 1e-4), ("< -$0.001", 1e-3)):
+            row[label] = int((fly < -tol).sum())
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
 def _surface_summary(build: surface.SurfaceBuild) -> dict[str, Any]:
     arb = surface.arbitrage_report(build.surface)
     term = surface.atm_term_structure(build.surface)
@@ -701,6 +737,13 @@ def _exercise_markdown(
         "leg de-Americanised by its own fixed point at the corrected forward). `atm`: "
         "vega-weighted vol within |k| < 0.05.\n\n"
         + _to_markdown(by_expiry)
+        + "\n## Butterflies on mid prices, by tolerance\n\n"
+        "Undiscounted call prices repriced from each quote's implied vol, as in "
+        "`surface.arbitrage_report`. The zero-tolerance column is the one in the headline "
+        "table; runs of identical tick-quantised mids have a butterfly of exactly zero, and "
+        "removing a premium that rises with strike tips them negative by millionths of a "
+        "dollar.\n\n"
+        + _to_markdown(_butterfly_tolerance_table(builds))
         + "\n## Where the change in fit comes from\n\n"
         "Each surface's Heston parameters scored on each surface's calibration quotes "
         "(RMSE, vol points). Rows with matching `quotes` and `parameters` reproduce the "
