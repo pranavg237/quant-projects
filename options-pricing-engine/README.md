@@ -18,18 +18,20 @@ Every pricer is cross-checked against an independently derived one, every chart 
 | **Real data** | 4,469 SPY quotes → 2,010-point surface across 12 expiries. Every quote de-Americanised (early-exercise premium removed on a lattice) and the forward solved from de-Americanised put-call parity; 0 calendar-arbitrage violations. |
 | **Put-call parity** | **44.5%** of the pairs the forward is fitted to break *European* parity by more than the bid-ask spread. Pricing the American early-exercise premium cuts that to **11.5%** and the scatter of the per-strike forwards 1.9–6.9x beyond six months — so SPY's parity "violations" are mostly American exercise, and plain European parity puts the forward too low by up to **86bp** at 21 months ([report](results/parity.md)). |
 | **American exercise** | Now built into the surface (the default; the old European-parity surface is `exercise="european"`). It closes the call/put vol gap at the forward (−0.24 at 73 days and −1.08 at 21 months before) to within ±0.03 vol points from 21 days to nine months except +0.07 at 104 days (on 3–4 strikes; +0.06 before), overshoots to +0.20/+0.37 at 15/21 months, and lowers 21-month ATM vol from 18.0% to 16.6% ([before/after](results/exercise_comparison.md)). |
+| **Discrete dividends** | The leading suspect for that overshoot, tested: SPY's real dividend schedule (downloaded, projected, sha256-pinned) priced on an escrowed-dividend lattice. It gives deep in-the-money calls their pre-ex-date premium and cuts the overshoot to **+0.17/+0.21** — real, but not the whole story: the rest survives ±10% on the dividends, ±25bp on rates and a doubled lattice. Heston fits no better (2.30), so it is an option (`dividends=`), not the default ([three-way comparison](results/exercise_comparison.md)). |
 | **Calibration** | Heston fits the corrected SPY surface to **2.26 vol points** RMSE with 5 parameters (2.51 before the correction), against **10.66** for a Black-Scholes model with one free volatility *per expiry* (12 parameters). Out-of-sample on held-out strikes: **2.14**. |
 | **Honest limitation** | That 2.26 is **1.10 vol points in the body** and **5.26 in the short-dated put wing** (5.92 before). The wing quotes barely moved; the new parameters fit the *old* wing just as well (5.26), so the gain is a better compromise across maturities, not better data. Heston still cannot generate enough short-dated skew. You need jumps. |
 
 ```bash
 pip install -r requirements.txt
-python scripts/run_analysis.py     # ~9 min (calibrates both surfaces), offline from the committed SPY snapshot; writes figures/ and results/
-python -m pytest                   # 401 tests, 98% branch coverage, offline
+python scripts/run_analysis.py     # ~16.5 min (builds and calibrates three surfaces), offline from the committed SPY snapshot and dividends; writes figures/ and results/
+python -m pytest                   # 456 tests, 98% branch coverage, offline
 ```
 
 **Data behind every market number below:** one SPY option chain captured from Yahoo
 Finance at 11:09 ET on 2026-09-18 (spot 759.87, 4,469 quotes, 12 expiries from 5 days to
-21 months), and that day's Treasury curve. Both are committed in `data/snapshots/`.
+21 months), and that day's Treasury curve. Both are committed in `data/snapshots/`. SPY's
+dividend history (Yahoo, downloaded 2026-09-29) and its projection are in `data/dividends/`.
 
 **This is a pricing and calibration project, not a trading strategy**, so there is no
 Sharpe ratio, drawdown, turnover or buy-and-hold comparison to report. The results are
@@ -271,10 +273,12 @@ estimates:
 | forward scatter (IQR), American \$ | 0.24 | 0.22 | 0.22 | 0.73 | 0.87 | 0.41 | 0.84 | 1.63 | 2.18 |
 | forward shift (bp) | +1.8 | +2.1 | +2.4 | +5.1 | +10.9 | +19.9 | +34.8 | +58.5 | +85.8 |
 
-The one expiry where it barely helps is 104 days (0.92 → 0.87). A plausible reason, not
-tested: it is the first expiry past SPY's December ex-dividend date, and the tree's
-continuous dividend yield cannot price the early exercise of deep-ITM calls just before a
-discrete dividend.
+The one expiry where it barely helps is 104 days (0.92 → 0.87). An earlier version offered
+a reason: it is the first expiry past SPY's December ex-dividend date, and a continuous
+dividend yield cannot price the early exercise of deep-ITM calls just before a discrete
+dividend. That is now tested and **ruled out**: with SPY's cash dividends on the lattice
+the 104-day scatter goes back *up* to 0.92, while the 272/455/637-day scatter falls to
+0.80/1.45/1.93 ([`results/exercise_comparison.md`](results/exercise_comparison.md)).
 
 A test applies the same adjustment to a synthetic chain that really is European and
 requires it to make the fit *worse*, so the improvement on SPY is evidence, not a free
@@ -340,13 +344,88 @@ What to take from it, honestly:
   (premia < 1e-10); on a European chain with carry it makes recovery *worse*. On SPY it
   closes the call/put gap to within ±0.03 vol points from 21 days to nine months except +0.07 at 104 days (on 3–4 strikes; +0.06 before).
 * **It overshoots at the long end.** +0.20 and +0.37 at 15 and 21 months, three strikes each,
-  against a band of 0.07–0.09. The tree's continuous dividend yield is the leading suspect:
+  against a band of 0.07–0.09. The tree's continuous dividend yield was the leading suspect:
   SPY's discrete dividends give deep-ITM *calls* a premium this tree prices at zero, which
-  would pull the forward back down. Not tested.
+  would pull the forward back down. Tested below: it explains part of it, not all.
 * **The Heston improvement is not the correction fitting the data better.** The short-dated
   wing quotes moved by at most 0.018 vol points. The new parameters score 5.26 on the *old*
   wing too, and 2.28 overall on the old quotes: the lower, flatter long end lets the
   optimiser pick a larger vol-of-vol that the short wing likes. The body is unchanged.
+
+### Discrete dividends: testing the overshoot
+
+**The data.** SPY's full dividend history from Yahoo (136 ex-dates since 1993) is committed
+in [`data/dividends/`](data/dividends/) with a manifest giving the source, download time and
+sha256 of every file; the pipeline refuses a file whose hash has changed. The projection
+through the longest expiry (June 2028) repeats the last four quarterly amounts known at the
+snapshot (\$1.797–\$1.993), each on the same quarter of later years, on SPY's ex-date rule
+— the third Friday of March/June/September/December, a day earlier for Good Friday or
+Juneteenth — which reproduces 107 of the 108 ex-dates since 2000 (the miss is the 2004
+special dividend). It is the simplest projection that keeps the seasonality (December is
+the largest quarter) and uses nothing after the snapshot; it ignores growth, which was
++4.5% over the trailing year, so the run also rescales the amounts by ±10%. Two facts
+about SPY make this matter more than a continuous yield suggests: the quarterly ex-dates
+fall *on* the quarterly option expiry days, 6.5 hours before the close, and none of the
+seven expiries under three months has an ex-date in its life at all.
+
+**The model.** The escrowed-dividend lattice (Hull's "known dollar dividend" tree, the model
+behind the Roll-Geske-Whaley formula): the tree is built on the spot minus the present value
+of the dividends before expiry, and the dividends still to come are added back wherever the
+stock price itself matters, i.e. in the exercise decision. The European half is then
+exactly Black-76 on the forward, so implied vols keep their meaning; only the premia change.
+Its known bias is that the volatility belongs to the escrowed part, not the stock, so
+long-dated options with several dividends are underpriced relative to a lognormal stock;
+for a fitted implied vol most of that is absorbed into the vol. An ex-date inside the
+last lattice step (every quarterly expiry) would otherwise be seen up to three days early
+on a 201-step 21-month tree, so the lattice stops at the ex-date and the stub to expiry is
+priced in closed form. Checks: the European lattice matches Black-Scholes on the escrowed
+spot; with no dividend in the option's life the code *is* the continuous-yield code, bit
+for bit; an American call exercises only at the last node before an ex-date, and never when
+the dividend is below the interest on the strike to expiry (Hull's condition); a
+one-dividend call converges to Roll-Geske-Whaley; and a synthetic chain priced with cash
+dividends is recovered exactly by the discrete surface and not by the continuous one.
+
+**The result.** The parity forward is still fitted to the quotes; the dividends decide how
+its carry splits into cash and a continuous remainder.
+
+| | European parity | American, continuous yield | American, discrete dividends |
+|---|---|---|---|
+| call − put vol at the forward, 104 / 182 / 272 days | +0.06 / −0.25 / −0.26 | +0.07 / +0.01 / +0.03 | +0.10 / +0.01 / +0.02 |
+| call − put vol at the forward, 455 / 637 days | −0.51 / −1.08 | +0.20 / +0.37 | **+0.17 / +0.21** |
+| forward shift vs European parity, 637 days | — | +85.8 bp | +60.3 bp |
+| per-strike forward scatter (IQR), 455 / 637 days | \$3.54 / \$4.18 | \$1.63 / \$2.18 | \$1.45 / \$1.93 |
+| Heston RMSE, all / body / short-dated put wing | 2.51 / 1.09 / 5.92 | 2.26 / 1.10 / 5.26 | 2.30 / 1.10 / 5.36 |
+| Heston out of sample | 2.38 | 2.14 | 2.18 |
+| parity violations beyond the spread, fitted strikes | 44.5% | 11.5% | 11.4% |
+| parity violations beyond the spread, out of sample | 33.1% | 34.1% | 35.4% |
+| implied carry, 637 days | q = 0.35% | q = −0.13% | funding 96bp over Treasury |
+
+What it shows:
+
+* **The mechanism is real and the right size to matter.** Out-of-the-money calls past an
+  ex-date now carry up to \$0.86 of premium, the 21-month forward comes down 25bp, and the
+  overshoot at 21 months falls from +0.37 to +0.21 (+0.20 to +0.17 at 15 months).
+* **It is not the whole story.** What remains is two to three times the bid-ask band, and it
+  does not move with the inputs: amounts ×0.9 or ×1.1 give +0.17/+0.22 and +0.17/+0.21, a
+  401-step lattice +0.17/+0.22, and the Treasury curve shifted ±25bp +0.15–0.19/+0.16–0.18.
+  So the continuous-yield approximation, the dividend projection and the lattice resolution
+  are ruled out as the *remaining* cause. Left standing: the Treasury-for-funding
+  assumption in the early-exercise premium (the forward implies funding 95–96bp over
+  Treasury at 15–21 months, far more than a projection error could produce), the escrowed
+  model's vol bias, and stale deep-ITM quotes in the parity window.
+* **It is not better everywhere.** At 104 days — the one expiry with an ex-date 13 days
+  before expiry rather than on it — the gap widens from +0.07 to +0.10 and the forward
+  scatter from 0.87 to 0.92. Heston fits 0.04 worse (2.30), but the continuous surface's
+  parameters score 2.26 on the discrete quotes too, so that is a different optimum of the
+  vega-weighted objective, not worse data. Parity violations: 102 against 103 in-window,
+  296 against 285 out of sample.
+
+**Decision: an option, not the default.** It is the more faithful model of SPY, and it halves
+the 21-month overshoot, but it leaves most of the 15-month one, makes 104 days worse, and
+improves neither the fit nor the parity counts; the evidence does not clear the bar for
+changing every number downstream. `build_surface(..., dividends=schedule)` and
+`python scripts/run_analysis.py --dividends discrete` switch it on; every run computes and
+reports all three surfaces.
 
 ### Heston calibration
 
@@ -402,9 +481,9 @@ This is not a calibration failure, it is the model. Heston generates skew throug
 
 ![Heston errors](figures/heston_errors.png)
 
-**The implied dividend yield comes out too low, and fixing American exercise makes it lower.** Backing $q$ out of the European-parity forward with Treasury discounting gives ~0.3% at long maturities, against SPY's actual ~1.1%. The American-adjusted forward the surface now uses is *higher*, so its implied $q$ is −0.13% to −0.19% beyond six months ([`results/exercise_comparison.md`](results/exercise_comparison.md)). Parity cannot say why: the forward is inferred from the same quotes, so only the carry $r - q$ is identified, and splitting it needs a dividend forecast and the dealers' funding rate, neither of which is in the data. The most likely culprit is funding — options are financed at OIS/repo-type rates, not Treasury yields — but that is a hypothesis, not a measurement. The European inversion is unaffected by the split (it is Black-76 in the forward), but **the early-exercise premium is not**: a put's premium depends on the interest earned on the strike, i.e. on $r$ itself, so the correction inherits the Treasury-rate assumption.
+**The implied dividend yield comes out too low, and fixing American exercise makes it lower.** Backing $q$ out of the European-parity forward with Treasury discounting gives ~0.3% at long maturities, against SPY's actual ~1.1%. The American-adjusted forward the surface now uses is *higher*, so its implied $q$ is −0.13% to −0.19% beyond six months ([`results/exercise_comparison.md`](results/exercise_comparison.md)). Parity cannot say why: the forward is inferred from the same quotes, so only the carry $r - q$ is identified, and splitting it needs a dividend forecast and the dealers' funding rate, neither of which is in the data. The most likely culprit is funding — options are financed at OIS/repo-type rates, not Treasury yields — but that is a hypothesis, not a measurement. With SPY's actual dividends supplied (the discrete-dividend surface above), the split *can* be made: the parity forward grows the spot net of dividends at 76–96bp over the Treasury rate from six to 21 months — the "funding basis" — which is far more than a ±10% dividend error moves it (±8bp at 21 months). The European inversion is unaffected by the split (it is Black-76 in the forward), but **the early-exercise premium is not**: a put's premium depends on the interest earned on the strike, i.e. on $r$ itself, so the correction inherits the Treasury-rate assumption.
 
-**The call/put mismatch at the forward was mostly American exercise, not quote noise — and correcting for it overshoots at the long end.** An earlier version of this README said call and put vols meet at the forward with a ~0.5 vol point gap that "needs better quotes". Measured on the uncorrected surface (median over strikes within 1% of the forward) it is within ±0.26 vol points out to nine months and then widens to **−0.51 at 455 days and −1.08 at 637 days**. On the corrected surface it is within ±0.03 from 21 days to nine months except +0.07 at 104 days (+0.06 before the correction, on 3–4 strikes), but **+0.20 and +0.37** at 455 and 637 days ([`results/exercise_comparison.md`](results/exercise_comparison.md)). The first three expiries (≤ 12 days) sit at +0.07 to +0.20 either way, where the correction is under four cents.
+**The call/put mismatch at the forward was mostly American exercise, not quote noise — and correcting for it overshoots at the long end.** An earlier version of this README said call and put vols meet at the forward with a ~0.5 vol point gap that "needs better quotes". Measured on the uncorrected surface (median over strikes within 1% of the forward) it is within ±0.26 vol points out to nine months and then widens to **−0.51 at 455 days and −1.08 at 637 days**. On the corrected surface it is within ±0.03 from 21 days to nine months except +0.07 at 104 days (+0.06 before the correction, on 3–4 strikes), but **+0.20 and +0.37** at 455 and 637 days ([`results/exercise_comparison.md`](results/exercise_comparison.md)). Pricing SPY's cash dividends on the lattice brings those to +0.17 and +0.21, and nothing tried closes the rest (above). The first three expiries (≤ 12 days) sit at +0.07 to +0.20 either way, where the correction is under four cents.
 
 ---
 
@@ -412,7 +491,7 @@ This is not a calibration failure, it is the model. Heston generates skew throug
 
 - **Quotes are not simultaneous, and some are stale.** Yahoo mids come from different moments across the chain; 72 quotes in the snapshot are offered below intrinsic and 100 adjacent-strike pairs are not monotone, which no live quote could be. This is the dominant error source in the deep ITM legs and it caps how much of the remaining butterfly violation rate is real.
 - **Mid prices, not a fitted fair value.** For wide-spread contracts the mid is a convention, not a price.
-- **American exercise is priced with a continuous dividend yield.** The surface removes each quote's early-exercise premium and uses the de-Americanised parity forward, but the lattice has no discrete dividends, so it misses the pre-ex-date exercise of deep ITM calls that SPY's quarterly dividends create (it prices every call premium at zero here, because the implied yield is not positive). That is the leading suspect for the +0.20/+0.37 vol point call/put overshoot at 15–21 months. It is *not* negligible for single stocks around dividends, so this pipeline should not be pointed at them unchanged. The premium also depends on the rate itself, not just the carry, so it inherits the Treasury-for-funding assumption below.
+- **American exercise is priced with a continuous dividend yield by default.** The default lattice misses the pre-ex-date exercise of deep ITM calls that SPY's quarterly dividends create (it prices every call premium at zero here, because the implied yield is not positive). The discrete-dividend lattice (`dividends=`) prices it and cuts the +0.20/+0.37 vol point call/put overshoot at 15–21 months to +0.17/+0.21, but is not the default because it improves neither the fit nor the parity counts and widens the 104-day gap. For single stocks around a large dividend use the discrete lattice; the continuous one is not negligible there. The premium also depends on the rate itself, not just the carry, so it inherits the Treasury-for-funding assumption below — now the leading suspect for the rest of the overshoot.
 - **Heston has no jumps**, hence the wing failure above. Bates or a Lévy model is the next step.
 - **One snapshot.** Calibration stability *across days* (how much the parameters move when the surface barely does) is the standard practitioner complaint about Heston and is not measured here.
 - **The Treasury curve is a proxy for OIS.** A few basis points at these maturities — far less than the bid-ask.
@@ -433,14 +512,18 @@ src/optpricing/
   heston.py        Characteristic function, two quadratures, Euler MC cross-check
   calibration.py   Multi-start least squares + Black-Scholes benchmarks
   data.py          Cached yfinance chains, rate curve, parity forward extraction
-  american.py      Early-exercise premium on a lattice; de-Americanising quotes and the forward
+  american.py      Early-exercise premium on a lattice (continuous yield or escrowed cash
+                   dividends); de-Americanising quotes and the forward
+  dividends.py     SPY dividend history, ex-date rule, projection, sha256-checked loading
   surface.py       Surface construction (de-Americanised mid, bid and ask vols), arbitrage checks, thinning
   parity.py        Put-call parity residuals, American adjustment, stale-quote checks
   style.py         One validated chart palette
   plotting.py      Every figure in this README
 scripts/run_analysis.py   Full pipeline
-tests/                    401 tests, 98% statement + branch coverage
+scripts/download_dividends.py  Dividend download + projection + manifest (needs the network)
+tests/                    456 tests, 98% statement + branch coverage
 data/snapshots/           Committed SPY chain so results reproduce offline
+data/dividends/           Committed SPY dividend history, projection and manifest
 ```
 
 ## 7. Running it
@@ -451,6 +534,8 @@ pip install -r requirements.txt
 
 python scripts/run_analysis.py --ticker SPY          # uses the most recent cached chain
 python scripts/run_analysis.py --exercise european   # the old, uncorrected surface as primary
+python scripts/run_analysis.py --dividends discrete  # SPY's cash dividends on the lattice as primary
+python scripts/download_dividends.py                 # re-download the dividend history (network)
 python scripts/run_analysis.py --ticker QQQ --refresh  # downloads a live chain (use during market hours)
 
 python -m pytest                                     # full suite
