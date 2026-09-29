@@ -175,15 +175,55 @@ things keep this honest: the adjustment has no parameter fitted to the residuals
 comes from the OTM surface), and a test applies it to a chain that really is European and
 requires it to make the fit *worse*.
 
-**Not wired into the surface (yet).** The adjusted forward moves long-dated forwards by up to
-~85bp and closes the call/put vol gap at the forward, so the surface and Heston numbers
-that use the European-parity forward carry a known bias at long maturities. Switching the
-pipeline over properly means de-Americanising the OTM quotes too (inverting each price
-minus its early-exercise premium), re-running the calibration and re-deriving every
-downstream number; that is a separate change with its own review, and until then the
-bias is measured and stated rather than silently fixed in one place. The tree also uses
-a continuous dividend yield, so it misses the pre-ex-date exercise premium of deep-ITM
-calls that discrete SPY dividends create.
+**Wired into the surface, and the default.** `build_surface(exercise="american")` removes
+each quote's early-exercise premium and fits the forward to de-Americanised parity;
+`exercise="european"` is the old pipeline. The run calibrates both and writes
+`results/exercise_comparison.md`. The design choices:
+
+* *The circularity is a fixed point, not a guess.* The premium depends on the vol being
+  solved for. Each quote solves `sigma = BS^-1(V_mkt - e(sigma))` by iteration from the
+  uncorrected vol. The map's slope is the premium's vega over the option's vega; the
+  largest seen on SPY is 0.11, so it converges geometrically in at most 8 iterations to
+  1e-8. The simpler alternative, pricing the premium once at the uncorrected vol, is one
+  iteration of the same map: its error is the whole correction times the map's slope,
+  about a tenth of the correction, and the correction is largest (dollars of premium) on
+  exactly the long-dated puts near the forward that pin the long end. Iterating costs
+  seconds. The forward is a second fixed point (forward -> surface -> forward, 5
+  passes to 6e-8), because the ITM parity legs need vols from the surface.
+* *Leisen-Reimer, not CRR, for the premium.* On a fixed CRR lattice the premium has a
+  sawtooth in strike (each strike sits differently relative to the nodes), about five
+  times the true curvature on \$1 strikes. Leisen-Reimer centres each tree on its own
+  strike; its premium is smooth and closer to a 2,001-step answer at 201 steps. Doubling
+  the steps moves no surface vol by more than 0.01 vol points.
+* *Bid and ask carry the mid's premium.* The premium moves with vol by far less than a
+  cent across a quote's bid-ask, so this keeps the tradeable spread exactly as quoted,
+  which the spread-aware butterfly test relies on.
+* *`mid`/`bid`/`ask` on the surface are European-equivalent prices*, with the quote as
+  observed kept in `mid_market`. The calibration compares Heston, a European model, with
+  `mid`; leaving the American price there would have been the obvious bug.
+* *Controls.* A synthetic American chain is recovered exactly (forward to 1e-6, smile to
+  1e-7) while the old pipeline misses by 1.6 vol points. With `r = q = 0` early exercise is
+  never optimal and the correction is < 1e-10. On a European chain with carry the
+  correction must make recovery worse. Given the corrected surface, the parity module's
+  independent American forward reproduces the surface's to 6e-8.
+
+**Why the corrected surface is the default.** The evidence is about the *data*, not the
+fit. On SPY the call/put vol gap at the forward goes from -0.24 / -0.26 vol points at 73 /
+272 days to -0.01 / +0.03, and the European-parity forward's per-strike scatter falls
+1.9-6.9x beyond six months once the premium is priced. SPY options *are* American, so the
+European surface is a known misspecification of every quote. The Heston RMSE improvement
+(2.51 -> 2.26) is *not* part of the case: cross-scoring shows the new parameters fit the
+old wing quotes just as well, so it is a different compromise, not better data. Against
+it: the gap overshoots to +0.20 / +0.37 at 15 / 21 months, and the self-consistent
+parity check is slightly worse than the non-self-consistent one (in-window violations
+10.6% -> 11.5%). Both point at what the lattice leaves out, not at a reason to go back to
+a model that ignores exercise altogether.
+
+**What it still leaves out.** A continuous dividend yield, so no pre-ex-date exercise of
+deep-ITM calls under SPY's discrete dividends. With the implied yield not positive here,
+the model prices every call premium at zero; the real ones would pull the long-dated
+forward back down, which is the leading suspect for the overshoot. And the premium depends
+on `r` itself, not only on the carry, so it inherits the Treasury-rate assumption.
 
 **Stale quotes are identified by arbitrage, not by timestamps.** The snapshot has last-trade
 times but no quote times. A quote offered below intrinsic (on an American option) or a call
