@@ -2,6 +2,7 @@
 End-to-end test of one decision cycle against a fake Alpaca client: no network,
 no credentials, but the same code path bot.py runs for real.
 """
+
 import datetime as dt
 import os
 import sys
@@ -9,24 +10,28 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from alpaca_client import Position  # noqa: E402
-from bot import run_once  # noqa: E402
+from alpaca_client import Position
+from bot import run_once
 
 
 class FakeClient:
-    def __init__(self, closes, qty=0.0, equity=100_000.0, buying_power=100_000.0,
-                 status="ACTIVE"):
+    def __init__(self, closes, qty=0.0, equity=100_000.0, buying_power=100_000.0, status="ACTIVE"):
         start = dt.date(2025, 1, 1)
         self.bars = [
             {"t": f"{start + dt.timedelta(days=i)}T05:00:00Z", "c": float(c)}
             for i, c in enumerate(closes)
         ]
         self.qty = qty
-        self.account = {"status": status, "equity": str(equity), "last_equity": str(equity),
-                        "buying_power": str(buying_power)}
+        self.account = {
+            "status": status,
+            "equity": str(equity),
+            "last_equity": str(equity),
+            "buying_power": str(buying_power),
+        }
         self.orders = []
-        self.now = dt.datetime.combine(start + dt.timedelta(days=len(closes) - 1),
-                                       dt.time(22, 0), tzinfo=dt.timezone.utc)
+        self.now = dt.datetime.combine(
+            start + dt.timedelta(days=len(closes) - 1), dt.time(22, 0), tzinfo=dt.UTC
+        )
 
     def get_account(self):
         return self.account
@@ -55,8 +60,16 @@ class FakeClient:
 
 
 def run(client, dry_run=False):
-    run_once(client, "SPY", short_window=5, long_window=20, risk_fraction=0.2,
-             max_position_fraction=0.25, dry_run=dry_run, now=client.now)
+    run_once(
+        client,
+        "SPY",
+        short_window=5,
+        long_window=20,
+        risk_fraction=0.2,
+        max_position_fraction=0.25,
+        dry_run=dry_run,
+        now=client.now,
+    )
 
 
 class TestRunOnce(unittest.TestCase):

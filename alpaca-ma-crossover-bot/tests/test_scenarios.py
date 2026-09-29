@@ -6,6 +6,7 @@ Default setup: SPY in a steady uptrend (5/20-day MAs so the fixtures stay small)
 account, flat, run on Friday 2026-09-25 at 16:15 ET after the close. The strategy wants to
 buy floor(20% x 100k / 139) = 143 shares.
 """
+
 import datetime as dt
 import io
 import json
@@ -18,13 +19,14 @@ import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from bot import EXIT_CODES, RunRefused, run_once  # noqa: E402
-from fake_alpaca import FakeAlpacaServer  # noqa: E402
-from risk import RiskLimits  # noqa: E402
-from runlog import RunLogger, configure_logger  # noqa: E402
+from fake_alpaca import FakeAlpacaServer
 
-UTC = dt.timezone.utc
-FRI_AFTER_CLOSE = dt.datetime(2026, 9, 25, 20, 15, tzinfo=UTC)   # 16:15 ET
+from bot import EXIT_CODES, RunRefused, run_once
+from risk import RiskLimits
+from runlog import RunLogger, configure_logger
+
+UTC = dt.UTC
+FRI_AFTER_CLOSE = dt.datetime(2026, 9, 25, 20, 15, tzinfo=UTC)  # 16:15 ET
 MON_AFTER_CLOSE = dt.datetime(2026, 9, 28, 20, 15, tzinfo=UTC)
 UP = list(range(100, 140))
 DOWN = list(range(140, 100, -1))
@@ -43,9 +45,19 @@ class Harness:
         stream = io.StringIO()
         log = RunLogger("test-run", configure_logger(stream, name=f"test-{uuid.uuid4().hex}"))
         try:
-            return run_once(self.client, "SPY", short_window=5, long_window=20,
-                            risk_fraction=0.2, max_position_fraction=0.25, dry_run=dry_run,
-                            limits=limits, kill_switch_reason=kill, now=now, log=log)
+            return run_once(
+                self.client,
+                "SPY",
+                short_window=5,
+                long_window=20,
+                risk_fraction=0.2,
+                max_position_fraction=0.25,
+                dry_run=dry_run,
+                limits=limits,
+                kill_switch_reason=kill,
+                now=now,
+                log=log,
+            )
         finally:
             self.events = [json.loads(line) for line in stream.getvalue().splitlines()]
 
@@ -60,6 +72,7 @@ def harness(closes=UP, **kwargs) -> Harness:
 
 
 # -- happy path, market closed, order open at end of run ------------------------------
+
 
 def test_after_close_buy_is_queued_and_reported_as_open_at_end_of_run():
     h = harness(market_open=False)
@@ -86,6 +99,7 @@ def test_order_filled_during_run_is_reported_as_filled():
 
 # -- idempotency: re-running the same day ---------------------------------------------
 
+
 def test_rerun_while_order_is_still_open_does_not_duplicate():
     h = harness()
     h.run()
@@ -107,7 +121,7 @@ def test_rerun_after_order_was_cancelled_does_not_resubmit_for_the_same_bar():
     h = harness()
     h.run()
     order = next(iter(h.server.orders.values()))
-    order["status"] = "canceled"   # e.g. cancelled by hand, nothing filled
+    order["status"] = "canceled"  # e.g. cancelled by hand, nothing filled
     second = h.run()
     assert second.outcome == "already_submitted"
     assert second.order_status == "canceled"
@@ -123,6 +137,7 @@ def test_rerun_after_fill_is_a_no_op():
 
 
 # -- partial fills ----------------------------------------------------------------------
+
 
 def test_partial_fill_then_cancel_is_reported_and_topped_up_on_the_next_bar():
     h = harness()
@@ -166,12 +181,14 @@ def test_partially_filled_order_still_working_blocks_the_next_run():
 
 # -- broker rejections and ambiguous failures ---------------------------------------------
 
+
 def test_insufficient_buying_power_rejection_is_not_retried():
     # The account snapshot said $100k, but by the time the order arrives the broker
     # disagrees (e.g. another order consumed it). The broker's word is final.
     h = harness()
-    h.server.fail("POST", "/v2/orders",
-                  (403, {"code": 40310000, "message": "insufficient buying power"}))
+    h.server.fail(
+        "POST", "/v2/orders", (403, {"code": 40310000, "message": "insufficient buying power"})
+    )
     result = h.run()
     assert result.outcome == "rejected" and EXIT_CODES["rejected"] == 1
     assert h.server.posts == 1
@@ -253,6 +270,7 @@ def test_persistent_read_failure_aborts_before_any_order():
 
 # -- market data problems -------------------------------------------------------------------
 
+
 def test_stale_bars_refuse_to_trade():
     h = harness()
     two_weeks_later = FRI_AFTER_CLOSE + dt.timedelta(days=14)
@@ -264,7 +282,7 @@ def test_stale_bars_refuse_to_trade():
 
 def test_holiday_weekend_is_not_stale():
     h = harness()
-    tuesday = FRI_AFTER_CLOSE + dt.timedelta(days=4)   # e.g. Monday was a holiday, feed lagging
+    tuesday = FRI_AFTER_CLOSE + dt.timedelta(days=4)  # e.g. Monday was a holiday, feed lagging
     assert h.run(now=tuesday).outcome == "submitted"
 
 
@@ -286,13 +304,14 @@ def test_bar_with_missing_close_refuses_to_trade():
 
 def test_intraday_run_ignores_todays_partial_bar():
     h = harness()
-    midday = dt.datetime(2026, 9, 25, 15, 30, tzinfo=UTC)   # 11:30 ET, market open
+    midday = dt.datetime(2026, 9, 25, 15, 30, tzinfo=UTC)  # 11:30 ET, market open
     result = h.run(now=midday)
     # Signal from Thursday's close; the order id carries Thursday's bar date.
     assert result.client_order_id == "macx-SPY-20260924-buy"
 
 
 # -- risk controls end to end -----------------------------------------------------------------
+
 
 def test_kill_switch_blocks_the_buy_and_logs_why():
     h = harness()

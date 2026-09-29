@@ -27,7 +27,7 @@ jobs:
           - project: fama-french-factor-model
             typed: false
           - project: alpaca-ma-crossover-bot
-            typed: false
+            typed: true
     defaults:
       run:
         working-directory: ${{ matrix.project }}
@@ -54,7 +54,8 @@ jobs:
         if: matrix.typed
         run: |
           pip install mypy pandas-stubs types-requests
-          if [ -f quantbt/__init__.py ]; then mypy; else mypy src scripts; fi
+          # Projects without a src/ layout list their files in pyproject.toml.
+          if [ -d src ]; then mypy src scripts; else mypy; fi
       - name: Test
         # All suites are offline: no market data is downloaded.
         run: python -m pytest

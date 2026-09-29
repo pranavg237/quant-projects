@@ -9,6 +9,7 @@ Response shapes and error codes follow Alpaca's public API docs (e.g. 403 with c
 40310000 for insufficient buying power, 422 for a duplicate client_order_id, 404 for "no
 position"). They have NOT been checked against the live API from this repository.
 """
+
 from __future__ import annotations
 
 import copy
@@ -36,7 +37,8 @@ class FakeResponse:
 
     def json(self) -> Any:
         if isinstance(self._body, str):
-            raise ValueError("not JSON")
+            # requests raises a ValueError subclass (JSONDecodeError) here; mirror it.
+            raise ValueError("not JSON")  # noqa: TRY004
         return copy.deepcopy(self._body)
 
 
@@ -58,23 +60,38 @@ class FakeAlpacaServer:
     KEY_ID = "PKFAKEKEYID00001"
     SECRET = "fakeSecretValue-9f8e7d6c5b4a"
 
-    def __init__(self, closes: list[float], *, last_bar: dt.date = dt.date(2026, 9, 25),
-                 equity: float = 100_000.0, last_equity: float | None = None,
-                 buying_power: float | None = None, status: str = "ACTIVE",
-                 position_qty: float = 0.0, market_open: bool = False) -> None:
+    def __init__(
+        self,
+        closes: list[float],
+        *,
+        last_bar: dt.date = dt.date(2026, 9, 25),
+        equity: float = 100_000.0,
+        last_equity: float | None = None,
+        buying_power: float | None = None,
+        status: str = "ACTIVE",
+        position_qty: float = 0.0,
+        market_open: bool = False,
+    ) -> None:
         dates = pd.bdate_range(end=pd.Timestamp(last_bar), periods=len(closes))
         # Alpaca stamps daily bars at midnight New York time (04:00 UTC in summer).
-        self.bars: list[dict] = [{"t": f"{d.date()}T04:00:00Z", "c": float(c)}
-                                 for d, c in zip(dates, closes, strict=True)]
+        self.bars: list[dict] = [
+            {"t": f"{d.date()}T04:00:00Z", "c": float(c)}
+            for d, c in zip(dates, closes, strict=True)
+        ]
         self.account: dict[str, Any] = {
-            "status": status, "trading_blocked": False, "equity": str(equity),
+            "status": status,
+            "trading_blocked": False,
+            "equity": str(equity),
             "last_equity": str(equity if last_equity is None else last_equity),
             "buying_power": str(equity if buying_power is None else buying_power),
         }
         self.position_qty = position_qty
-        self.clock = {"is_open": market_open, "timestamp": f"{last_bar}T20:15:00-04:00",
-                      "next_open": f"{last_bar + dt.timedelta(days=3)}T09:30:00-04:00",
-                      "next_close": f"{last_bar + dt.timedelta(days=3)}T16:00:00-04:00"}
+        self.clock = {
+            "is_open": market_open,
+            "timestamp": f"{last_bar}T20:15:00-04:00",
+            "next_open": f"{last_bar + dt.timedelta(days=3)}T09:30:00-04:00",
+            "next_close": f"{last_bar + dt.timedelta(days=3)}T16:00:00-04:00",
+        }
         self.orders: dict[str, dict] = {}
         self.calls: list[tuple[str, str]] = []
         self.faults: dict[tuple[str, str], list[Fault]] = {}
@@ -84,10 +101,14 @@ class FakeAlpacaServer:
         self._ids = itertools.count(1)
 
     # -- test helpers --------------------------------------------------
-    def fail(self, method: str, path: str, *errors: BaseException | tuple[int, Any],
-             process_first: bool = False) -> None:
-        self.faults.setdefault((method, path), []).extend(
-            Fault(e, process_first) for e in errors)
+    def fail(
+        self,
+        method: str,
+        path: str,
+        *errors: BaseException | tuple[int, Any],
+        process_first: bool = False,
+    ) -> None:
+        self.faults.setdefault((method, path), []).extend(Fault(e, process_first) for e in errors)
 
     def count(self, method: str, path: str) -> int:
         return sum(1 for c in self.calls if c == (method, path))
@@ -107,14 +128,22 @@ class FakeAlpacaServer:
         self.bars.append({"t": f"{nxt}T04:00:00Z", "c": float(close)})
 
     # -- the HTTP boundary ------------------------------------------------
-    def request(self, method: str, url: str, headers: dict | None = None,
-                params: dict | None = None, json: dict | None = None,
-                timeout: float | None = None) -> FakeResponse:
+    def request(
+        self,
+        method: str,
+        url: str,
+        headers: dict | None = None,
+        params: dict | None = None,
+        json: dict | None = None,
+        timeout: float | None = None,
+    ) -> FakeResponse:
         path = urlsplit(url).path
         self.calls.append((method, path))
         headers = headers or {}
-        if (headers.get("APCA-API-KEY-ID") != self.KEY_ID
-                or headers.get("APCA-API-SECRET-KEY") != self.SECRET):
+        if (
+            headers.get("APCA-API-KEY-ID") != self.KEY_ID
+            or headers.get("APCA-API-SECRET-KEY") != self.SECRET
+        ):
             return FakeResponse(401, {"code": 40110000, "message": "request is not authorized"})
 
         queue = self.faults.get((method, path))
@@ -147,13 +176,25 @@ class FakeAlpacaServer:
             if not self.position_qty:
                 return FakeResponse(404, {"code": 40410000, "message": "position does not exist"})
             price = self.bars[-1]["c"]
-            return FakeResponse(200, {"symbol": path.rsplit("/", 1)[1], "qty": str(self.position_qty),
-                                      "market_value": str(self.position_qty * price),
-                                      "avg_entry_price": str(price)})
+            return FakeResponse(
+                200,
+                {
+                    "symbol": path.rsplit("/", 1)[1],
+                    "qty": str(self.position_qty),
+                    "market_value": str(self.position_qty * price),
+                    "avg_entry_price": str(price),
+                },
+            )
         if method == "GET" and path == "/v2/orders":
             assert params.get("status") == "open"
-            return FakeResponse(200, [o for o in self.orders.values()
-                                      if o["symbol"] == params.get("symbols") and o["status"] not in TERMINAL])
+            return FakeResponse(
+                200,
+                [
+                    o
+                    for o in self.orders.values()
+                    if o["symbol"] == params.get("symbols") and o["status"] not in TERMINAL
+                ],
+            )
         if method == "GET" and path == "/v2/orders:by_client_order_id":
             for o in self.orders.values():
                 if o["client_order_id"] == params.get("client_order_id"):
@@ -171,15 +212,25 @@ class FakeAlpacaServer:
     def _submit(self, body: dict) -> FakeResponse:
         cid = body.get("client_order_id")
         if cid and any(o["client_order_id"] == cid for o in self.orders.values()):
-            return FakeResponse(422, {"code": 40010001, "message": "client_order_id must be unique"})
+            return FakeResponse(
+                422, {"code": 40010001, "message": "client_order_id must be unique"}
+            )
         qty = float(body["qty"])
         if body["side"] == "buy" and qty * self.bars[-1]["c"] > float(self.account["buying_power"]):
             return FakeResponse(403, {"code": 40310000, "message": "insufficient buying power"})
         order_id = f"ord-{next(self._ids):04d}"
-        order = {"id": order_id, "client_order_id": cid or order_id, "symbol": body["symbol"],
-                 "side": body["side"], "qty": body["qty"], "filled_qty": "0",
-                 "type": body["type"], "time_in_force": body["time_in_force"],
-                 "status": "accepted", "submitted_at": "2026-09-25T20:15:01Z"}
+        order = {
+            "id": order_id,
+            "client_order_id": cid or order_id,
+            "symbol": body["symbol"],
+            "side": body["side"],
+            "qty": body["qty"],
+            "filled_qty": "0",
+            "type": body["type"],
+            "time_in_force": body["time_in_force"],
+            "status": "accepted",
+            "submitted_at": "2026-09-25T20:15:01Z",
+        }
         self.orders[order_id] = order
         if self.on_submit:
             self.on_submit(order)
@@ -190,5 +241,6 @@ class FakeAlpacaServer:
         from alpaca_client import AlpacaClient
 
         self.sleeps: list[float] = []
-        return AlpacaClient(self.KEY_ID, self.SECRET, session=self,
-                            sleep=self.sleeps.append, **kwargs)
+        return AlpacaClient(
+            self.KEY_ID, self.SECRET, session=self, sleep=self.sleeps.append, **kwargs
+        )

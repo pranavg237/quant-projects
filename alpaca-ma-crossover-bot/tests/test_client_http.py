@@ -5,6 +5,7 @@ Policy under test: reads are retried on timeouts, connection errors, 429 and 5xx
 4xx are not; order submission is never retried and reports whether the failure is
 ambiguous (the order may have reached the broker).
 """
+
 import os
 import sys
 
@@ -13,8 +14,9 @@ import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from alpaca_client import AlpacaClient, AlpacaError  # noqa: E402
-from fake_alpaca import FakeAlpacaServer  # noqa: E402
+from fake_alpaca import FakeAlpacaServer
+
+from alpaca_client import AlpacaClient, AlpacaError
 
 
 @pytest.fixture
@@ -23,8 +25,12 @@ def server():
 
 
 def test_get_retries_5xx_then_succeeds_with_exponential_backoff(server):
-    server.fail("GET", "/v2/account", (503, {"message": "service unavailable"}),
-                (502, "<html>bad gateway</html>"))
+    server.fail(
+        "GET",
+        "/v2/account",
+        (503, {"message": "service unavailable"}),
+        (502, "<html>bad gateway</html>"),
+    )
     client = server.client(backoff_seconds=0.5)
     assert client.get_account()["status"] == "ACTIVE"
     assert server.count("GET", "/v2/account") == 3
@@ -32,8 +38,12 @@ def test_get_retries_5xx_then_succeeds_with_exponential_backoff(server):
 
 
 def test_get_retries_timeouts_and_429(server):
-    server.fail("GET", "/v2/clock", requests.Timeout("read timed out"),
-                (429, {"message": "rate limit exceeded"}))
+    server.fail(
+        "GET",
+        "/v2/clock",
+        requests.Timeout("read timed out"),
+        (429, {"message": "rate limit exceeded"}),
+    )
     assert server.client().get_clock()["is_open"] is False
     assert server.count("GET", "/v2/clock") == 3
 
@@ -73,13 +83,16 @@ def test_order_lookup_by_client_order_id_404_is_none(server):
     assert server.client().get_order_by_client_order_id("macx-SPY-20260925-buy") is None
 
 
-@pytest.mark.parametrize("error, ambiguous", [
-    (requests.Timeout("read timed out"), True),
-    (requests.ConnectionError("connection reset"), True),
-    ((500, {"message": "internal error"}), True),
-    ((503, {"message": "unavailable"}), True),
-    ((429, {"message": "rate limit"}), False),   # rate-limited: definitely not accepted
-])
+@pytest.mark.parametrize(
+    "error, ambiguous",
+    [
+        (requests.Timeout("read timed out"), True),
+        (requests.ConnectionError("connection reset"), True),
+        ((500, {"message": "internal error"}), True),
+        ((503, {"message": "unavailable"}), True),
+        ((429, {"message": "rate limit"}), False),  # rate-limited: definitely not accepted
+    ],
+)
 def test_order_submission_is_never_retried(server, error, ambiguous):
     server.fail("POST", "/v2/orders", error)
     client = server.client()

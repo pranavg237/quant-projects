@@ -15,6 +15,7 @@ Secrets are kept out in two layers:
      replaces any occurrence of the configured secret *values* in the final line.
 tests/test_logging.py checks both layers.
 """
+
 from __future__ import annotations
 
 import datetime as dt
@@ -26,20 +27,24 @@ from collections.abc import Iterable
 from typing import IO, Any
 
 REDACTED = "[REDACTED]"
-_SENSITIVE_NAME = re.compile(r"secret|password|token|authorization|api[_-]?key|key[_-]?id", re.I)
+_SENSITIVE_NAME = re.compile(
+    r"secret|password|token|authorization|api[_-]?key|key[_-]?id", re.IGNORECASE
+)
 
 
 def new_run_id(now: dt.datetime | None = None) -> str:
     """A sortable, unique id for one bot invocation, e.g. 20260928T201502Z-3f9a1c2e."""
-    now = now or dt.datetime.now(dt.timezone.utc)
-    return f"{now.astimezone(dt.timezone.utc):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:8]}"
+    now = now or dt.datetime.now(dt.UTC)
+    return f"{now.astimezone(dt.UTC):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:8]}"
 
 
 def _sanitize(value: Any) -> Any:
     """Recursively redact values stored under sensitive-looking keys."""
     if isinstance(value, dict):
-        return {k: (REDACTED if _SENSITIVE_NAME.search(str(k)) else _sanitize(v))
-                for k, v in value.items()}
+        return {
+            k: (REDACTED if _SENSITIVE_NAME.search(str(k)) else _sanitize(v))
+            for k, v in value.items()
+        }
     if isinstance(value, (list, tuple)):
         return [_sanitize(v) for v in value]
     return value
@@ -55,8 +60,9 @@ class JsonLinesFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            "ts": dt.datetime.fromtimestamp(record.created, dt.timezone.utc)
-                    .isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            "ts": dt.datetime.fromtimestamp(record.created, dt.UTC)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z"),
             "level": record.levelname.lower(),
             "run_id": getattr(record, "run_id", None),
             "event": record.getMessage(),
@@ -72,8 +78,9 @@ class JsonLinesFormatter(logging.Formatter):
         return line
 
 
-def configure_logger(stream: IO[str], secrets: Iterable[str | None] = (),
-                     name: str = "bot") -> logging.Logger:
+def configure_logger(
+    stream: IO[str], secrets: Iterable[str | None] = (), name: str = "bot"
+) -> logging.Logger:
     """Return a logger named `name` that writes JSON lines to `stream` (replacing any
     handlers it had), with secret-value redaction for `secrets`."""
     logger = logging.getLogger(name)

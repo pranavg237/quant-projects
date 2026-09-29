@@ -33,7 +33,8 @@ produced it. Where a strategy loses to buying and holding the index, the README 
   result is fragile, the README says so: one backtest's Sharpe moves by 0.02 when a single
   price changes in its seventh digit.
 - **Tested.** 904 tests across the six projects, all offline, run by CI on every push.
-  The four main packages also pass strict `mypy` and `ruff`.
+  Five of the six projects also pass strict `mypy` and `ruff` in CI; fama-french is
+  tested but not type-checked.
 
 [PLAN.md](PLAN.md) is the audit and plan behind two rounds of work, and
 [CHANGES.md](CHANGES.md) explains every change they led to.

@@ -4,11 +4,13 @@ pranavg237/ma-crossover-backtest, pulled out into a pure function so it can
 be unit tested without hitting any API, and reused by both a backtest and
 this live/paper bot.
 """
+
 from __future__ import annotations
 
 import datetime as dt
 import math
 from enum import Enum
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -20,8 +22,8 @@ MARKET_CLOSE = dt.time(16, 0)
 class Signal(str, Enum):
     """Desired position for the next session."""
 
-    LONG = "long"    # short MA above long MA -> want to be in the position
-    FLAT = "flat"    # short MA below long MA -> want to be out
+    LONG = "long"  # short MA above long MA -> want to be in the position
+    FLAT = "flat"  # short MA below long MA -> want to be out
 
 
 def compute_signal(closes: pd.Series, short_window: int, long_window: int) -> Signal:
@@ -36,7 +38,7 @@ def compute_signal(closes: pd.Series, short_window: int, long_window: int) -> Si
     return Signal.LONG if ma_short > ma_long else Signal.FLAT
 
 
-def completed_bars(bars: list[dict], now: dt.datetime) -> list[dict]:
+def completed_bars(bars: list[dict[str, Any]], now: dt.datetime) -> list[dict[str, Any]]:
     """Drop today's daily bar if the session has not closed yet.
 
     During market hours Alpaca returns a bar for today whose "close" is really the
@@ -59,8 +61,9 @@ def completed_bars(bars: list[dict], now: dt.datetime) -> list[dict]:
     return bars
 
 
-def validate_bars(bars: list[dict], now: dt.datetime, long_window: int,
-                  max_age_days: int = 5) -> str | None:
+def validate_bars(
+    bars: list[dict[str, Any]], now: dt.datetime, long_window: int, max_age_days: int = 5
+) -> str | None:
     """Return a reason the bars are unusable, or None if they are fine.
 
     Refuses to trade on:
@@ -72,8 +75,10 @@ def validate_bars(bars: list[dict], now: dt.datetime, long_window: int,
         signal computed from it would be a signal about the past.
     """
     if len(bars) < long_window:
-        return (f"only {len(bars)} completed bars, need >= {long_window} "
-                f"(market data may lag on a free/paper account)")
+        return (
+            f"only {len(bars)} completed bars, need >= {long_window} "
+            f"(market data may lag on a free/paper account)"
+        )
     for i, bar in enumerate(bars):
         if not isinstance(bar.get("t"), str):
             return f"bar {i} has no timestamp"
@@ -89,9 +94,13 @@ def validate_bars(bars: list[dict], now: dt.datetime, long_window: int,
     return None
 
 
-def position_size(equity: float, price: float, risk_fraction: float,
-                  max_position_fraction: float = 0.25,
-                  buying_power: float | None = None) -> int:
+def position_size(
+    equity: float,
+    price: float,
+    risk_fraction: float,
+    max_position_fraction: float = 0.25,
+    buying_power: float | None = None,
+) -> int:
     """Whole-share position size: risk_fraction of equity, capped at
     max_position_fraction of equity so one signal can't put the whole
     account into one name, and never more than the available buying power.
@@ -107,8 +116,9 @@ def position_size(equity: float, price: float, risk_fraction: float,
     return int(dollars // price)
 
 
-def decide_order(current_qty: float, signal: Signal, target_qty: int,
-                 top_up_below: float = 0.5) -> tuple[str, float] | None:
+def decide_order(
+    current_qty: float, signal: Signal, target_qty: int, top_up_below: float = 0.5
+) -> tuple[str, float] | None:
     """Compares current holdings to the desired signal and returns
     (side, qty) to submit, or None if already positioned correctly.
 

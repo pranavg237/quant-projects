@@ -19,6 +19,7 @@ Design choices:
 - **The kill switch never flattens.** It halts all order submission, buys and sells alike.
   See `read_kill_switch()` for why it does not liquidate.
 """
+
 from __future__ import annotations
 
 import math
@@ -38,9 +39,9 @@ _KILL_SWITCH_OFF_VALUES = frozenset({"", "0", "false", "no", "off"})
 class RiskLimits:
     """Configurable pre-trade limits. Defaults are deliberately conservative."""
 
-    max_position_pct: float = 0.25          # max position value as a fraction of equity
+    max_position_pct: float = 0.25  # max position value as a fraction of equity
     max_position_notional: float = 50_000.0  # max position value in dollars
-    max_daily_loss_pct: float = 0.02        # block new risk once equity is down this much vs last_equity
+    max_daily_loss_pct: float = 0.02  # block new risk once equity is down this much vs last_equity
 
     def __post_init__(self) -> None:
         if not (0 < self.max_position_pct <= 1):
@@ -65,7 +66,7 @@ class OrderIntent:
     """An order the strategy wants to place. `price` is the reference price used for sizing."""
 
     symbol: str
-    side: str   # "buy" or "sell"
+    side: str  # "buy" or "sell"
     qty: float
     price: float
 
@@ -124,8 +125,13 @@ def is_risk_increasing(current_qty: float, side: str, qty: float) -> bool:
     return abs(current_qty + signed) > abs(current_qty)
 
 
-def evaluate_order(order: OrderIntent, current_qty: float, account: AccountSnapshot,
-                   limits: RiskLimits, kill_switch_reason: str | None = None) -> RiskDecision:
+def evaluate_order(
+    order: OrderIntent,
+    current_qty: float,
+    account: AccountSnapshot,
+    limits: RiskLimits,
+    kill_switch_reason: str | None = None,
+) -> RiskDecision:
     """Run every pre-trade check against a proposed order and return the verdict.
 
     Checks, in order:
@@ -149,13 +155,21 @@ def evaluate_order(order: OrderIntent, current_qty: float, account: AccountSnaps
         add("kill_switch", "pass", "not engaged")
 
     # 2. Sanity of the order itself
-    sane = (order.side in ("buy", "sell") and math.isfinite(order.qty) and order.qty > 0
-            and math.isfinite(order.price) and order.price > 0)
+    sane = (
+        order.side in ("buy", "sell")
+        and math.isfinite(order.qty)
+        and order.qty > 0
+        and math.isfinite(order.price)
+        and order.price > 0
+    )
     if sane:
         add("order_sanity", "pass", f"{order.side} {order.qty:g} @ ~{order.price:.2f}")
     else:
-        add("order_sanity", "fail",
-            f"invalid order: side={order.side!r} qty={order.qty!r} price={order.price!r}")
+        add(
+            "order_sanity",
+            "fail",
+            f"invalid order: side={order.side!r} qty={order.qty!r} price={order.price!r}",
+        )
         # Nothing below is meaningful without a sane order.
         return RiskDecision(approved=False, risk_increasing=True, checks=tuple(checks))
 
@@ -166,8 +180,11 @@ def evaluate_order(order: OrderIntent, current_qty: float, account: AccountSnaps
 
     # 3. Long-only: never sell more than we hold
     if order.side == "sell" and order.qty > max(current_qty, 0.0):
-        add("no_short", "fail",
-            f"sell {order.qty:g} exceeds current position {current_qty:g}; would open a short")
+        add(
+            "no_short",
+            "fail",
+            f"sell {order.qty:g} exceeds current position {current_qty:g}; would open a short",
+        )
     else:
         add("no_short", "pass", f"post-trade qty {projected_qty:g}")
 
@@ -179,12 +196,17 @@ def evaluate_order(order: OrderIntent, current_qty: float, account: AccountSnaps
     else:
         # 4. Daily loss circuit breaker (fail closed)
         if account.last_equity is None or not (account.last_equity > 0):
-            add("daily_loss", "fail",
-                f"last_equity unavailable ({account.last_equity!r}); cannot evaluate daily loss")
+            add(
+                "daily_loss",
+                "fail",
+                f"last_equity unavailable ({account.last_equity!r}); cannot evaluate daily loss",
+            )
         else:
             loss_pct = (account.last_equity - account.equity) / account.last_equity
-            detail = (f"equity {account.equity:,.2f} vs last_equity {account.last_equity:,.2f} "
-                      f"({-loss_pct:+.2%}), limit -{limits.max_daily_loss_pct:.2%}")
+            detail = (
+                f"equity {account.equity:,.2f} vs last_equity {account.last_equity:,.2f} "
+                f"({-loss_pct:+.2%}), limit -{limits.max_daily_loss_pct:.2%}"
+            )
             if loss_pct >= limits.max_daily_loss_pct:
                 add("daily_loss", "fail", f"daily loss limit breached: {detail}")
             else:
@@ -199,10 +221,14 @@ def evaluate_order(order: OrderIntent, current_qty: float, account: AccountSnaps
             add("position_pct", "fail" if pct > limits.max_position_pct + 1e-12 else "pass", detail)
 
         # 6. Position size in dollars
-        detail = (f"post-trade ${projected_notional:,.2f}, "
-                  f"limit ${limits.max_position_notional:,.2f}")
-        add("position_notional",
-            "fail" if projected_notional > limits.max_position_notional else "pass", detail)
+        detail = (
+            f"post-trade ${projected_notional:,.2f}, limit ${limits.max_position_notional:,.2f}"
+        )
+        add(
+            "position_notional",
+            "fail" if projected_notional > limits.max_position_notional else "pass",
+            detail,
+        )
 
     # 7. Buying power (buys only; the broker also checks, this just avoids a known reject)
     if order.side == "buy":
