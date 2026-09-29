@@ -90,7 +90,7 @@ report it moves a lot. Measuring that needs a time series of chains, which needs
 paid feed or weeks of daily collection. This is the largest gap in the repo and it is
 stated in the README rather than papered over.
 
-### B. American exercise in the surface — **FIXED for the continuous-yield model; discrete dividends open**
+### B. American exercise in the surface — **FIXED for the continuous-yield model; discrete dividends tested (item L), not the default**
 SPY options are American; the surface used to treat them as European. The first version
 of this item said the premium on the OTM quotes the surface inverts is small. That is
 true short-dated and wrong long-dated: the 21-month puts near the forward carry up to
@@ -101,7 +101,7 @@ whose premium is roughly `r K tau`.
 `build_surface` now de-Americanises every quote (201-step Leisen-Reimer lattice, a
 per-quote fixed point for the vol-premium circularity, contraction <= 0.11, <= 8
 iterations) and iterates the forward with the surface (5 passes to 6e-8). The old
-pipeline is `exercise="european"` and both are calibrated in every run
+pipeline is `exercise="european"` and a default run calibrates both (and the discrete-dividend surface)
 (`results/exercise_comparison.md`). Heston RMSE 2.51 -> 2.26, holdout 2.38 -> 2.14,
 body 1.09 -> 1.10, short-dated put wing 5.92 -> 5.26, one-vol-per-expiry Black-Scholes
 10.61 -> 10.66. The Heston gain looked suspicious, because the wing quotes barely moved
@@ -180,7 +180,9 @@ the surface, makes the gap wider (implied q -0.13% to -0.19% beyond six months).
 carry `r - q`; splitting it needs a dividend forecast and the funding rate. The dividend
 forecast is now in the data (item L), and with it the parity forward grows the spot net
 of dividends at 76-96bp over Treasury from six to 21 months; a +/-10% dividend error moves
-that by +/-8bp. So the carry gap is a funding basis, measured, not a dividend error.
+that by +/-8bp. So the carry gap looks like a funding basis rather than a dividend error. That is an
+inference from a residual, not a measurement: the residual also absorbs quote staleness
+and the escrowed-dividend model's bias.
 Whether options are *discounted* at that rate too is not identified by parity, and it is
 the leading suspect for the remaining overshoot in item 8.
 

@@ -177,7 +177,7 @@ requires it to make the fit *worse*.
 
 **Wired into the surface, and the default.** `build_surface(exercise="american")` removes
 each quote's early-exercise premium and fits the forward to de-Americanised parity;
-`exercise="european"` is the old pipeline. The run calibrates both and writes
+`exercise="european"` is the old pipeline. A default run calibrates the European, continuous-yield and discrete-dividend surfaces and writes
 `results/exercise_comparison.md`. The design choices:
 
 * *The circularity is a fixed point, not a guess.* The premium depends on the vol being
@@ -270,7 +270,7 @@ forward comes down 25bp, and the long-dated per-strike forward scatter narrows. 
 optimum, per the cross-scores), parity violations are flat in-window (102 vs 103) and
 slightly worse out of sample (296 vs 285). A model that is more faithful to SPY but
 does not improve the measured fit does not clear the bar for moving every downstream
-number, so it is computed and reported in every run and switched on by argument.
+number, so it is computed and reported in every default run and switched on by argument.
 
 **Stale quotes are identified by arbitrage, not by timestamps.** The snapshot has last-trade
 times but no quote times. A quote offered below intrinsic (on an American option) or a call

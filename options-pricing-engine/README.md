@@ -13,7 +13,7 @@ Every pricer is cross-checked against an independently derived one, every chart 
 | **Analytic** | Black-Scholes price + 9 Greeks, fully vectorised. Every Greek, calls and puts, checked against central differences of the *price* on a 168-point grid down to **1 day** to expiry: worst relative error **6e-8** first-order, **7e-4** second-order ([table](results/greeks_fd.md)). |
 | **Lattice** | CRR / Jarrow-Rudd / Leisen-Reimer, European + American. LR at **101 steps** beats CRR at **2,001 steps** (3.4e-5 vs 8.8e-4 error). |
 | **Monte Carlo** | Antithetic + control variates: **57x variance reduction** on a European call, **576x** on an arithmetic Asian (geometric-Asian control, ρ = 0.9991). Error bars verified calibrated over 40 replications. |
-| **Implied vol** | Safeguarded Newton (`rtsafe`). On a 180-quote stress grid, every quote with vega ≥ 1e-6 comes back to within **2.5e-10** of vol in ≤16 iterations; below that, the price's own round-off sets the floor ([`results/validation.md`](results/validation.md)). |
+| **Implied vol** | Safeguarded Newton (`rtsafe`). On a 182-quote stress grid (180 usable), every one of the 178 quotes with vega ≥ 1e-6 comes back to within **2.5e-10** of vol in ≤16 iterations; below that, the price's own round-off sets the floor ([`results/validation.md`](results/validation.md)). |
 | **Heston** | Characteristic function ("little trap" branch), two independent quadratures agreeing to 1.6e-8 (max abs price difference), cross-checked against a full-truncation Euler Monte Carlo. |
 | **Real data** | 4,469 SPY quotes → 2,010-point surface across 12 expiries. Every quote de-Americanised (early-exercise premium removed on a lattice) and the forward solved from de-Americanised put-call parity; 0 calendar-arbitrage violations. |
 | **Put-call parity** | **44.5%** of the pairs the forward is fitted to break *European* parity by more than the bid-ask spread. Pricing the American early-exercise premium cuts that to **11.5%** and the scatter of the per-strike forwards 1.9–6.9x beyond six months — so SPY's parity "violations" are mostly American exercise, and plain European parity puts the forward too low by up to **86bp** at 21 months ([report](results/parity.md)). |
@@ -24,7 +24,7 @@ Every pricer is cross-checked against an independently derived one, every chart 
 
 ```bash
 pip install -r requirements.txt
-python scripts/run_analysis.py     # ~16.5 min (builds and calibrates three surfaces), offline from the committed SPY snapshot and dividends; writes figures/ and results/
+python scripts/run_analysis.py     # ~16.5 min unloaded, up to ~18 min under load (builds and calibrates three surfaces), offline from the committed SPY snapshot and dividends; writes figures/ and results/
 python -m pytest                   # 456 tests, 98% branch coverage, offline
 ```
 
@@ -420,12 +420,12 @@ What it shows:
   vega-weighted objective, not worse data. Parity violations: 102 against 103 in-window,
   296 against 285 out of sample.
 
-**Decision: an option, not the default.** It is the more faithful model of SPY, and it halves
-the 21-month overshoot, but it leaves most of the 15-month one, makes 104 days worse, and
+**Decision: an option, not the default.** It is the more faithful model of SPY, and it cuts
+the 21-month overshoot by 43% (+0.37 to +0.21), but it leaves most of the 15-month one, makes 104 days worse, and
 improves neither the fit nor the parity counts; the evidence does not clear the bar for
 changing every number downstream. `build_surface(..., dividends=schedule)` and
-`python scripts/run_analysis.py --dividends discrete` switch it on; every run computes and
-reports all three surfaces.
+`python scripts/run_analysis.py --dividends discrete` switch it on; a default run computes and
+reports all three surfaces (`--skip-comparison` skips the other two).
 
 ### Heston calibration
 

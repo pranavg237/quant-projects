@@ -43,10 +43,12 @@ just before each ex-date. This round tested that properly.
   (+0.07 → +0.10). It also rules out an earlier guess that the 104-day miss came from the
   December ex-date.
 - **Decision.** Discrete dividends are an option (`dividends=`, `--dividends discrete`),
-  not the default, because they don't win on every measure. Every run now builds and
-  reports all three surfaces side by side (full run about 16.5 minutes).
+  not the default, because they don't win on every measure. A default run now builds and
+  reports all three surfaces side by side (`--skip-comparison` skips the other two; a full
+  run takes about 16.5 minutes, up to 18 under load).
 - **What it points to next.** With dividends known, the parity forward implies funding
-  about 76–96 bp above the Treasury rate at 6–21 months. A ±10% dividend error moves that
+  about 76–96 bp above the Treasury rate at 6–21 months (a residual that also absorbs quote
+  staleness and model bias, so treat it as a lead, not a measurement). A ±10% dividend error moves that
   by only about 8 bp, so the rate used for the early-exercise premium is the leading
   suspect for the remainder. That is a hypothesis, not tested.
 

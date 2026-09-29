@@ -26,9 +26,11 @@ or turnover of its own to report. Its outputs are factor loadings, alphas and as
 test statistics. The worked examples use French data through July 2026 (`--end 2026-07`),
 and all three are built **offline from committed snapshots**. Each snapshot's `manifest.json`
 records the download time, URLs, SHA-256 hashes, file sizes and sample periods, and the
-commands below reproduce the reports byte for byte. Every file is checked against its hash
-when read, including the Yahoo `returns.csv` (its hash was added to the 2026-09-28
-manifest after the fact, from the file as committed with the snapshot).
+commands below reproduce the reports byte for byte. The command line checks every file against
+its hash when it reads it, including the Yahoo `returns.csv` (its hash was added to the
+2026-09-28 manifest after the fact, from the file as committed with the snapshot). The
+returns check applies only when the CSV sits in the snapshot directory next to its
+manifest; a copy elsewhere, or a call through the Python API, is not checked.
 
 - [example-analyze](reports/example-analyze/report.md) reads
   [data/snapshot-2026-09-28/](data/snapshot-2026-09-28/): the French monthly factor files
