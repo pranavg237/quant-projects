@@ -13,8 +13,8 @@ Every pricer is cross-checked against an independently derived one, every chart 
 | **Analytic** | Black-Scholes price + 9 Greeks, fully vectorised. Every Greek, calls and puts, checked against central differences of the *price* on a 168-point grid down to **1 day** to expiry: worst relative error **6e-8** first-order, **7e-4** second-order ([table](results/greeks_fd.md)). |
 | **Lattice** | CRR / Jarrow-Rudd / Leisen-Reimer, European + American. LR at **101 steps** beats CRR at **2,001 steps** (3.4e-5 vs 8.8e-4 error). |
 | **Monte Carlo** | Antithetic + control variates: **57x variance reduction** on a European call, **576x** on an arithmetic Asian (geometric-Asian control, ρ = 0.9991). Error bars verified calibrated over 40 replications. |
-| **Implied vol** | Safeguarded Newton (`rtsafe`). Converges in ≤16 iterations to **1e-11** of vol even where vega is 1e-6. |
-| **Heston** | Characteristic function ("little trap" branch), two independent quadratures agreeing to 1e-8, cross-checked against a full-truncation Euler Monte Carlo. |
+| **Implied vol** | Safeguarded Newton (`rtsafe`). On a 180-quote stress grid, every quote with vega ≥ 1e-6 comes back to within **2.5e-10** of vol in ≤16 iterations; below that, the price's own round-off sets the floor ([`results/validation.md`](results/validation.md)). |
+| **Heston** | Characteristic function ("little trap" branch), two independent quadratures agreeing to 1.6e-8 (max abs price difference), cross-checked against a full-truncation Euler Monte Carlo. |
 | **Real data** | 4,469 SPY quotes → 2,012-point surface across 12 expiries. Forward from put-call parity, 0 calendar-arbitrage violations. |
 | **Put-call parity** | **44.5%** of the pairs the forward is fitted to break *European* parity by more than the bid-ask spread. Pricing the American early-exercise premium cuts that to **10.6%** and the scatter of the per-strike forwards 2.4–5.6x beyond six months — so SPY's parity "violations" are mostly American exercise, and the pipeline's forward is biased low by up to **85bp** at 21 months ([report](results/parity.md)). Not yet fixed in the surface. |
 | **Calibration** | Heston fits the SPY surface to **2.51 vol points** RMSE with 5 parameters, against **10.61** for a Black-Scholes model with one free volatility *per expiry* (12 parameters). Out-of-sample on held-out strikes: **2.38**. |
@@ -63,7 +63,7 @@ $$C = S e^{-q\tau} N(d_1) - K e^{-r\tau} N(d_2), \qquad P = K e^{-r\tau} N(-d_2)
 
 Nine Greeks are implemented analytically: Δ, Γ, vega, Θ, ρ, vanna $\partial^2V/\partial S\partial\sigma$, volga $\partial^2V/\partial\sigma^2$, charm $\partial\Delta/\partial t$, and dual delta $\partial V/\partial K$. (An earlier version said ten, counting the price.) Undiscounted, the put's dual delta is the risk-neutral CDF of $S_T$ and minus the call's is $\mathbb{Q}(S_T > K)$ — which is why call prices must fall, and be convex, in strike.
 
-**How the Greeks are checked.** Each one is compared with a central finite difference of the *price* alone — second-order Greeks, including the mixed partials vanna and charm, are second differences of the price, not differences of the analytic delta or vega. The grid is built for where Greeks break: calls and puts, **1 day** to 3 years, strikes $\pm3$ standard deviations from the forward, 10% and 40% vol, non-zero $r$ and $q$ (168 points per option type). Steps are scaled to each input's natural scale ($S\sigma\sqrt\tau$ for spot, $\sigma$ for vol, $\tau$ for time) and to the price formula's round-off, which is about $\epsilon S$ because the price is a difference of two terms of size $S$; the textbook $\epsilon^{1/3}$, $\epsilon^{1/4}$ steps lose about 10x on one-day gamma and volga. Worst relative error ([full table](results/greeks_fd.md)):
+**How the Greeks are checked.** Each one is compared with a central finite difference of the *price* alone — second-order Greeks, including the mixed partials vanna and charm, are second differences of the price, not differences of the analytic delta or vega. The grid is built for where Greeks break: calls and puts, **1 day** to 3 years, strikes $\pm3$ standard deviations from the forward, 10% and 40% vol, non-zero $r$ and $q$ (84 points per option type, 168 in all). Steps are scaled to each input's natural scale ($S\sigma\sqrt\tau$ for spot, $\sigma$ for vol, $\tau$ for time) and to the price formula's round-off, which is about $\epsilon S$ because the price is a difference of two terms of size $S$; the textbook $\epsilon^{1/3}$, $\epsilon^{1/4}$ steps lose about 10x on one-day gamma and volga. Worst relative error ([full table](results/greeks_fd.md)):
 
 | | Δ | vega | Θ | ρ | dual Δ | Γ | vanna | volga | charm |
 |---|---|---|---|---|---|---|---|---|---|
@@ -155,7 +155,7 @@ This was a real bug in the first version. Fitting $\beta$ on the raw $Z$/$-Z$ le
 
 ### Implied vol converges in volatility space, not price space
 
-Stopping at $|V_{BS}(\sigma) - V_{mkt}| < 10^{-10}$ sounds strict and is not: a five-day 10%-OTM call has vega around $10^{-6}$, so that price tolerance leaves $10^{-4}$ of *volatility* error. Adding a bracket-width criterion costs a handful of bisection steps and improved the worst-case accuracy on the test suite from **5e-5 to 1.7e-11**.
+Stopping at $|V_{BS}(\sigma) - V_{mkt}| < 10^{-10}$ sounds strict and is not: a five-day 10%-OTM call at 15% vol has vega $2.1\times10^{-6}$, so that price tolerance alone leaves $4.7\times10^{-5}$ of *volatility* error (and at 10% vol the vega is $2.4\times10^{-14}$, where a price stop says nothing about vol at all). The solver therefore also requires the implied vol uncertainty, or the bracket width, to be below $10^{-9}$. That costs a handful of bisection steps; on a 180-quote stress grid the worst vol error is now **2.5e-10** for every quote with vega ≥ 1e-6 ([`results/validation.md`](results/validation.md)).
 
 ### The Heston benchmark is one vol per expiry, not one vol overall
 
@@ -186,9 +186,9 @@ Variance reduction at matched effective sample counts:
 | **both** | **0.00434** | **57.4×** |
 | arithmetic Asian, geometric control | 0.00055 vs 0.01326 | **576×** (ρ = 0.9991) |
 
-The American put on the same parameters is worth **6.0909** (3,001-step CRR tree), a **0.5173** early-exercise premium over the Black-Scholes European put. With no dividends, the American *call* matches the European call on the same tree to 1e-10 — as it must, since early exercise is never optimal.
+The American put on the same parameters is worth **6.0909** (3,001-step CRR tree), a **0.5173** early-exercise premium over the Black-Scholes European put. With no dividends, the American *call* matches the European call on the same 3,001-step tree exactly (difference 0.0, [`results/validation.md`](results/validation.md)) — as it must, since early exercise is never optimal.
 
-Heston is validated three ways: the Black-Scholes limit ($\xi \to 0$) to **1e-9**, Gil-Pelaez against Lewis' single-integral form to **1e-8**, and against a full-truncation Euler Monte Carlo to within one standard error across strikes.
+Heston is validated three ways: the Black-Scholes limit ($\xi \to 0$) to **1.2e-9**, Gil-Pelaez against Lewis' single-integral form to **1.6e-8** (maximum absolute price differences, [`results/validation.md`](results/validation.md); the unit tests assert 5e-9 and 1e-6), and against a full-truncation Euler Monte Carlo to within one standard error across strikes.
 
 ### The SPY volatility surface
 
@@ -206,7 +206,7 @@ The overlay shows how the smile changes with expiry; it does not show how well e
 
 ![Smiles by expiry with bid-ask band](figures/smiles_by_expiry.png)
 
-At this scale the band is thinner than the line almost everywhere, which is itself the finding: the smile's *shape* is pinned down by the quotes far more tightly than any model below fits it. The band is widest where vega is smallest: a median **0.6–0.75 vol points** beyond $k = -0.3$ at 12–21 days, against **0.05–0.11** within 5% of the forward at every expiry, and at most 0.13 anywhere past six months (medians by expiry and moneyness bucket). Two consequences. The Heston misses in the short-dated put wing (5–10 vol points, below) are far outside the quotes, so they are model failure, not noise. And the step at $k = 0$ on the longest expiries, where the surface switches from puts to calls — **−1.15 vol points at 637 days**, ten times the band there — is not noise either: it is the forward bias from American exercise measured in the parity section below.
+At this scale the band is thinner than the line almost everywhere, which is itself the finding: the smile's *shape* is pinned down by the quotes far more tightly than any model below fits it. The band is widest where vega is smallest: a median **0.59–0.75 vol points** in the deep put wing at 12–21 days, against **0.05–0.11** within 5% of the forward at every expiry, and at most 0.13 anywhere past six months (medians by expiry and moneyness bucket, [`results/validation.md`](results/validation.md)). Two consequences. The Heston misses in the short-dated put wing (5–10 vol points, below) are far outside the quotes, so they are model failure, not noise. And the call-minus-put vol gap at the forward on the longest expiries — **−1.08 vol points at 637 days** (median over strikes within 1% of the forward, [`results/parity.md`](results/parity.md)), ten times the 0.11 band there — is not noise either: it is the forward bias from American exercise measured in the parity section below.
 
 ![Term structure](figures/term_structure.png)
 
@@ -290,7 +290,7 @@ that are arbitrageable *on their own*, with no model and no forward:
 * **100 adjacent-strike pairs are not monotone** — a call bid above the next-lower strike's
   call ask (or the put mirror image), a free vertical spread.
 * **128 pairs breach the American bound $C - P \le S - Ke^{-r\tau}$**, which needs neither a
-  forward nor a dividend forecast (only spot and the Treasury rate); 82% of them are at
+  forward nor a dividend forecast (only spot and the Treasury rate); 105 of them (82%) are at
   strikes more than 5% below spot, i.e. deep in-the-money calls.
 
 None of these can exist in a live market. The snapshot carries last-trade times but no quote
@@ -317,7 +317,7 @@ the rest:
 | Model | In-sample RMSE | Out-of-sample RMSE | Ratio |
 |---|---|---|---|
 | Black-Scholes, one vol | 11.43 | 10.95 | 0.96 |
-| Black-Scholes, one vol per expiry | 10.80 | 10.31 | 0.96 |
+| Black-Scholes, one vol per expiry | 10.80 | 10.31 | 0.95 |
 | **Heston** | **2.55** | **2.38** | **0.93** |
 
 All three degrade by nothing — with 5 parameters against 234 training quotes there is
@@ -353,7 +353,7 @@ This is not a calibration failure, it is the model. Heston generates skew throug
 
 **The implied dividend yield comes out too low, and fixing American exercise makes it lower.** Backing $q$ out of the parity forward with Treasury discounting gives ~0.3% at long maturities, against SPY's actual ~1.1%. The American-adjusted forward is *higher*, so its implied $q$ is about −0.1% to −0.2% beyond six months (table in [`results/parity.md`](results/parity.md)). Parity cannot say why: the forward is inferred from the same quotes, so only the carry $r - q$ is identified, and splitting it needs a dividend forecast and the dealers' funding rate, neither of which is in the data. The most likely culprit is funding — options are financed at OIS/repo-type rates, not Treasury yields — but that is a hypothesis, not a measurement. The surface itself is unaffected by the split: it is built from the forward directly (i.e. Black-76), so the $r$/$q$ split never enters a price.
 
-**The call/put mismatch at the forward was mostly American exercise, not quote noise.** An earlier version of this README said call and put vols meet at the forward with a ~0.5 vol point gap that "needs better quotes". Measured properly (median over strikes within 1% of the forward), the gap is under 0.25 vol points out to nine months and then widens to **−0.51 at 455 days and −1.08 at 637 days**, and it closes to about **0.2 or less** at every expiry once both legs are de-Americanised and the adjusted forward is used — see the parity section above. The bias is not yet removed from the surface.
+**The call/put mismatch at the forward was mostly American exercise, not quote noise.** An earlier version of this README said call and put vols meet at the forward with a ~0.5 vol point gap that "needs better quotes". Measured properly (median over strikes within 1% of the forward), the gap is within ±0.26 vol points out to nine months (−0.25 at 182 days, −0.26 at 272 days) and then widens to **−0.51 at 455 days and −1.08 at 637 days**, and it closes to about **0.2 or less** at every expiry once both legs are de-Americanised and the adjusted forward is used — see the parity section above. The bias is not yet removed from the surface.
 
 ---
 

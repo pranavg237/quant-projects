@@ -1,7 +1,7 @@
 """Every analytic Greek, calls and puts, against finite differences of the price.
 
 ``test_blackscholes.py`` checks the Greeks at two hand-picked points. This file checks all
-nine at 168 points per option type -- one day to three years, three standard deviations
+nine at 84 points per option type -- one day to three years, three standard deviations
 either side of the forward, 10% and 40% vol -- using only second differences of the
 *price* for the second-order Greeks. It also checks that the check has teeth: the
 classic unit bugs (vega per vol point, theta per day) and a sign slip in the put branch
