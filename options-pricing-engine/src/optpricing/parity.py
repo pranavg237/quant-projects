@@ -122,7 +122,7 @@ def early_exercise_premia(
     rate: float,
     dividend_yield: float,
     vols: np.ndarray,
-    steps: int = 200,
+    steps: int = 201,
 ) -> tuple[np.ndarray, np.ndarray]:
     """American-minus-European value of the call and the put at each strike.
 
@@ -149,7 +149,7 @@ def american_adjusted_forward(
     surface: pd.DataFrame,
     moneyness_window: float = 0.10,
     iterations: int = 20,
-    steps: int = 200,
+    steps: int = 201,
     tol: float = 1e-7,
 ) -> pd.DataFrame:
     """Re-solve parity for the forward with the early-exercise premia removed.
@@ -234,7 +234,7 @@ def parity_residuals(
     adjusted_forward: pd.DataFrame | None = None,
     surface: pd.DataFrame | None = None,
     moneyness_window: float = 0.10,
-    steps: int = 200,
+    steps: int = 201,
 ) -> pd.DataFrame:
     r"""Parity residuals for every matched pair, European and (optionally) American.
 
@@ -509,7 +509,7 @@ def run_parity_analysis(
     rate_curve: RateCurve,
     forward_curve: pd.DataFrame,
     surface: pd.DataFrame,
-    steps: int = 200,
+    steps: int = 201,
 ) -> ParityResult:
     """Matched pairs -> European residuals -> American adjustment -> model-free checks."""
     pairs = matched_pairs(snapshot, clean)

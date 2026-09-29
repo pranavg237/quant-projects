@@ -96,19 +96,51 @@ def american_builds(american_chain):
 # --- the lattice premium ---------------------------------------------------------------
 
 
+@pytest.mark.parametrize("method", ["lr", "crr"])
 @pytest.mark.parametrize("side", [OptionType.CALL, OptionType.PUT])
-def test_batched_premium_matches_the_scalar_tree(side) -> None:
+def test_batched_premium_matches_the_scalar_tree(side, method) -> None:
     strikes = np.array([380.0, 450.0, 500.0, 540.0, 620.0])
     vols = np.array([0.32, 0.24, 0.2, 0.18, 0.21])
     tau, r, q = 1.3, 0.04, 0.02
-    got = american.early_exercise_premium(SPOT, strikes, tau, r, q, vols, side, 150)
+    got = american.early_exercise_premium(SPOT, strikes, tau, r, q, vols, side, 150, method)
     ref = [
-        binomial.price(SPOT, k, tau, r, v, side, ExerciseStyle.AMERICAN, 150, "crr", q)
-        - binomial.price(SPOT, k, tau, r, v, side, ExerciseStyle.EUROPEAN, 150, "crr", q)
+        binomial.price(SPOT, k, tau, r, v, side, ExerciseStyle.AMERICAN, 150, method, q)
+        - binomial.price(SPOT, k, tau, r, v, side, ExerciseStyle.EUROPEAN, 150, method, q)
         for k, v in zip(strikes, vols, strict=True)
     ]
     assert np.allclose(got, np.maximum(ref, 0.0), atol=1e-10, rtol=0)
     assert np.all(got >= 0.0)
+
+
+def test_leisen_reimer_premium_is_smooth_across_strikes() -> None:
+    """The finding that made LR the default: CRR's premium is jagged on $1 strikes.
+
+    Which side of a lattice node a strike falls on changes from one listed strike to the
+    next, so the CRR premium carries a sawtooth in strike. On a 12-day put that sawtooth
+    is several times the true curvature -- the size of a $1 butterfly -- and it more than
+    doubled the zero-tolerance butterfly count on SPY's 12-day expiry. LR centres each
+    tree on its strike.
+    """
+    s, tau, r, q = 760.0, 12.2 / 365, 0.039, 0.016
+    k = np.arange(700.0, 761.0, 1.0)
+    vol = 0.12 + 0.6 * np.log(760.0 / k)
+    crr = american.early_exercise_premium(s, k, tau, r, q, vol, "put", 200, "crr")
+    lr = american.early_exercise_premium(s, k, tau, r, q, vol, "put", 201, "lr")
+    fine = american.early_exercise_premium(s, k, tau, r, q, vol, "put", 2001, "lr")
+
+    def roughness(x: np.ndarray) -> float:
+        return float(np.sqrt(np.mean(np.diff(x, 2) ** 2)))
+
+    assert roughness(crr) > 3.0 * roughness(fine)
+    assert roughness(lr) < 1.1 * roughness(fine)
+    assert np.max(np.abs(lr - fine)) < np.max(np.abs(crr - fine))
+
+
+def test_unknown_lattice_is_rejected() -> None:
+    with pytest.raises(ValueError, match="unknown lattice"):
+        american.early_exercise_premium(
+            SPOT, np.array([500.0]), 1.0, 0.04, 0.0, 0.2, "put", 51, "jr"
+        )
 
 
 def test_premium_vanishes_where_early_exercise_is_never_optimal() -> None:
@@ -164,9 +196,10 @@ def test_fixed_point_contracts_geometrically() -> None:
     steps = np.array(res.step_history)
     assert res.converged.all()
     assert 0.0 < res.contraction < 0.3
-    # Each iteration shrinks the largest step by at least the measured contraction.
-    shrinking = steps[:-1] > 1e-11
-    assert np.all(steps[1:][shrinking] <= res.contraction * steps[:-1][shrinking] * 1.0001)
+    # Geometric: every iteration (above round-off) shrinks the largest step ~10x.
+    ratios = steps[1:][steps[:-1] > 1e-9] / steps[:-1][steps[:-1] > 1e-9]
+    assert ratios.size >= 5
+    assert np.all(ratios < 0.15)
     # The first correction is the whole premium's worth of vol; it is not small.
     assert steps[0] > 1e-3
     assert res.iterations.max() <= 20
@@ -188,7 +221,7 @@ def test_fixed_point_reports_non_convergence_honestly() -> None:
 
 
 def test_independent_fine_lattice_is_recovered_to_its_discretisation_error() -> None:
-    """American prices from a 2,000-step tree, not the 200-step construction."""
+    """American prices from a 2,000-step CRR tree, not the 201-step construction."""
     tau, r, q = 1.0, 0.045, 0.005
     fwd = SPOT * np.exp((r - q) * tau)
     k = np.round(fwd * np.exp(np.linspace(-0.3, -0.02, 6)))

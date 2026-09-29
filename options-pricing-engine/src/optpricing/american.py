@@ -7,9 +7,10 @@ has to come off:
 .. math:: V^{E}_{\text{mkt}} = V^{A}_{\text{mkt}} - e(\sigma),\qquad
           e(\sigma) = V^{A}_{\text{tree}}(\sigma) - V^{E}_{\text{tree}}(\sigma).
 
-The premium is American minus European on the *same* CRR lattice, so the lattice's own
-discretisation error -- larger than the premium itself for short expiries -- cancels in
-the difference. Nothing is fitted to the quotes being corrected.
+The premium is American minus European on the *same* lattice (Leisen-Reimer by default,
+which keeps it smooth across strikes; see :func:`early_exercise_premium`), so the
+lattice's own discretisation error -- larger than the premium itself for short expiries --
+cancels in the difference. Nothing is fitted to the quotes being corrected.
 
 **The circularity.** The premium depends on the volatility, which is the thing being
 solved for. :func:`deamericanise` treats this as a fixed point,
@@ -60,7 +61,14 @@ __all__ = [
 ]
 
 
-def _crr_american_european(
+def _peizer_pratt(z: FloatArray, n: int) -> FloatArray:
+    """Peizer-Pratt inversion (method 2), vectorised; see :mod:`optpricing.binomial`."""
+    denom = n + 1.0 / 3.0 + 0.1 / (n + 1.0)
+    inner = 1.0 - np.exp(-((z / denom) ** 2) * (n + 1.0 / 6.0))
+    return np.asarray(0.5 + np.sign(z) * 0.5 * np.sqrt(inner), dtype=np.float64)
+
+
+def _american_european(
     spot: float,
     strikes: FloatArray,
     tau: float,
@@ -69,36 +77,49 @@ def _crr_american_european(
     vols: FloatArray,
     phi: float,
     steps: int,
+    method: str,
 ) -> tuple[FloatArray, FloatArray]:
-    """American and European CRR prices for many (strike, vol) pairs in one lattice sweep.
+    """American and European lattice prices for many (strike, vol) pairs in one sweep.
 
-    Row ``i`` is an independent CRR tree with volatility ``vols[i]``; the backward
-    induction runs on all rows at once. It is the algorithm of
-    :func:`optpricing.binomial.price` vectorised over strikes (a test pins the two
-    together), which is what makes the fixed point below affordable on ~2,000 quotes.
-    Rows whose risk-neutral probability falls outside ``[0, 1]`` come back ``nan``.
+    Row ``i`` is an independent tree with volatility ``vols[i]`` (and, for Leisen-Reimer,
+    centred on ``strikes[i]``); the backward induction runs on all rows at once. It is the
+    algorithm of :func:`optpricing.binomial.price` vectorised over strikes (a test pins
+    the two together), which is what makes the fixed point below affordable on ~2,000
+    quotes. Rows whose risk-neutral probability falls outside ``[0, 1]`` come back
+    ``nan``.
     """
     dt = tau / steps
-    log_u = vols * np.sqrt(dt)
-    with np.errstate(over="ignore", invalid="ignore"):
-        u = np.exp(log_u)
-        d = 1.0 / u
-        p = (np.exp((rate - dividend_yield) * dt) - d) / (u - d)
+    growth = np.exp((rate - dividend_yield) * dt)
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        if method == "crr":
+            log_u = vols * np.sqrt(dt)
+            log_d = -log_u
+            u, d = np.exp(log_u), np.exp(log_d)
+            p = (growth - d) / (u - d)
+        else:  # Leisen-Reimer: each row's tree is centred on its own strike
+            vst = vols * np.sqrt(tau)
+            d2 = (np.log(spot / strikes) + (rate - dividend_yield - 0.5 * vols**2) * tau) / vst
+            p = _peizer_pratt(d2, steps)
+            u = growth * _peizer_pratt(d2 + vst, steps) / p
+            d = (growth - p * u) / (1.0 - p)
+            log_u, log_d = np.log(u), np.log(d)
     disc = float(np.exp(-rate * dt))
-    ok = np.isfinite(p) & (p >= 0.0) & (p <= 1.0)
+    ok = np.isfinite(p) & (p >= 0.0) & (p <= 1.0) & np.isfinite(log_u) & np.isfinite(log_d)
     p = np.where(ok, p, 0.5)[:, None]
-    log_u = np.where(np.isfinite(log_u), log_u, 0.0)[:, None]
+    log_u = np.where(ok, log_u, 0.0)[:, None]
+    log_d = np.where(ok, log_d, 0.0)[:, None]
     k = strikes[:, None]
+    log_s = float(np.log(spot))
 
     j = np.arange(steps + 1, dtype=np.float64)
-    terminal = spot * np.exp(log_u * (2.0 * j - steps))
+    terminal = np.exp(log_s + j * log_u + (steps - j) * log_d)
     european = np.maximum(phi * (terminal - k), 0.0)
     american = european.copy()
     for step in range(steps - 1, -1, -1):
         european = disc * (p * european[:, 1:] + (1.0 - p) * european[:, :-1])
         american = disc * (p * american[:, 1:] + (1.0 - p) * american[:, :-1])
         jj = np.arange(step + 1, dtype=np.float64)
-        node = spot * np.exp(log_u * (2.0 * jj - step))
+        node = np.exp(log_s + jj * log_u + (step - jj) * log_d)
         american = np.maximum(american, phi * (node - k))
     am = np.where(ok, american[:, 0], np.nan)
     eu = np.where(ok, european[:, 0], np.nan)
@@ -113,9 +134,10 @@ def early_exercise_premium(
     dividend_yield: float,
     vols: FloatArray,
     option_type: OptionType | str,
-    steps: int = 200,
+    steps: int = 201,
+    method: str = "lr",
 ) -> FloatArray:
-    """American-minus-European value on one CRR lattice, per (strike, vol).
+    """American-minus-European value on one lattice, per (strike, vol).
 
     Args:
         spot: Underlying price.
@@ -126,12 +148,23 @@ def early_exercise_premium(
             forward: ``rate - ln(F/S)/tau``).
         vols: Volatility per strike. ``nan`` gives a ``nan`` premium.
         option_type: ``"call"`` or ``"put"``.
-        steps: Lattice steps.
+        steps: Lattice steps (forced odd for Leisen-Reimer, as in
+            :func:`optpricing.binomial.price`).
+        method: ``"lr"`` (Leisen-Reimer, default) or ``"crr"``. CRR's premium is
+            accurate on average but jagged *in strike*: which side of a node each strike
+            falls on changes from one listed strike to the next, and on $1 strikes that
+            sawtooth is as large as a short-dated butterfly's value. Leisen-Reimer centres
+            each tree on its own strike, so the premium is smooth across strikes and
+            closer to the converged value at the same step count.
 
     Returns:
         The premium per strike, floored at zero (on one lattice it is non-negative up to
         round-off).
     """
+    if method not in {"lr", "crr"}:
+        raise ValueError(f"unknown lattice method {method!r}; expected 'lr' or 'crr'")
+    if method == "lr" and steps % 2 == 0:
+        steps += 1
     phi = to_option_type(option_type).sign
     k = np.atleast_1d(np.asarray(strikes, dtype=np.float64))
     sig = np.broadcast_to(np.asarray(vols, dtype=np.float64), k.shape).copy()
@@ -140,8 +173,8 @@ def early_exercise_premium(
     if tau <= 0.0:
         return np.where(good, 0.0, np.nan)
     if good.any():
-        am, eu = _crr_american_european(
-            spot, k[good], tau, rate, dividend_yield, sig[good], phi, steps
+        am, eu = _american_european(
+            spot, k[good], tau, rate, dividend_yield, sig[good], phi, steps, method
         )
         out[good] = np.maximum(am - eu, 0.0)
     return out
@@ -180,7 +213,7 @@ def deamericanise(
     rate: float,
     dividend_yield: float,
     option_type: OptionType | str,
-    steps: int = 200,
+    steps: int = 201,
     tol: float = 1e-8,
     max_iter: int = 30,
 ) -> Deamericanised:
@@ -268,7 +301,7 @@ def american_forward(
     discount: float,
     vol_at: Callable[[FloatArray], FloatArray],
     forward0: float,
-    steps: int = 200,
+    steps: int = 201,
     tol: float = 1e-6,
     max_iter: int = 20,
 ) -> ForwardSolution:

@@ -140,7 +140,7 @@ def build_surface(
     min_vol: float = 0.01,
     max_vol: float = 3.0,
     exercise: ExerciseStyle | str = ExerciseStyle.AMERICAN,
-    tree_steps: int = 200,
+    tree_steps: int = 201,
 ) -> pd.DataFrame:
     """Turn cleaned quotes into a tidy implied-volatility surface.
 
@@ -195,7 +195,7 @@ def build_surface_detailed(
     min_vol: float = 0.01,
     max_vol: float = 3.0,
     exercise: ExerciseStyle | str = ExerciseStyle.AMERICAN,
-    tree_steps: int = 200,
+    tree_steps: int = 201,
     forward_tol: float = 1e-7,
     max_forward_iter: int = 10,
     forwards: pd.DataFrame | None = None,
