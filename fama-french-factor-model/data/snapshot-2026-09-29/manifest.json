@@ -1,0 +1,35 @@
+{
+  "downloaded_utc": "2026-09-29T02:10:33Z",
+  "frequency": "monthly",
+  "french_library": {
+    "F-F_Research_Data_Factors_CSV.zip": {
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_Factors_CSV.zip",
+      "sha256": "593f4fbef03181bc0b22ff6292f217689dd1fb79355049ca905d95b262040a66",
+      "bytes": 13065,
+      "first": "1926-07",
+      "last": "2026-08"
+    },
+    "F-F_Research_Data_5_Factors_2x3_CSV.zip": {
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_5_Factors_2x3_CSV.zip",
+      "sha256": "36756c5c2559648519ac4b22913d860c6afd865cfebce920e3e8927f8e2d10b7",
+      "bytes": 11964,
+      "first": "1963-07",
+      "last": "2026-08"
+    },
+    "F-F_Momentum_Factor_CSV.zip": {
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Momentum_Factor_CSV.zip",
+      "sha256": "c06d1c2e9a5e4f6985879722f23c6bb585f46b34eaf3fcb681d4de887e353f3e",
+      "bytes": 5600,
+      "first": "1927-01",
+      "last": "2026-08"
+    },
+    "25_Portfolios_5x5_CSV.zip": {
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/25_Portfolios_5x5_CSV.zip",
+      "sha256": "e02edcd282d8993cf3133e71181665f888ecb57c202a99a9cbd6cdf7fc6b8429",
+      "bytes": 548830,
+      "first": "1926-07",
+      "last": "2026-08",
+      "period_of": "Average Value Weighted Returns -- Monthly"
+    }
+  }
+}
