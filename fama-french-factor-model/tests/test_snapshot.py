@@ -48,7 +48,8 @@ def test_committed_snapshot_files_match_manifest(directory):
         if "bytes" in entry:
             assert len(body) == entry["bytes"]
     if "returns" in manifest:
-        assert (directory / manifest["returns"]["file"]).exists()
+        body = (directory / manifest["returns"]["file"]).read_bytes()
+        assert hashlib.sha256(body).hexdigest() == manifest["returns"]["sha256"]
 
 
 @pytest.mark.parametrize("directory", SNAPSHOTS, ids=[d.name for d in SNAPSHOTS])
@@ -164,3 +165,47 @@ def test_changed_snapshot_file_is_refused(fixture_snapshot, no_network, capsys):
     assert cli.main(["factors", "--model", "ff6", "--data-dir", str(fixture_snapshot), "--no-report"]) == 1
     assert "SHA-256" in capsys.readouterr().err
     data.load_factors("ff3", data_dir=fixture_snapshot)  # files that still match load as before
+
+
+# ---------------------------------------------------------------- the returns file
+
+
+def test_snapshot_records_the_returns_hash(monkeypatch, tmp_path):
+    texts = _fixture_texts()
+    monkeypatch.setattr(data, "_download", lambda name, path: _zip(path, texts[name]))
+    index = pd.date_range("2000-01-31", periods=24, freq="ME")
+    fake = pd.DataFrame({"AAA": np.linspace(-0.02, 0.03, 24)}, index=index)
+    monkeypatch.setattr(snapshot, "download_returns", lambda *args, **kwargs: fake)
+    snap = tmp_path / "snap"
+    manifest = snapshot.save_snapshot(snap, tickers=["AAA"])
+    body = (snap / "returns.csv").read_bytes()
+    assert manifest["returns"]["sha256"] == hashlib.sha256(body).hexdigest()
+    assert snapshot.verify_snapshot(snap)["returns.csv"] is True
+
+
+def test_changed_returns_file_is_refused(no_network, tmp_path, capsys):
+    source = PROJECT / "data" / "snapshot-2026-09-28"
+    copy = tmp_path / source.name
+    copy.mkdir()
+    for path in source.iterdir():
+        (copy / path.name).write_bytes(path.read_bytes())
+    snapshot.verify_returns_file(copy / "returns.csv")  # untouched: passes
+
+    lines = (copy / "returns.csv").read_text().splitlines()
+    date, first, *rest = lines[1].split(",")
+    lines[1] = ",".join([date, str(float(first) + 0.01), *rest])  # one return, one point higher
+    (copy / "returns.csv").write_text("\n".join(lines) + "\n")
+
+    assert snapshot.verify_snapshot(copy)["returns.csv"] is False
+    with pytest.raises(RuntimeError, match="does not match the SHA-256"):
+        snapshot.verify_returns_file(copy / "returns.csv")
+    argv = ["analyze", "--csv", str(copy / "returns.csv"), "--data-dir", str(copy),
+            "--start", "2005-01", "--end", "2026-07", "--no-report"]
+    assert cli.main(argv) == 1
+    assert "SHA-256" in capsys.readouterr().err
+
+
+def test_csv_outside_a_snapshot_is_not_checked(tmp_path):
+    path = tmp_path / "returns.csv"
+    path.write_text("date,AAA\n2000-01-31,0.01\n")
+    snapshot.verify_returns_file(path)  # no manifest: nothing to check against

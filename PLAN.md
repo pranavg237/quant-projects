@@ -159,3 +159,13 @@ clone and checked every README number. [CHANGES.md](CHANGES.md) records the outc
 
 As before, a fresh agent re-ran the changed projects from a clean clone and checked every
 number; [CHANGES.md](CHANGES.md) records the outcome.
+
+## Round 4: loose ends from round 3
+
+| Project | Work |
+|---|---|
+| options-pricing-engine | Test whether SPY's discrete quarterly dividends explain the long-dated call/put overshoot. |
+| fama-french-factor-model | Hash-check the snapshot's Yahoo returns file. |
+
+A fresh agent re-ran the changed projects from a clean clone; [CHANGES.md](CHANGES.md)
+records the outcome.

@@ -51,6 +51,7 @@ import pandas as pd
 from . import american
 from . import implied_vol as iv
 from .data import ChainSnapshot, RateCurve
+from .dividends import DividendSchedule
 from .types import OptionType, to_float
 
 __all__ = [
@@ -123,12 +124,14 @@ def early_exercise_premia(
     dividend_yield: float,
     vols: np.ndarray,
     steps: int = 201,
+    dividends: DividendSchedule | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """American-minus-European value of the call and the put at each strike.
 
     Both legs are priced on the same lattice (Leisen-Reimer by default), so the
     lattice's own discretisation error (which is far larger than the premium for short
     expiries) cancels in the difference. See :func:`optpricing.american.early_exercise_premium`.
+    With ``dividends``, ``dividend_yield`` is the residual on top of the cash dividends.
 
     Returns:
         ``(call_premium, put_premium)``, each the shape of ``strikes``.
@@ -136,8 +139,8 @@ def early_exercise_premia(
     k = np.asarray(strikes, dtype=np.float64)
     v = np.asarray(vols, dtype=np.float64)
     args = (spot, k, tau, rate, dividend_yield, v)
-    call = american.early_exercise_premium(*args, OptionType.CALL, steps)
-    put = american.early_exercise_premium(*args, OptionType.PUT, steps)
+    call = american.early_exercise_premium(*args, OptionType.CALL, steps, dividends=dividends)
+    put = american.early_exercise_premium(*args, OptionType.PUT, steps, dividends=dividends)
     return call, put
 
 
@@ -151,6 +154,7 @@ def american_adjusted_forward(
     iterations: int = 20,
     steps: int = 201,
     tol: float = 1e-7,
+    dividends: DividendSchedule | None = None,
 ) -> pd.DataFrame:
     """Re-solve parity for the forward with the early-exercise premia removed.
 
@@ -172,12 +176,16 @@ def american_adjusted_forward(
         iterations: Maximum fixed-point passes.
         steps: Tree steps.
         tol: Relative tolerance on the forward.
+        dividends: Cash dividends for the escrowed-dividend lattice (``None``: the
+            continuous-yield lattice).
 
     Returns:
         One row per expiry: ``expiry, tau, forward_raw, forward_adjusted,
-        forward_shift_bp, dividend_yield_raw, dividend_yield_adjusted, dispersion_raw,
-        dispersion_adjusted`` (dispersion is the interquartile range of the per-strike
-        forward estimates, in price units).
+        forward_shift_bp, dividend_yield_raw, dividend_yield_adjusted, residual_yield,
+        dispersion_raw, dispersion_adjusted`` (dispersion is the interquartile range of
+        the per-strike forward estimates, in price units; ``residual_yield`` is the
+        continuous yield the lattice carries, equal to ``dividend_yield_adjusted``
+        without cash dividends).
     """
     rows: list[dict[str, object]] = []
     for _, f in forward_curve.iterrows():
@@ -207,7 +215,9 @@ def american_adjusted_forward(
             steps=steps,
             tol=tol,
             max_iter=iterations,
+            dividends=dividends,
         )
+        s_star = american.escrowed_spot(spot, tau, rate, dividends)
         forward, per_strike = sol.forward, sol.per_strike
         rows.append(
             {
@@ -219,6 +229,7 @@ def american_adjusted_forward(
                 "forward_shift_bp": 1e4 * (forward / float(f["forward"]) - 1.0),
                 "dividend_yield_raw": rate - np.log(float(f["forward"]) / spot) / tau,
                 "dividend_yield_adjusted": rate - np.log(forward / spot) / tau,
+                "residual_yield": rate - np.log(forward / s_star) / tau,
                 "dispersion_raw": float(np.subtract(*np.percentile(per_strike_raw, [75, 25]))),
                 "dispersion_adjusted": float(np.subtract(*np.percentile(per_strike, [75, 25]))),
             }
@@ -235,6 +246,7 @@ def parity_residuals(
     surface: pd.DataFrame | None = None,
     moneyness_window: float = 0.10,
     steps: int = 201,
+    dividends: DividendSchedule | None = None,
 ) -> pd.DataFrame:
     r"""Parity residuals for every matched pair, European and (optionally) American.
 
@@ -273,7 +285,10 @@ def parity_residuals(
     df["violation"] = df["excess"] > _TOL
 
     if adjusted_forward is not None and surface is not None:
-        adj = adjusted_forward[["expiry", "forward_adjusted", "dividend_yield_adjusted"]]
+        cols = ["expiry", "forward_adjusted", "dividend_yield_adjusted"]
+        if "residual_yield" in adjusted_forward.columns:
+            cols.append("residual_yield")
+        adj = adjusted_forward[cols]
         df = df.merge(adj, on="expiry", how="left")
         ee_call = np.full(len(df), np.nan)
         ee_put = np.full(len(df), np.nan)
@@ -289,9 +304,14 @@ def parity_residuals(
                 strikes,
                 tau,
                 float(rate_curve.rate(tau)[0]),
-                float(g["dividend_yield_adjusted"].iloc[0]),
+                float(
+                    g[
+                        "residual_yield" if "residual_yield" in g else "dividend_yield_adjusted"
+                    ].iloc[0]
+                ),
                 vols,
                 steps,
+                dividends,
             )
             pos = df.index.get_indexer(g.index)
             ee_call[pos], ee_put[pos] = c, p
@@ -510,14 +530,25 @@ def run_parity_analysis(
     forward_curve: pd.DataFrame,
     surface: pd.DataFrame,
     steps: int = 201,
+    dividends: DividendSchedule | None = None,
 ) -> ParityResult:
-    """Matched pairs -> European residuals -> American adjustment -> model-free checks."""
+    """Matched pairs -> European residuals -> American adjustment -> model-free checks.
+
+    ``dividends`` switches the American adjustment to the escrowed-dividend lattice.
+    """
     pairs = matched_pairs(snapshot, clean)
     forwards = american_adjusted_forward(
-        pairs, snapshot.spot, rate_curve, forward_curve, surface, steps=steps
+        pairs, snapshot.spot, rate_curve, forward_curve, surface, steps=steps, dividends=dividends
     )
     residuals = parity_residuals(
-        pairs, snapshot.spot, rate_curve, forward_curve, forwards, surface, steps=steps
+        pairs,
+        snapshot.spot,
+        rate_curve,
+        forward_curve,
+        forwards,
+        surface,
+        steps=steps,
+        dividends=dividends,
     )
     return ParityResult(
         residuals=residuals,

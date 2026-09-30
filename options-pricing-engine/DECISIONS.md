@@ -177,7 +177,7 @@ requires it to make the fit *worse*.
 
 **Wired into the surface, and the default.** `build_surface(exercise="american")` removes
 each quote's early-exercise premium and fits the forward to de-Americanised parity;
-`exercise="european"` is the old pipeline. The run calibrates both and writes
+`exercise="european"` is the old pipeline. A default run calibrates the European, continuous-yield and discrete-dividend surfaces and writes
 `results/exercise_comparison.md`. The design choices:
 
 * *The circularity is a fixed point, not a guess.* The premium depends on the vol being
@@ -219,11 +219,58 @@ parity check is slightly worse than the non-self-consistent one (in-window viola
 10.6% -> 11.5%). Both point at what the lattice leaves out, not at a reason to go back to
 a model that ignores exercise altogether.
 
-**What it still leaves out.** A continuous dividend yield, so no pre-ex-date exercise of
-deep-ITM calls under SPY's discrete dividends. With the implied yield not positive here,
-the model prices every call premium at zero; the real ones would pull the long-dated
-forward back down, which is the leading suspect for the overshoot. And the premium depends
-on `r` itself, not only on the carry, so it inherits the Treasury-rate assumption.
+**What it still leaves out.** By default, a continuous dividend yield, so no pre-ex-date
+exercise of deep-ITM calls under SPY's discrete dividends. With the implied yield not
+positive here, the model prices every call premium at zero. That was the leading suspect
+for the overshoot; it is now tested (below) and explains part of it. And the premium
+depends on `r` itself, not only on the carry, so it inherits the Treasury-rate assumption.
+
+**Discrete dividends: the escrowed-dividend lattice, as an option.**
+`build_surface(..., dividends=schedule)` prices every premium on a lattice built on the
+spot minus the PV of the cash dividends before expiry, with the dividends still to come
+added back for the exercise decision (Hull's known-dollar-dividend tree; the model behind
+Roll-Geske-Whaley). The choices:
+
+* *Why escrowed, not a tree on the stock with a dollar drop at each ex-date.* The latter
+  does not recombine, and its fixes (interpolating the value across the drop, Vellekoop &
+  Nieuwenhuis 2006) cost far more on ~2,000 quotes times a fixed point. The escrowed
+  model's European price is exactly Black-76 on the forward, so the implied vols the
+  surface quotes mean the same thing with or without dividends; only the premia change.
+  Its known bias (Beneder & Vorst 2001; Bos & Vandermark 2002; Haug, Haug & Lewis 2003):
+  the vol belongs to the escrowed part, so a stock with several dividends to go is less
+  volatile than the vol says, and long-dated options are underpriced against a lognormal
+  stock. For a fitted implied vol most of that is absorbed into the vol.
+* *The forward still comes from parity.* The dividends and the Treasury rate alone would
+  put the 21-month forward at \$803.48 against the parity forward's \$817.03, so taking
+  the forward from them would throw away the quotes. Instead the parity forward's carry is
+  split into the cash dividends and a continuous residual; minus the residual is the
+  funding basis (76-96bp beyond six months), reported rather than hidden.
+* *An ex-date inside the final step stops the lattice.* SPY goes ex on its quarterly expiry
+  days, 6.5 hours before the close; on a 201-step lattice over 21 months the last node
+  before the ex-date is up to three days early, forgoing interest and time value on
+  exactly the exercise that matters. The lattice ends at the ex-date instead and the stub
+  is priced in closed form (the binomial Black-Scholes device of Broadie & Detemple 1996).
+  Cost: the European lattice value loses Leisen-Reimer's O(1/n^2) (error ~1e-4 of the
+  price at 201 steps), because the smoothed payoff is narrower than a node spacing; the
+  premium, a difference on one lattice, is within 2% of a 6,401-step reference. Earlier
+  ex-dates keep the grid-timing bias, but for SPY they are rarely worth exercising for at
+  all: the quarterly dividend is below the interest on the strike to the next ex-date for
+  any strike above about \$200.
+* *No dividend in the option's life means the continuous code, bit for bit.* Seven of the
+  twelve expiries are before the first ex-date, and a test pins those forwards to the
+  continuous surface's.
+* *The projection repeats the last four quarters, no growth.* The simplest rule with
+  SPY's seasonality and no look-ahead; the run rescales it by ±10% to show it does not
+  matter to the conclusion (trailing growth was +4.5%).
+
+**Why it is not the default.** The evidence (`results/exercise_comparison.md`) is mixed. For:
+the overshoot at 15 / 21 months falls from +0.20 / +0.37 to +0.17 / +0.21, the 21-month
+forward comes down 25bp, and the long-dated per-strike forward scatter narrows. Against:
+104 days widens from +0.07 to +0.10, Heston RMSE is 2.30 against 2.26 (a different
+optimum, per the cross-scores), parity violations are flat in-window (102 vs 103) and
+slightly worse out of sample (296 vs 285). A model that is more faithful to SPY but
+does not improve the measured fit does not clear the bar for moving every downstream
+number, so it is computed and reported in every default run and switched on by argument.
 
 **Stale quotes are identified by arbitrage, not by timestamps.** The snapshot has last-trade
 times but no quote times. A quote offered below intrinsic (on an American option) or a call

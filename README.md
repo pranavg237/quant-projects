@@ -8,7 +8,7 @@ produced it. Where a strategy loses to buying and holding the index, the README 
 
 | Project | What it is | Headline result |
 |---|---|---|
-| [**options-pricing-engine**](./options-pricing-engine) | Black-Scholes, binomial lattices, Monte Carlo and Heston, cross-validated against each other and calibrated to a real SPY option chain with American early exercise removed from every quote | Heston fits the SPY surface to **2.26 vol points** RMSE against 10.66 for Black-Scholes with one vol per expiry (2.14 out of sample; 2.51 if early exercise is ignored). It fails in the short-dated put wing (5.26), which needs jumps. Put-call parity "violations" are mostly American early exercise: 44.5% of pairs breach the spread, 11.5% once the premium is priced |
+| [**options-pricing-engine**](./options-pricing-engine) | Black-Scholes, binomial lattices, Monte Carlo and Heston, cross-validated against each other and calibrated to a real SPY option chain with American early exercise removed from every quote | Heston fits the SPY surface to **2.26 vol points** RMSE against 10.66 for Black-Scholes with one vol per expiry (2.14 out of sample; 2.51 if early exercise is ignored). It fails in the short-dated put wing (5.26), which needs jumps. Put-call parity "violations" are mostly American early exercise: 44.5% of pairs breach the spread, 11.5% once the premium is priced. Modelling SPY's real quarterly dividends cuts the 21-month call/put overshoot by 43% (+0.37 → +0.21) but leaves a funding-basis residual, so it is an option, not the default |
 | [**market-making-simulator**](./market-making-simulator) | A price-time-priority limit order book and matching engine, plus Avellaneda-Stoikov optimal quoting with informed order flow, markouts and a parameter-sensitivity study | Reproduces the paper's Table 1 (profit 64.98 vs 65.0). In the full book, inventory skew cuts PnL volatility 4x at statistically identical PnL. Informed-fill markouts match the model's prediction; A-S's edge under informed flow comes from how it unwinds, not from avoiding it |
 | [**ma-crossover-backtest**](./ma-crossover-backtest) | An event-driven backtester built to be hard to fool yourself with: next-bar fills, costs, walk-forward, bootstrap, deflated Sharpe over every configuration tried, PBO, a parameter-sensitivity heatmap, factor regressions | Five strategies, all out of sample and net of costs: **none shows a reliable edge over buy-and-hold SPY**, and none has a significant Fama-French alpha. Four have lower Sharpe ratios; the MA crossover's 0.58 vs 0.53 is inside the noise, and deflated for all 63 configurations tried its DSR is 0.08 |
 | [**portfolio-optimization**](./portfolio-optimization) | Markowitz, Ledoit-Wolf, risk parity, HRP and Black-Litterman, walk-forward tested on 15 ETFs, with per-method trading costs and an estimation-error study | No method's Sharpe differs significantly from 1/N (all p ≥ 0.20). Unconstrained leverage loses 95% in one month, and a cap fixes it |
@@ -25,16 +25,15 @@ produced it. Where a strategy loses to buying and holding the index, the README 
   evidence.
 - **Reproducible offline.** The market data behind every headline number is committed as
   dated snapshots, and the analysis scripts read them by default; ma-crossover and
-  fama-french also check the downloaded French and price files' hashes when they read them
-  (fama-french's Yahoo returns file is the one exception). An agent that had not seen the
+  fama-french also check every data file's hash when they read it. An agent that had not seen the
   work re-ran every project from a clean clone and checked the README numbers (see
   [CHANGES.md](CHANGES.md)). Where a result is fragile, the README says so: one backtest's
   Sharpe moves by 0.02 when a single price changes in its seventh digit.
-- **Tested.** 938 tests across the six projects, all offline, run by CI on every push.
+- **Tested.** 996 tests across the six projects, all offline, run by CI on every push.
   Five of the six projects also pass strict `mypy` and `ruff` in CI; fama-french is
   tested but not type-checked.
 
-[PLAN.md](PLAN.md) is the audit and plan behind three rounds of work, and
+[PLAN.md](PLAN.md) is the audit and plan behind four rounds of work, and
 [CHANGES.md](CHANGES.md) explains every change they led to.
 
 ## Running a project

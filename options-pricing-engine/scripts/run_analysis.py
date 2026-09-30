@@ -34,6 +34,7 @@ from optpricing import (  # noqa: E402
     blackscholes,
     calibration,
     data,
+    dividends,
     greeks_check,
     heston,
     implied_vol,
@@ -431,6 +432,14 @@ def _validation_markdown(checks: dict[str, Any], bands: pd.DataFrame, meta: str)
 TREE_STEPS = 201
 FINE_STEPS = 2 * TREE_STEPS - 1  # odd, as Leisen-Reimer needs
 
+#: The three surfaces compared in exercise_comparison.md.
+MODES = ("european", "continuous", "discrete")
+HEADS = {
+    "european": "European parity",
+    "continuous": "American, continuous yield",
+    "discrete": "American, discrete dividends",
+}
+
 
 def _fit_models(surf: pd.DataFrame, spot: float, per_expiry: int, verbose: bool) -> dict[str, Any]:
     """Heston, the two Black-Scholes benchmarks and the strike holdout on one surface."""
@@ -506,8 +515,9 @@ def _cross_scores(fits: dict[str, dict[str, Any]], spot: float) -> pd.DataFrame:
     compromise.
     """
     rows = []
-    for data_mode in ("european", "american"):
-        for param_mode in ("european", "american"):
+    modes = [m for m in MODES if m in fits]
+    for data_mode in modes:
+        for param_mode in modes:
             errors = calibration.surface_errors(
                 fits[param_mode]["fit"].params, fits[data_mode]["thin"], spot
             )
@@ -521,6 +531,66 @@ def _cross_scores(fits: dict[str, dict[str, Any]], spot: float) -> pd.DataFrame:
                     "rmse_short_put_wing": split["wing"],
                 }
             )
+    return pd.DataFrame(rows)
+
+
+def _discrete_sensitivity(
+    snapshot: data.ChainSnapshot,
+    clean: pd.DataFrame,
+    rate_curve: data.RateCurve,
+    schedule: dividends.DividendSchedule,
+    fine: surface.SurfaceBuild,
+) -> pd.DataFrame:
+    """How the discrete-dividend surface's call/put gap moves with its inputs.
+
+    The projection assumes no dividend growth (the trailing year grew 4.5%), so the
+    amounts are scaled by 0.9 and 1.1; the early-exercise premia depend on the rate
+    itself, not just the carry, so the discount curve is shifted by 25bp each way; and
+    the lattice is refined. Each variant re-solves the forwards and the gap.
+    """
+
+    def gap_row(label: str, build: surface.SurfaceBuild, **kwargs: Any) -> dict[str, Any]:
+        both = surface.build_surface_detailed(
+            snapshot,
+            clean,
+            kwargs.get("curve", rate_curve),
+            otm_only=False,
+            max_abs_log_moneyness=0.05,
+            forwards=build.forwards,
+            dividends=kwargs.get("divs", schedule),
+            tree_steps=kwargs.get("steps", TREE_STEPS),
+        ).surface
+        g = surface.call_put_gap(both).set_index("expiry")["gap_vol_points"]
+        f = build.forwards.set_index("expiry")
+        row: dict[str, Any] = {"variant": label}
+        for expiry in f.index[f["tau"] > 0.25]:
+            row[f"gap {round(float(f.loc[expiry, 'tau']) * 365)}d"] = float(g.get(expiry, np.nan))
+        last = f.index[-1]
+        row["shift_bp last"] = float(f.loc[last, "forward_shift_bp"])
+        row["funding basis bp last"] = -1e4 * float(f.loc[last, "residual_yield"])
+        return row
+
+    rows = []
+    for label, divs, curve in (
+        ("as projected", schedule, rate_curve),
+        (
+            "dividends x 0.9",
+            dividends.DividendSchedule(schedule.times, 0.9 * schedule.amounts),
+            rate_curve,
+        ),
+        (
+            "dividends x 1.1",
+            dividends.DividendSchedule(schedule.times, 1.1 * schedule.amounts),
+            rate_curve,
+        ),
+        ("rates - 25bp", schedule, data.RateCurve(rate_curve.tenors, rate_curve.rates - 0.0025)),
+        ("rates + 25bp", schedule, data.RateCurve(rate_curve.tenors, rate_curve.rates + 0.0025)),
+    ):
+        b = surface.build_surface_detailed(
+            snapshot, clean, curve, dividends=divs, tree_steps=TREE_STEPS
+        )
+        rows.append(gap_row(label, b, divs=divs, curve=curve))
+    rows.append(gap_row(f"{FINE_STEPS}-step lattice", fine, steps=FINE_STEPS))
     return pd.DataFrame(rows)
 
 
@@ -572,19 +642,20 @@ def _surface_summary(build: surface.SurfaceBuild) -> dict[str, Any]:
     }
 
 
-def _exercise_markdown(
-    builds: dict[str, surface.SurfaceBuild],
+def _in_window_count(dist: pd.DataFrame, theory: str) -> str:
+    """``violations/pairs (rate)`` on the strikes the forward is fitted to."""
+    row = dist.loc[(dist["theory"] == theory) & (dist["sample"] == "in-window")].iloc[0]
+    n_viol, n_pairs = int(row["violations"]), int(row["pairs"])
+    return f"{n_viol}/{n_pairs} ({float(row['violation_rate']):.1%})"
+
+
+def _headline_rows(
     summaries: dict[str, dict[str, Any]],
     fits: dict[str, dict[str, Any]],
-    gaps: dict[str, pd.DataFrame],
-    steps_check: dict[str, float],
-    parity_consistency: float,
-    cross: pd.DataFrame,
-    meta: str,
+    parity_counts: dict[str, str],
 ) -> str:
-    """Before/after table: the European-parity pipeline against the American-corrected one."""
-    modes = ("european", "american")
-    heads = {"european": "European parity (old)", "american": "American-corrected (new)"}
+    """The headline comparison table, one column per surface."""
+    modes = [m for m in MODES if m in fits]
 
     def row(label: str, values: list[str]) -> str:
         return f"| {label} | " + " | ".join(values) + " |\n"
@@ -597,22 +668,8 @@ def _exercise_markdown(
         h = fits[mode]["holdout"]
         return float(h.loc[h["model"] == name, col].iloc[0])
 
-    out = (
-        "# American exercise in the surface: before and after\n\n"
-        "Generated by `python scripts/run_analysis.py`. Do not edit by hand.\n\n"
-        f"{meta}\n\n"
-        "Both columns are computed in the same run, from the same cleaned quotes, rate curve, "
-        "thinning and calibration settings. *European parity* is `build_surface(..., "
-        'exercise="european")`: quotes inverted as quoted, forward from plain put-call '
-        "parity. *American-corrected* is the default: each quote's early-exercise premium "
-        f"({TREE_STEPS}-step Leisen-Reimer lattice, continuous dividend yield) is removed "
-        "by a per-quote fixed point, and the forward is re-solved from de-Americanised "
-        "parity, the two iterated together. Vol errors are model minus market, in vol "
-        "points; *body* is |k| < 0.15, the *short-dated put wing* k < -0.15 and "
-        "tau < 0.15 years.\n\n"
-        "## Headline\n\n"
-        "| | " + " | ".join(heads[m] for m in modes) + " |\n| --- | --- | --- |\n"
-    )
+    out = "| | " + " | ".join(HEADS[m] for m in modes) + " |\n"
+    out += "| --- " * (len(modes) + 1) + "|\n"
     fmt = "{:.2f}".format
     out += row("surface quotes", [str(summaries[m]["n_quotes"]) for m in modes])
     out += row("calibration quotes (thinned)", [str(len(fits[m]["thin"])) for m in modes])
@@ -643,8 +700,7 @@ def _exercise_markdown(
                 for m in modes
             ],
         )
-    names = ("v0", "kappa", "theta", "xi", "rho")
-    for name in names:
+    for name in ("v0", "kappa", "theta", "xi", "rho"):
         out += row(
             f"Heston {name}",
             [
@@ -674,6 +730,10 @@ def _exercise_markdown(
             for m in modes
         ],
     )
+    out += row(
+        "parity violations beyond the spread, fitted strikes",
+        [parity_counts[m] for m in modes],
+    )
     for label, attr in (
         ("calendar violations", "calendar"),
         ("butterfly violations, zero tolerance", "zero"),
@@ -698,45 +758,160 @@ def _exercise_markdown(
         "ATM vol, first / last expiry",
         [f"{summaries[m]['atm_first']:.1%} / {summaries[m]['atm_last']:.1%}" for m in modes],
     )
+    return out
 
-    fwd = builds["american"].forwards.copy()
+
+def _exercise_markdown(
+    builds: dict[str, surface.SurfaceBuild],
+    summaries: dict[str, dict[str, Any]],
+    fits: dict[str, dict[str, Any]],
+    gaps: dict[str, pd.DataFrame],
+    steps_check: dict[str, dict[str, float]],
+    parity_results: dict[str, parity.ParityResult],
+    parity_consistency: dict[str, float],
+    cross: pd.DataFrame,
+    sensitivity: pd.DataFrame,
+    projection: pd.DataFrame,
+    manifest: dict[str, Any],
+    spot: float,
+    meta: str,
+) -> str:
+    """European parity against American exercise with a continuous yield and with cash dividends."""
+    parity_counts = {
+        "european": _in_window_count(parity_results["continuous"].distribution, "European parity")
+    }
+    for m, r in parity_results.items():
+        parity_counts[m] = _in_window_count(r.distribution, "American-adjusted")
+    proj = projection.assign(
+        ex_date=projection["ex_date"].astype(str),
+        basis_ex_date=projection["basis_ex_date"].astype(str),
+    )[["ex_date", "amount", "basis_ex_date"]]
+    rule = manifest["ex_date_rule_check"]
+    out = (
+        "# American exercise in the surface: European parity, continuous yield, "
+        "discrete dividends\n\n"
+        "Generated by `python scripts/run_analysis.py`. Do not edit by hand.\n\n"
+        f"{meta}\n\n"
+        "All three columns are computed in the same run, from the same cleaned quotes, rate "
+        "curve, thinning and calibration settings. *European parity* is "
+        '`build_surface(..., exercise="european")`: quotes inverted as quoted, forward from '
+        "plain put-call parity. The two American surfaces remove each quote's early-exercise "
+        f"premium ({TREE_STEPS}-step Leisen-Reimer lattice) by a per-quote fixed point and "
+        "re-solve the forward from de-Americanised parity, the two iterated together. "
+        "*Continuous yield*: the lattice carries the parity-implied yield "
+        "q = r - ln(F/S)/tau. *Discrete dividends*: `build_surface(..., dividends=...)`, "
+        "the escrowed-dividend lattice with SPY's projected cash dividends; the parity "
+        "forward is split into the dividends and a continuous residual "
+        "q_res = r - ln(F/(S - PV))/tau, minus which is the funding rate over Treasury. "
+        "Vol errors are model minus market, in vol points; *body* is |k| < 0.15, the "
+        "*short-dated put wing* k < -0.15 and tau < 0.15 years.\n\n"
+        "## Dividends\n\n"
+        f"Source: {manifest['source']}, downloaded {manifest['downloaded_at_utc']} "
+        f"(`data/dividends/`, sha256-checked against its manifest). Projection: "
+        f"{manifest['projection']['rule']}. The ex-date rule reproduces {rule['matched']} of "
+        f"{rule['dividends']} ex-dates since {rule['since']}; trailing-year dividend growth "
+        f"was {manifest['projection']['trailing_year_growth']:+.1%}, which the projection "
+        "ignores (see the sensitivity table). Ex-dates are 09:30 New York; the quarterly "
+        "ones fall on the quarterly option expiry days, 6.5 hours before the close.\n\n"
+        + _to_markdown(proj, floatfmt="{:.3f}")
+        + "\n## Headline\n\n"
+        + _headline_rows(summaries, fits, parity_counts)
+    )
+
+    fwd = builds["continuous"].forwards.set_index("expiry")
+    disc = builds["discrete"].forwards.set_index("expiry")
     days = (fwd["tau"] * 365.0).round().astype(int)
-    gap_e = gaps["european"].set_index("expiry")["gap_vol_points"]
-    gap_a = gaps["american"].set_index("expiry")["gap_vol_points"]
-    atm_e = summaries["european"]["term"].set_index("expiry")["atm_vol"]
-    atm_a = summaries["american"]["term"].set_index("expiry")["atm_vol"]
-    by_expiry = pd.DataFrame(
+
+    def per_expiry(frame: pd.DataFrame, col: str) -> np.ndarray:
+        values = dict(zip(frame["expiry"], frame[col], strict=True))
+        return np.array([values.get(e, np.nan) for e in fwd.index], dtype=np.float64)
+
+    carry = pd.DataFrame(
         {
-            "expiry": fwd["expiry"].astype(str),
-            "days": days,
-            "forward_old": fwd["forward_european"],
-            "forward_new": fwd["forward"],
-            "shift_bp": fwd["forward_shift_bp"],
-            "q_old %": 100.0 * fwd["dividend_yield_european"],
-            "q_new %": 100.0 * fwd["dividend_yield"],
-            "gap_old": fwd["expiry"].map(gap_e).to_numpy(),
-            "gap_new": fwd["expiry"].map(gap_a).to_numpy(),
-            "atm_old %": 100.0 * fwd["expiry"].map(atm_e).to_numpy(),
-            "atm_new %": 100.0 * fwd["expiry"].map(atm_a).to_numpy(),
+            "expiry": fwd.index.astype(str),
+            "days": days.to_numpy(),
+            "fwd_european": fwd["forward_european"].to_numpy(),
+            "fwd_continuous": fwd["forward"].to_numpy(),
+            "fwd_discrete": disc["forward"].to_numpy(),
+            "shift_cont_bp": fwd["forward_shift_bp"].to_numpy(),
+            "shift_disc_bp": disc["forward_shift_bp"].to_numpy(),
+            "pv_divs": disc["pv_dividends"].to_numpy(),
+            "fwd_divs_treasury": (
+                (spot - disc["pv_dividends"]) * np.exp(disc["rate"] * disc["tau"])
+            ).to_numpy(),
+            "r %": 100.0 * disc["rate"].to_numpy(),
+            "q_european %": 100.0 * fwd["dividend_yield_european"].to_numpy(),
+            "q_continuous %": 100.0 * fwd["dividend_yield"].to_numpy(),
+            "funding_basis_bp": -1e4 * disc["residual_yield"].to_numpy(),
         }
     )
-    surf = builds["american"].surface
-    prem = surf.assign(days=(surf["tau"] * 365.0).round().astype(int)).pivot_table(
-        index="days", columns="option_type", values="ee_premium", aggfunc=["median", "max"]
+    gap_atm = pd.DataFrame(
+        {
+            "expiry": fwd.index.astype(str),
+            "days": days.to_numpy(),
+            **{f"gap_{m}": per_expiry(gaps[m], "gap_vol_points") for m in MODES},
+            **{f"atm_{m} %": 100.0 * per_expiry(summaries[m]["term"], "atm_vol") for m in MODES},
+        }
     )
-    prem.columns = [f"{col[1]} premium {col[0]} $" for col in prem.columns.to_list()]
-    prem = prem.reset_index()
-    b = builds["american"]
-    history = ", ".join(f"{h:.1e}" for h in b.forward_history)
+    pf = {m: r.forwards for m, r in parity_results.items()}
+    scatter = pd.DataFrame(
+        {
+            "expiry": fwd.index.astype(str),
+            "days": days.to_numpy(),
+            "iqr_european $": per_expiry(pf["continuous"], "dispersion_raw"),
+            "iqr_continuous $": per_expiry(pf["continuous"], "dispersion_adjusted"),
+            "iqr_discrete $": per_expiry(pf["discrete"], "dispersion_adjusted"),
+        }
+    )
+    prem_tables = []
+    for m in ("continuous", "discrete"):
+        surf = builds[m].surface
+        prem = surf.assign(days=(surf["tau"] * 365.0).round().astype(int)).pivot_table(
+            index="days", columns="option_type", values="ee_premium", aggfunc=["median", "max"]
+        )
+        prem.columns = [f"{m} {col[1]} {col[0]} $" for col in prem.columns.to_list()]
+        prem_tables.append(prem)
+    prem_all = pd.concat(prem_tables, axis=1).reset_index()
+    dist_rows = []
+    for m, r in parity_results.items():
+        d = r.distribution.copy()
+        d.insert(0, "lattice", m)
+        d["violation_rate"] = 100.0 * d["violation_rate"]
+        dist_rows.append(d.rename(columns={"violation_rate": "violation %"}))
+    dist_table = pd.concat(dist_rows).reset_index(drop=True)
+
     out += (
-        "\n## By expiry\n\n"
-        "`shift_bp`: American-corrected forward over the European-parity one. `q`: implied "
-        "dividend yield r - ln(F/S)/tau with Treasury discounting. `gap`: median call-minus-put "
-        "implied vol (vol points) at strikes within 1% of the forward, both legs inverted the "
-        "way the surface inverts them (old: raw mids at the European forward; new: each "
-        "leg de-Americanised by its own fixed point at the corrected forward). `atm`: "
-        "vega-weighted vol within |k| < 0.05.\n\n"
-        + _to_markdown(by_expiry)
+        "\n## Forwards and carry, by expiry\n\n"
+        "`shift`: each American forward over the European-parity one. `pv_divs`: present "
+        "value of the projected dividends going ex before expiry. `fwd_divs_treasury`: the "
+        "forward SPY's dividends and the Treasury rate alone would give, (S - PV) e^(r tau) "
+        "-- no quotes used. `q`: implied continuous yield r - ln(F/S)/tau. "
+        "`funding_basis_bp`: minus the discrete surface's residual yield, i.e. the rate "
+        "at which the parity forward grows the spot net of dividends, ln(F/(S - PV))/tau, "
+        "over the Treasury rate.\n\n"
+        + _to_markdown(carry)
+        + "\n## Scatter of the per-strike parity forwards\n\n"
+        "Interquartile range, in dollars, of K + (C - P - e_C + e_P)/D over the in-window "
+        "pairs (European: no premia), from the parity module at each surface's vols. One "
+        "forward has to explain every strike, so a correct model of the premia makes this "
+        "small; a premium that is right on average but wrong in strike leaves it wide.\n\n"
+        + _to_markdown(scatter)
+        + "\n## Call/put gap at the forward and ATM vol, by expiry\n\n"
+        "`gap`: median call-minus-put implied vol (vol points) at strikes within 1% of the "
+        "forward, both legs inverted the way each surface inverts them (European: raw mids "
+        "at the European forward; American: each leg de-Americanised by its own fixed point "
+        "at that surface's forward). `atm`: vega-weighted vol within |k| < 0.05.\n\n"
+        + _to_markdown(gap_atm)
+        + "\n## What the discrete-dividend gap depends on\n\n"
+        "The discrete surface rebuilt with the dividend amounts scaled, the Treasury curve "
+        f"shifted, and the lattice refined to {FINE_STEPS} steps (gaps in vol points for "
+        "expiries beyond three months; the forward shift and funding basis at the last "
+        "expiry).\n\n"
+        + _to_markdown(sensitivity)
+        + "\n## Put-call parity violations beyond the spread, by lattice\n\n"
+        "As in `parity.md`, with the American adjustment priced on each lattice at its "
+        "own surface's vols. The European rows do not depend on the lattice.\n\n"
+        + _to_markdown(dist_table)
         + "\n## Butterflies on mid prices, by tolerance\n\n"
         "Undiscounted call prices repriced from each quote's implied vol, as in "
         "`surface.arbitrage_report`. The zero-tolerance column is the one in the headline "
@@ -747,34 +922,43 @@ def _exercise_markdown(
         + "\n## Where the change in fit comes from\n\n"
         "Each surface's Heston parameters scored on each surface's calibration quotes "
         "(RMSE, vol points). Rows with matching `quotes` and `parameters` reproduce the "
-        "headline. If the old parameters scored better on the new quotes in a region, "
-        "the *quotes* there moved; if only the new parameters do, the optimiser found a "
-        "different compromise across the surface.\n\n"
+        "headline. If one surface's parameters scored better on another's quotes in a "
+        "region, the *quotes* there moved; if only its own parameters do, the optimiser "
+        "found a different compromise across the surface.\n\n"
         + _to_markdown(cross)
         + "\n## Early-exercise premium removed from the surface quotes\n\n"
-        "Per expiry, over the out-of-the-money quotes the surface keeps. Calls carry none "
-        "wherever the implied dividend yield is not positive: with a continuous yield an "
-        "American call is then never exercised early.\n\n"
-        + _to_markdown(prem, floatfmt="{:.3f}")
+        "Per expiry, over the out-of-the-money quotes each surface keeps. With a continuous "
+        "yield the calls carry none wherever the implied yield is not positive: an American "
+        "call is then never exercised early. With cash dividends an out-of-the-money call "
+        "carries one once an ex-date falls inside its life.\n\n"
+        + _to_markdown(prem_all, floatfmt="{:.3f}")
         + "\n## Convergence of the correction\n\n"
-        f"- forward -> surface -> forward passes: {b.outer_iterations} "
-        f"(largest relative forward change per pass: {history}); converged: {b.converged}\n"
-        f"- per-quote fixed point: at most {b.max_fixed_point_iterations} iterations to "
-        f"1e-8 in vol; largest observed contraction (|step n+1| / |step n|) "
-        f"{b.max_contraction:.3f}; unconverged quotes: {b.unconverged_quotes}; quotes lost "
-        f"because the corrected price fell to the European floor: {b.dropped_by_correction}\n"
-        f"- lattice resolution: re-running the correction at {FINE_STEPS} steps moves "
-        f"surface vols by at most {steps_check['max_vol_diff_points']:.4f} vol points "
-        f"(median {steps_check['median_vol_diff_points']:.5f}) and forwards by at most "
-        f"{steps_check['max_forward_diff_bp']:.2f} bp\n"
-        f"- self-consistency: the parity module's American-adjusted forward, given this "
-        f"surface, matches the surface's own forward to {parity_consistency:.1e} "
-        "(largest relative difference)\n"
     )
+    for m in ("continuous", "discrete"):
+        b = builds[m]
+        history = ", ".join(f"{h:.1e}" for h in b.forward_history)
+        sc = steps_check[m]
+        out += (
+            f"**{HEADS[m]}.**\n\n"
+            f"- forward -> surface -> forward passes: {b.outer_iterations} "
+            f"(largest relative forward change per pass: {history}); converged: {b.converged}\n"
+            f"- per-quote fixed point: at most {b.max_fixed_point_iterations} iterations to "
+            f"1e-8 in vol; largest observed contraction (|step n+1| / |step n|) "
+            f"{b.max_contraction:.3f}; unconverged quotes: {b.unconverged_quotes}; quotes "
+            f"lost because the corrected price fell to the European floor: "
+            f"{b.dropped_by_correction}\n"
+            f"- lattice resolution: re-running the correction at {FINE_STEPS} steps moves "
+            f"surface vols by at most {sc['max_vol_diff_points']:.4f} vol points "
+            f"(median {sc['median_vol_diff_points']:.5f}) and forwards by at most "
+            f"{sc['max_forward_diff_bp']:.2f} bp\n"
+            f"- self-consistency: the parity module's American-adjusted forward, given this "
+            f"surface, matches the surface's own forward to {parity_consistency[m]:.1e} "
+            "(largest relative difference)\n\n"
+        )
     return out
 
 
-def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one piece)
+def main() -> int:  # noqa: PLR0912, PLR0915  (a top-level pipeline reads better in one piece)
     """Run the full pipeline. Returns a process exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ticker", default="SPY", help="underlying symbol")
@@ -790,9 +974,16 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
         help="treat quotes as American (de-Americanise; default) or European (old pipeline)",
     )
     parser.add_argument(
+        "--dividends",
+        choices=["continuous", "discrete"],
+        default="continuous",
+        help="American lattice carry: the parity-implied continuous yield (default) or "
+        "SPY's projected cash dividends (escrowed-dividend model)",
+    )
+    parser.add_argument(
         "--skip-comparison",
         action="store_true",
-        help="do not calibrate the other exercise treatment for exercise_comparison.md",
+        help="do not calibrate the other surfaces for exercise_comparison.md",
     )
     args = parser.parse_args()
 
@@ -856,6 +1047,30 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
     )
     clean, report = data.clean_chain(snapshot)
     print("  " + str(report).replace("\n", "\n  "))
+    # The discrete-dividend surface needs a committed projection made for this very
+    # snapshot; nothing is invented when there is none (another ticker, a refreshed chain).
+    div_projection: pd.DataFrame | None
+    div_manifest: dict[str, Any]
+    try:
+        div_schedule, div_projection, div_manifest = dividends.load_committed_schedule(
+            snapshot.asof, ticker=snapshot.ticker
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        if args.dividends == "discrete":
+            raise SystemExit(
+                f"--dividends discrete needs a committed dividend projection: {exc}. "
+                "Run scripts/download_dividends.py for this snapshot."
+            ) from exc
+        print(f"  no dividend projection for this snapshot ({exc}); discrete surface skipped")
+        div_schedule, div_projection, div_manifest = dividends.DividendSchedule.empty(), None, {}
+    else:
+        print(
+            f"  dividends: {len(div_schedule)} projected ex-dates after the snapshot through "
+            f"{div_manifest['projection']['until']} "
+            f"(downloaded {div_manifest['downloaded_at_utc']})"
+        )
+    modes = MODES if div_projection is not None else ("european", "continuous")
+    american_modes = modes[1:]
 
     fwd_fixed = data.implied_forward_curve(clean, snapshot.spot, rate_curve, method="fixed-rate")
     fwd_reg = data.implied_forward_curve(clean, snapshot.spot, method="regression")
@@ -876,64 +1091,105 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
     print("=" * 78)
     print("3. Implied-volatility surface")
     print("=" * 78)
-    other = "european" if args.exercise == "american" else "american"
-    started = time.time()
-    builds = {
-        ex: surface.build_surface_detailed(
-            snapshot, clean, rate_curve, exercise=ex, tree_steps=TREE_STEPS
-        )
-        for ex in ("european", "american")
+    primary = "european" if args.exercise == "european" else args.dividends
+    american_mode = args.dividends
+    divs_for: dict[str, dividends.DividendSchedule | None] = {
+        "european": None,
+        "continuous": None,
+        "discrete": div_schedule,
     }
-    build = builds[args.exercise]
+
+    def build_mode(mode: str, **kwargs: Any) -> surface.SurfaceBuild:
+        return surface.build_surface_detailed(
+            snapshot,
+            clean,
+            rate_curve,
+            exercise="european" if mode == "european" else "american",
+            dividends=divs_for[mode],
+            **kwargs,
+        )
+
+    builds: dict[str, surface.SurfaceBuild] = {}
+    for mode in modes:
+        started = time.time()
+        builds[mode] = build_mode(mode, tree_steps=TREE_STEPS)
+        print(f"  {HEADS[mode]} surface built ({time.time() - started:.1f}s)")
+    build = builds[primary]
     surf = build.surface
-    amer = builds["american"]
-    print(f"  surface built as {args.exercise} ({time.time() - started:.1f}s for both)")
-    print(
-        f"  de-Americanisation: {amer.outer_iterations} forward passes, per-quote fixed point "
-        f"<= {amer.max_fixed_point_iterations} iterations, contraction <= "
-        f"{amer.max_contraction:.3f}, {amer.unconverged_quotes} unconverged, "
-        f"{amer.dropped_by_correction} dropped"
-    )
+    amer = builds[american_mode]
+    print(f"  primary surface: {HEADS[primary]}")
+    for mode in american_modes:
+        b = builds[mode]
+        print(
+            f"  {HEADS[mode]}: {b.outer_iterations} forward passes, per-quote fixed point "
+            f"<= {b.max_fixed_point_iterations} iterations, contraction <= "
+            f"{b.max_contraction:.3f}, {b.unconverged_quotes} unconverged, "
+            f"{b.dropped_by_correction} dropped"
+        )
     print(
         "  "
-        + amer.forwards[["tau", "forward_european", "forward", "forward_shift_bp"]]
+        + builds[american_modes[-1]]
+        .forwards[["tau", "forward_european", "forward", "forward_shift_bp", "pv_dividends"]]
+        .assign(forward_continuous=builds["continuous"].forwards["forward"])
         .to_string(index=False, float_format=lambda x: f"{x:9.3f}")
         .replace("\n", "\n  ")
     )
-    fine = surface.build_surface_detailed(
-        snapshot, clean, rate_curve, exercise="american", tree_steps=FINE_STEPS
-    )
-    joined = amer.surface.merge(
-        fine.surface, on=["expiry", "strike", "option_type"], suffixes=("", "_fine")
-    )
-    vol_diff = 100.0 * (joined["implied_vol"] - joined["implied_vol_fine"]).abs()
-    steps_check = {
-        "max_vol_diff_points": float(vol_diff.max()),
-        "median_vol_diff_points": float(vol_diff.median()),
-        "max_forward_diff_bp": float(
-            1e4 * np.max(np.abs(fine.forwards["forward"] / amer.forwards["forward"] - 1.0))
-        ),
-    }
-    print(
-        f"  {FINE_STEPS} vs {TREE_STEPS} lattice steps: vols move <= "
-        f"{steps_check['max_vol_diff_points']:.4f} vol pts, forwards <= "
-        f"{steps_check['max_forward_diff_bp']:.2f} bp"
-    )
+    steps_check: dict[str, dict[str, float]] = {}
+    fine_builds: dict[str, surface.SurfaceBuild] = {}
+    for mode in american_modes:
+        started = time.time()
+        fine = build_mode(mode, tree_steps=FINE_STEPS)
+        fine_builds[mode] = fine
+        coarse = builds[mode]
+        joined = coarse.surface.merge(
+            fine.surface, on=["expiry", "strike", "option_type"], suffixes=("", "_fine")
+        )
+        vol_diff = 100.0 * (joined["implied_vol"] - joined["implied_vol_fine"]).abs()
+        steps_check[mode] = {
+            "max_vol_diff_points": float(vol_diff.max()),
+            "median_vol_diff_points": float(vol_diff.median()),
+            "max_forward_diff_bp": float(
+                1e4 * np.max(np.abs(fine.forwards["forward"] / coarse.forwards["forward"] - 1.0))
+            ),
+        }
+        print(
+            f"  {HEADS[mode]}, {FINE_STEPS} vs {TREE_STEPS} lattice steps: vols move <= "
+            f"{steps_check[mode]['max_vol_diff_points']:.4f} vol pts, forwards <= "
+            f"{steps_check[mode]['max_forward_diff_bp']:.2f} bp ({time.time() - started:.1f}s)"
+        )
     gaps = {
-        ex: surface.call_put_gap(
-            surface.build_surface_detailed(
-                snapshot,
-                clean,
-                rate_curve,
+        mode: surface.call_put_gap(
+            build_mode(
+                mode,
                 otm_only=False,
                 max_abs_log_moneyness=0.05,
-                exercise=ex,
                 tree_steps=TREE_STEPS,
-                forwards=builds[ex].forwards,
+                forwards=builds[mode].forwards,
             ).surface
         )
-        for ex in ("european", "american")
+        for mode in modes
     }
+    gap_table = pd.DataFrame(
+        {m: g.set_index("days")["gap_vol_points"] for m, g in gaps.items()}
+    ).reset_index()
+    print("  call-minus-put vol at the forward (vol points):")
+    print(
+        "  "
+        + gap_table.to_string(index=False, float_format=lambda x: f"{x:8.3f}").replace("\n", "\n  ")
+    )
+    sensitivity = pd.DataFrame()
+    if "discrete" in modes:
+        started = time.time()
+        sensitivity = _discrete_sensitivity(
+            snapshot, clean, rate_curve, div_schedule, fine_builds["discrete"]
+        )
+        print(f"  discrete-dividend gap sensitivity ({time.time() - started:.1f}s):")
+        print(
+            "  "
+            + sensitivity.to_string(index=False, float_format=lambda x: f"{x:8.3f}").replace(
+                "\n", "\n  "
+            )
+        )
     print(f"  {len(surf)} quotes inverted across {surf['tau'].nunique()} expiries")
     term = surface.atm_term_structure(surf)
     print(
@@ -943,6 +1199,7 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
     print("  " + str(arb).replace("\n", "\n  "))
     results["surface"] = {
         "exercise": args.exercise,
+        "dividends": primary,
         "n_quotes": len(surf),
         "n_expiries": int(surf["tau"].nunique()),
         "atm_term_structure": term.assign(expiry=term["expiry"].astype(str)).to_dict(
@@ -956,7 +1213,7 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
             "butterfly_checks": arb.butterfly_checks,
         },
         "cleaning": report.to_frame().to_dict(orient="records"),
-        "forwards": builds[args.exercise]
+        "forwards": builds[primary]
         .forwards.assign(expiry=lambda d: d["expiry"].astype(str))
         .to_dict(orient="records"),
         "de_americanisation": {
@@ -968,7 +1225,7 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
             "unconverged_quotes": amer.unconverged_quotes,
             "dropped_by_correction": amer.dropped_by_correction,
             "tree_steps": TREE_STEPS,
-            "doubled_steps_check": steps_check,
+            "doubled_steps_check": steps_check[american_mode],
         },
         "call_put_gap": {
             ex: g.assign(expiry=g["expiry"].astype(str)).to_dict(orient="records")
@@ -982,14 +1239,29 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
     print("=" * 78)
     started = time.time()
     # The American-adjusted theory needs de-Americanised vols whichever surface is primary.
-    parity_result = parity.run_parity_analysis(
-        snapshot, clean, rate_curve, fwd_fixed, amer.surface, steps=TREE_STEPS
-    )
-    consistency = parity_result.forwards.merge(amer.forwards, on="expiry")
-    parity_consistency = float(
-        np.max(np.abs(consistency["forward_adjusted"] / consistency["forward"] - 1.0))
-    )
-    print(f"  parity's American forward vs the surface's: max rel diff {parity_consistency:.1e}")
+    parity_results = {
+        mode: parity.run_parity_analysis(
+            snapshot,
+            clean,
+            rate_curve,
+            fwd_fixed,
+            builds[mode].surface,
+            steps=TREE_STEPS,
+            dividends=divs_for[mode],
+        )
+        for mode in american_modes
+    }
+    parity_result = parity_results[american_mode]
+    parity_consistency: dict[str, float] = {}
+    for mode, res in parity_results.items():
+        consistency = res.forwards.merge(builds[mode].forwards, on="expiry")
+        parity_consistency[mode] = float(
+            np.max(np.abs(consistency["forward_adjusted"] / consistency["forward"] - 1.0))
+        )
+        print(
+            f"  {HEADS[mode]}: parity's American forward vs the surface's: max rel diff "
+            f"{parity_consistency[mode]:.1e}"
+        )
     print(
         "  "
         + parity_result.distribution.to_string(
@@ -1100,20 +1372,21 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
     }
     results["model_comparison"] = model_rows
 
-    fits: dict[str, dict[str, Any]] = {args.exercise: fitted}
+    fits: dict[str, dict[str, Any]] = {primary: fitted}
     if not args.skip_comparison:
-        print()
-        print(f"  Same calibration on the {other} surface, for exercise_comparison.md")
-        started = time.time()
-        fits[other] = _fit_models(
-            builds[other].surface, snapshot.spot, args.quotes_per_expiry, verbose=False
-        )
-        alt = fits[other]
-        print(
-            f"  ({time.time() - started:.1f}s) Heston RMSE {alt['fit'].rmse_vol * 100:.2f} "
-            f"(body {alt['body_rmse']:.2f}, short-dated put wing {alt['wing_rmse']:.2f}) "
-            f"vs {fit.rmse_vol * 100:.2f} on the {args.exercise} surface"
-        )
+        for other in (m for m in modes if m != primary):
+            print()
+            print(f"  Same calibration on the {HEADS[other]} surface, for exercise_comparison.md")
+            started = time.time()
+            fits[other] = _fit_models(
+                builds[other].surface, snapshot.spot, args.quotes_per_expiry, verbose=False
+            )
+            alt = fits[other]
+            print(
+                f"  ({time.time() - started:.1f}s) Heston RMSE {alt['fit'].rmse_vol * 100:.2f} "
+                f"(body {alt['body_rmse']:.2f}, short-dated put wing {alt['wing_rmse']:.2f}) "
+                f"vs {fit.rmse_vol * 100:.2f} on the {HEADS[primary]} surface"
+            )
 
     print()
     print("=" * 78)
@@ -1155,12 +1428,40 @@ def main() -> int:  # noqa: PLR0915  (a top-level pipeline reads better in one p
         f"same day's Treasury curve. {len(parity_result.residuals)} matched call/put pairs."
     )
     (args.results / "parity.md").write_text(_parity_markdown(parity_result, meta))
-    if len(fits) == 2:
+    if div_projection is not None:
+        results["dividends"] = {
+            "manifest": div_manifest,
+            "projection": div_projection.assign(
+                ex_date=div_projection["ex_date"].astype(str),
+                ex_time=div_projection["ex_time"].astype(str),
+                basis_ex_date=div_projection["basis_ex_date"].astype(str),
+            ).to_dict(orient="records"),
+            "forwards": {mode: _records(builds[mode].forwards) for mode in american_modes},
+            "call_put_gap": {mode: _records(g) for mode, g in gaps.items()},
+            "doubled_steps_check": steps_check,
+            "discrete_sensitivity": sensitivity.to_dict(orient="records"),
+            "parity_distribution": {
+                mode: r.distribution.to_dict(orient="records") for mode, r in parity_results.items()
+            },
+        }
+    if len(fits) == len(MODES) and div_projection is not None:
         summaries = {ex: _surface_summary(b) for ex, b in builds.items()}
         cross = _cross_scores(fits, snapshot.spot)
         (args.results / "exercise_comparison.md").write_text(
             _exercise_markdown(
-                builds, summaries, fits, gaps, steps_check, parity_consistency, cross, meta
+                builds,
+                summaries,
+                fits,
+                gaps,
+                steps_check,
+                parity_results,
+                parity_consistency,
+                cross,
+                sensitivity,
+                div_projection,
+                div_manifest,
+                snapshot.spot,
+                meta,
             )
         )
         results["exercise_cross_scores"] = cross.to_dict(orient="records")
